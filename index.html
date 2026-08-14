@@ -102,6 +102,7 @@
       </div>
 
       <h2 class="text-xl font-bold mb-4 flex items-center gap-2"><i data-lucide="radio" class="w-5 h-5 text-blue-400"></i> Your Channels</h2>
+      <button onclick="openAddChannelModal()" class="mb-4 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl text-sm">Add Channel</button>
       <div id="channels-list" class="space-y-3 mb-8"></div>
 
       <!-- Wallet Section (injected dynamically) -->
@@ -117,6 +118,20 @@
       <h2 class="text-xl font-bold mb-4 flex items-center gap-2"><i data-lucide="wallet" class="w-5 h-5 text-blue-400"></i> Pending Withdrawals</h2>
       <div id="admin-withdrawals" class="space-y-3"></div>
     </section>
+    <!-- Add Channel Modal -->
+<div id="add-channel-modal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm hidden flex items-center justify-center">
+  <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-full max-w-md mx-4">
+    <h2 class="text-xl font-bold mb-4">Add Channel</h2>
+    <label class="block text-sm text-slate-400 mb-1">Channel Name</label>
+    <input id="add-channel-name" type="text" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white mb-3" />
+    <label class="block text-sm text-slate-400 mb-1">Invite Link (t.me/...)</label>
+    <input id="add-channel-link" type="text" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white font-mono mb-4" />
+    <div class="flex justify-end gap-2">
+      <button onclick="closeAddChannelModal()" class="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl">Cancel</button>
+      <button onclick="submitAddChannel()" class="px-4 py-2 bg-blue-600 text-white rounded-xl">Add</button>
+    </div>
+  </div>
+</div>
 
   </main>
 
