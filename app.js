@@ -5,7 +5,7 @@ TG.expand();
 
 const SUPABASE_URL = 'https://mslxnegbtstpdwauugmq.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1zbHhuZWdidHN0cGR3YXV1Z21xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY1Mjk0NDUsImV4cCI6MjEwMjEwNTQ0NX0.l1rEfiEmPSPItqx1OdvX1T52LpwP5DlJr8gWhbJXcgA';  // public anon key
-const API_BASE = 'https://mslxnegbtstpdwauugmq.supabase.co/functions/v1/main'; // Express API
+const API_BASE = 'https://mslxnegbtstpdwauugmq.supabase.co/functions/v1/mainbot'; // Express API
 
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
