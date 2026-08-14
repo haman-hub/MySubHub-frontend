@@ -176,6 +176,26 @@ document.getElementById('modal-save').onclick = async () => {
   document.getElementById('edit-modal').classList.add('hidden');
   loadOwnerDashboard();
 };
+function openAddChannelModal() {
+  document.getElementById('add-channel-modal').classList.remove('hidden');
+}
+
+function closeAddChannelModal() {
+  document.getElementById('add-channel-modal').classList.add('hidden');
+}
+
+async function submitAddChannel() {
+  const channel_name = document.getElementById('add-channel-name').value.trim();
+  const channel_invite_link = document.getElementById('add-channel-link').value.trim();
+  if (!channel_name || !channel_invite_link) return alert('Please fill all fields');
+  const res = await apiFetch('/api/channels/register', {
+    method: 'POST',
+    body: JSON.stringify({ channel_name, channel_invite_link }),
+  });
+  if (res.error) return alert('Error: ' + res.error);
+  closeAddChannelModal();
+  loadOwnerDashboard();
+}
 
 // ========== ADMIN DASHBOARD ==========
 async function loadAdminDashboard() {
