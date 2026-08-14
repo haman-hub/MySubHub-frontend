@@ -44,7 +44,7 @@
     </div>
     <nav class="flex gap-2">
       <button id="nav-subscriptions" onclick="showPage('subscriptions')" class="px-3 py-1.5 text-xs font-medium rounded-full bg-slate-800 text-slate-300 hover:bg-slate-700 transition">My Subs</button>
-      <button id="nav-owner" onclick="showPage('owner')" class="px-3 py-1.5 text-xs font-medium rounded-full bg-slate-800 text-slate-300 hover:bg-slate-700 transition" style="display:none;">My Channels</button>
+      <button id="nav-owner" onclick="showPage('owner'); loadOwnerDashboard();" class="px-3 py-1.5 text-xs font-medium rounded-full bg-slate-800 text-slate-300 hover:bg-slate-700 transition" style="display:none;">My Channels</button>
       <button id="nav-admin" onclick="showPage('admin')" class="px-3 py-1.5 text-xs font-medium rounded-full bg-slate-800 text-slate-300 hover:bg-slate-700 transition" style="display:none;">Admin</button>
     </nav>
     <div id="ton-connect-button" class="flex-shrink-0"></div>
