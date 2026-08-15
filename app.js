@@ -148,30 +148,47 @@ async function loadOwnerDashboard() {
   `).join('');
 
   // Wallet section
-  const walletDiv = document.getElementById('wallet-section');
-  walletDiv.innerHTML = `
-    <h3 class="text-lg font-semibold text-white mb-2">Payout Wallet</h3>
-    <p id="current-wallet" class="text-slate-400 font-mono text-sm break-all">Not set</p>
-    <button id="btn-connect-wallet" class="mt-3 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl text-sm">Connect TON Wallet</button>
-  `;
+// Inside loadOwnerDashboard(), replace the walletDiv block and btn-connect-wallet handler with:
+
+const walletDiv = document.getElementById('wallet-section');
+walletDiv.innerHTML = `
+  <h3 class="text-lg font-semibold text-white mb-2">Payout Wallet</h3>
+  <p id="current-wallet" class="text-slate-400 font-mono text-sm break-all">Not connected</p>
+  <button id="btn-connect-wallet" class="mt-3 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl text-sm">Connect TON Wallet</button>
+`;
+
+// Function to get wallet address from TON Connect
+async function getWalletAddress() {
+  // If already connected, return address immediately
+  if (tonConnectUI.connected && tonConnectUI.account?.address) {
+    return tonConnectUI.account.address;
+  }
+
+  // Otherwise, try to connect
+  await tonConnectUI.connectWallet();
+
+  // After connection, the address should be available
+  if (tonConnectUI.connected && tonConnectUI.account?.address) {
+    return tonConnectUI.account.address;
+  }
+  throw new Error("Could not get wallet address");
+}
+
 document.getElementById('btn-connect-wallet').onclick = async () => {
   try {
-    const connected = await tonConnectUI.connectWallet();
-    console.log("Connected wallet object:", connected); // for debugging
-
-    // Get the wallet address as a string (bounceable friendly format)
+    const address = await getWalletAddress();
+    // Extract friendly string
     let walletAddress = "";
-    if (typeof connected.account.address === "string") {
-      walletAddress = connected.account.address;
-    } else if (connected.account.address?.toString) {
-      walletAddress = connected.account.address.toString(true, true, true);
+    if (typeof address === "string") {
+      walletAddress = address;
+    } else if (address?.toString) {
+      walletAddress = address.toString(true, true, true); // bounceable, testOnly, urlSafe
     } else {
-      throw new Error("Could not extract wallet address");
+      throw new Error("Invalid address format");
     }
 
     console.log("Wallet address:", walletAddress);
 
-    // Save to backend
     const res = await apiFetch('/api/auth/wallet', {
       method: 'POST',
       body: JSON.stringify({ wallet_address: walletAddress }),
