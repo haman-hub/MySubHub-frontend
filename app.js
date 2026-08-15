@@ -221,6 +221,25 @@ async function loadAdminWithdrawals() {
     </div>
   `).join('');
 }
+// Copy channel deep link
+function copyDeepLink(channelId) {
+  const link = `https://t.me/MySubsHub_bot?start=${channelId}`;
+  navigator.clipboard.writeText(link).then(() => {
+    alert('Link copied!');
+  }).catch(() => {
+    prompt('Copy link:', link);
+  });
+}
 
+// Approve withdrawal (admin)
+async function approveWithdrawal(id) {
+  const res = await apiFetch(`/api/admin/withdrawals/${id}/approve`, { method: 'POST' });
+  if (res.success) {
+    alert('Withdrawal processed.');
+    loadAdminWithdrawals();
+  } else {
+    alert('Failed: ' + res.error);
+  }
+}
 // ========== START ==========
 window.onload = init;
