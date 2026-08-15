@@ -154,18 +154,40 @@ async function loadOwnerDashboard() {
     <p id="current-wallet" class="text-slate-400 font-mono text-sm break-all">Not set</p>
     <button id="btn-connect-wallet" class="mt-3 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl text-sm">Connect TON Wallet</button>
   `;
-  document.getElementById('btn-connect-wallet').onclick = async () => {
-    try {
-      const connected = await tonConnectUI.connectWallet();
-      const rawAddress = connected.account.address;
-      const friendly = rawAddress.toString(true, true, true);
-      await apiFetch('/api/auth/wallet', { method: 'POST', body: JSON.stringify({ wallet_address: friendly }) });
-      document.getElementById('current-wallet').innerText = friendly;
-      alert('Wallet saved!');
-    } catch (e) {
-      alert('Connection failed');
+document.getElementById('btn-connect-wallet').onclick = async () => {
+  try {
+    const connected = await tonConnectUI.connectWallet();
+    console.log("Connected wallet object:", connected); // for debugging
+
+    // Get the wallet address as a string (bounceable friendly format)
+    let walletAddress = "";
+    if (typeof connected.account.address === "string") {
+      walletAddress = connected.account.address;
+    } else if (connected.account.address?.toString) {
+      walletAddress = connected.account.address.toString(true, true, true);
+    } else {
+      throw new Error("Could not extract wallet address");
     }
-  };
+
+    console.log("Wallet address:", walletAddress);
+
+    // Save to backend
+    const res = await apiFetch('/api/auth/wallet', {
+      method: 'POST',
+      body: JSON.stringify({ wallet_address: walletAddress }),
+    });
+
+    if (res.success) {
+      document.getElementById('current-wallet').innerText = walletAddress;
+      alert('Wallet saved!');
+    } else {
+      alert('Failed to save wallet: ' + res.error);
+    }
+  } catch (e) {
+    console.error("Wallet connection error:", e);
+    alert('Connection failed: ' + e.message);
+  }
+};
 
   loadWithdrawalSection();
   lucide.createIcons();
