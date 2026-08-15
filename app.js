@@ -58,6 +58,19 @@ async function init() {
         document.getElementById('nav-admin').style.display = 'inline-block';
       }
 
+      // ========== Add TON Connect status listener here ==========
+      tonConnectUI.onStatusChange((wallet) => {
+        if (wallet) {
+          const walletAddress = typeof wallet.account.address === "string"
+            ? wallet.account.address
+            : wallet.account.address?.toString(true, true, true);
+          const walletDisplay = document.getElementById('current-wallet');
+          if (walletDisplay) {
+            walletDisplay.innerText = walletAddress || 'Not connected';
+          }
+        }
+      });
+
       const startParam = TG.initDataUnsafe?.start_param;
       if (startParam && /^[0-9a-fA-F-]{36}$/.test(startParam)) {
         loadPurchasePage(startParam);
