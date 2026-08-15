@@ -112,13 +112,55 @@ async function loadPurchasePage(channelId) {
 }
 
 async function initiatePayment(channelId, price) {
-  const initRes = await apiFetch('/api/subscriptions/initiate', {
-    method: 'POST',
-    body: JSON.stringify({ channel_id: channelId }),
-  });
-  if (!initRes.wallet) return alert('Failed to initiate payment');
-  // TON Connect transaction will be implemented later
-  alert('TON payment not yet implemented in this test.');
+  try {
+    // 1. Get payment details from backend
+    const initRes = await apiFetch('/api/subscriptions/initiate', {
+      method: 'POST',
+      body: JSON.stringify({ channel_id: channelId }),
+    });
+    if (!initRes.wallet) throw new Error('Failed to initiate payment');
+
+    // 2. Build comment cell (op=0, string memo)
+    const tonweb = new TonWeb();
+    const commentCell = new TonWeb.boc.Cell();
+    commentCell.bits.writeUint(0, 32); // op: 0 for text comment
+    commentCell.bits.writeString(initRes.memo);
+    const payloadBoc = await commentCell.toBoc();
+    const payloadBase64 = TonWeb.utils.bytesToBase64(payloadBoc);
+
+    // 3. Prepare transaction
+    const transaction = {
+      validUntil: Math.floor(Date.now() / 1000) + 360,
+      messages: [
+        {
+          address: initRes.wallet,
+          amount: initRes.amountNano,   // string in nanoTON
+          payload: payloadBase64,
+        },
+      ],
+    };
+
+    // 4. Send via TON Connect
+    const result = await tonConnectUI.sendTransaction(transaction);
+    const boc = result.boc;
+
+    // 5. Confirm payment on backend
+    const confirmRes = await apiFetch('/api/subscriptions/confirm', {
+      method: 'POST',
+      body: JSON.stringify({ channel_id: channelId, boc }),
+    });
+
+    if (confirmRes.success) {
+      alert('Subscription activated! Check your Telegram for the invite link.');
+      showPage('subscriptions');
+      loadSubscriptions();
+    } else {
+      alert('Payment verification failed: ' + (confirmRes.error || 'Unknown error'));
+    }
+  } catch (e) {
+    console.error('Payment error:', e);
+    alert('Transaction failed: ' + e.message);
+  }
 }
 
 // ========== SUBSCRIPTIONS PAGE ==========
