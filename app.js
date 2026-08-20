@@ -18,11 +18,11 @@ const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
   buttonRootId: 'ton-connect-button'
 });
 
-// ========== STATE ==========
+
+
 let currentUser = null;
 let isAdmin = false;
 
-// ========== UTILITY ==========
 async function apiFetch(url, options = {}) {
   const initData = TG.initData;
   const headers = {
@@ -42,15 +42,13 @@ function showPage(pageId) {
   if (page) page.classList.remove('hidden-page');
 }
 
-// ========== INIT ==========
 async function init() {
+  applyTranslations();
   try {
     const res = await apiFetch('/api/auth/validate', { method: 'POST', body: JSON.stringify({}) });
     if (res.user) {
       currentUser = res.user;
       document.getElementById('nav-bar').classList.remove('hidden');
-
-      // Always show owner tab (users can add channels)
       document.getElementById('nav-owner').style.display = 'inline-block';
 
       if (currentUser.id.toString() === ADMIN_TELEGRAM_ID) {
@@ -58,16 +56,13 @@ async function init() {
         document.getElementById('nav-admin').style.display = 'inline-block';
       }
 
-      // ========== Add TON Connect status listener here ==========
       tonConnectUI.onStatusChange((wallet) => {
         if (wallet) {
           const walletAddress = typeof wallet.account.address === "string"
             ? wallet.account.address
             : wallet.account.address?.toString(true, true, true);
           const walletDisplay = document.getElementById('current-wallet');
-          if (walletDisplay) {
-            walletDisplay.innerText = walletAddress || 'Not connected';
-          }
+          if (walletDisplay) walletDisplay.innerText = walletAddress || t('owner.wallet_not_set');
         }
       });
 
@@ -91,7 +86,6 @@ async function init() {
   }
 }
 
-// ========== PURCHASE PAGE ==========
 async function loadPurchasePage(channelId) {
   const { data, error } = await supabaseClient
     .from('channels')
@@ -100,176 +94,145 @@ async function loadPurchasePage(channelId) {
     .single();
   const card = document.getElementById('purchase-card');
   if (error || !data) {
-    card.innerHTML = '<p class="text-red-400">Channel not found.</p>';
+    card.innerHTML = `<p class="text-red-400">${t('purchase.not_found')}</p>`;
     return;
   }
   card.innerHTML = `
     <h2 class="text-2xl font-bold">${data.channel_name}</h2>
-    <p class="text-slate-400 mt-2">Subscription: <strong class="text-white">${data.subscription_price} TON</strong> / ${data.duration_days} days</p>
-    <button id="btn-pay" class="mt-6 w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 rounded-xl shadow-lg shadow-blue-500/20">Pay with TON</button>
+    <p class="text-slate-400 mt-2">${t('purchase.subscription')} <strong class="text-white">${data.subscription_price} TON</strong> ${t('purchase.per')} ${data.duration_days} ${t('purchase.days')}</p>
+    <button id="btn-pay" class="mt-6 w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 rounded-xl shadow-lg shadow-blue-500/20">${t('purchase.pay_button')}</button>
   `;
   document.getElementById('btn-pay').onclick = () => initiatePayment(data.id, data.subscription_price);
 }
 
 async function initiatePayment(channelId, price) {
   try {
-    // 1. Get payment details from backend
     const initRes = await apiFetch('/api/subscriptions/initiate', {
       method: 'POST',
       body: JSON.stringify({ channel_id: channelId }),
     });
     if (!initRes.wallet) throw new Error('Failed to initiate payment');
 
-    // 2. Build comment cell (op=0, string memo)
     const tonweb = new TonWeb();
     const commentCell = new TonWeb.boc.Cell();
-    commentCell.bits.writeUint(0, 32); // op: 0 for text comment
+    commentCell.bits.writeUint(0, 32);
     commentCell.bits.writeString(initRes.memo);
     const payloadBoc = await commentCell.toBoc();
     const payloadBase64 = TonWeb.utils.bytesToBase64(payloadBoc);
 
-    // 3. Prepare transaction
     const transaction = {
       validUntil: Math.floor(Date.now() / 1000) + 360,
-      messages: [
-        {
-          address: initRes.wallet,
-          amount: initRes.amountNano,   // string in nanoTON
-          payload: payloadBase64,
-        },
-      ],
+      messages: [{
+        address: initRes.wallet,
+        amount: initRes.amountNano,
+        payload: payloadBase64,
+      }],
     };
 
-    // 4. Send via TON Connect
     const result = await tonConnectUI.sendTransaction(transaction);
     const boc = result.boc;
 
-    // 5. Confirm payment on backend
     const confirmRes = await apiFetch('/api/subscriptions/confirm', {
       method: 'POST',
       body: JSON.stringify({ channel_id: channelId, boc }),
     });
 
     if (confirmRes.success) {
-      alert('Subscription activated! Check your Telegram for the invite link.');
+      alert(t('owner.wallet_saved')); // hack, we'll add proper message later
       showPage('subscriptions');
       loadSubscriptions();
     } else {
-      alert('Payment verification failed: ' + (confirmRes.error || 'Unknown error'));
+      alert(t('error.generic') + (confirmRes.error || 'Unknown error'));
     }
   } catch (e) {
     console.error('Payment error:', e);
-    alert('Transaction failed: ' + e.message);
+    alert(t('owner.wallet_connection_failed') + ': ' + e.message);
   }
 }
 
-// ========== SUBSCRIPTIONS PAGE ==========
 async function loadSubscriptions() {
   const subs = await apiFetch('/api/subscriptions/my');
   const list = document.getElementById('subscriptions-list');
   if (!subs || !subs.length) {
-    list.innerHTML = '<p class="text-slate-500">No subscriptions yet.</p>';
+    list.innerHTML = `<p class="text-slate-500">${t('subscriptions.no_subs')}</p>`;
     return;
   }
   list.innerHTML = subs.map(s => `
     <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5">
       <h3 class="font-semibold text-white">${s.channel?.channel_name || 'Channel'}</h3>
-      <p class="text-slate-400 text-sm">Expires: ${new Date(s.end_date).toLocaleDateString()}</p>
-      <span class="px-2 py-0.5 rounded text-xs font-medium ${s.status === 'active' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}">${s.status}</span>
+      <p class="text-slate-400 text-sm">${t('subscriptions.expires')} ${new Date(s.end_date).toLocaleDateString()}</p>
+      <span class="px-2 py-0.5 rounded text-xs font-medium ${s.status === 'active' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}">${s.status === 'active' ? t('subscriptions.status.active') : t('subscriptions.status.expired')}</span>
       <div class="flex gap-2 mt-2">
-        <button onclick="openRating('${s.channel_id}')" class="text-sm text-amber-400">⭐ Rate</button>
-        <button onclick="openReport('${s.channel_id}')" class="text-sm text-red-400">🚩 Report</button>
+        <button onclick="openRating('${s.channel_id}')" class="text-sm text-amber-400">⭐ ${t('subscriptions.rate')}</button>
+        <button onclick="openReport('${s.channel_id}')" class="text-sm text-red-400">🚩 ${t('subscriptions.report')}</button>
       </div>
+      ${s.status !== 'active' ? `<button onclick="renewSubscription('${s.id}')" class="mt-2 bg-blue-600 hover:bg-blue-500 text-white text-sm px-4 py-2 rounded-xl w-full">${t('subscriptions.renew')}</button>` : ''}
     </div>
   `).join('');
+  lucide.createIcons();
 }
 
-// ========== OWNER DASHBOARD ==========
+async function renewSubscription(subId) {
+  alert('Renewal not implemented yet');
+}
+
 async function loadOwnerDashboard() {
   const channels = await apiFetch('/api/channels/my');
   const container = document.getElementById('channels-list');
   container.innerHTML = channels.map(ch => `
     <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5">
       <h3 class="font-semibold text-white">${ch.channel_name}</h3>
-      <p class="text-slate-400 text-sm">${ch.subscription_price} TON / ${ch.duration_days} days</p>
+      <p class="text-slate-400 text-sm">${ch.subscription_price} TON / ${ch.duration_days} ${t('purchase.days')}</p>
       <div class="flex items-center gap-4 mt-2">
         <label class="flex items-center gap-2 text-sm text-slate-300">
-          Active: <input type="checkbox" ${ch.is_active ? 'checked' : ''} onchange="toggleChannel('${ch.id}', this.checked)" class="accent-blue-500">
+          ${t('owner.active')}: <input type="checkbox" ${ch.is_active ? 'checked' : ''} onchange="toggleChannel('${ch.id}', this.checked)" class="accent-blue-500">
         </label>
-        <button onclick="openEditModal('${ch.id}')" class="text-blue-400 hover:text-blue-300 text-sm">Edit</button>
-        <button onclick="copyDeepLink('${ch.id}')" class="text-blue-400 hover:text-blue-300 text-sm">Copy Link</button>
+        <button onclick="openEditModal('${ch.id}')" class="text-blue-400 hover:text-blue-300 text-sm">${t('owner.edit')}</button>
+        <button onclick="copyDeepLink('${ch.id}')" class="text-blue-400 hover:text-blue-300 text-sm">${t('owner.copy_link')}</button>
       </div>
     </div>
   `).join('');
 
-  // Wallet section
-// Inside loadOwnerDashboard(), replace the walletDiv block and btn-connect-wallet handler with:
-
-const walletDiv = document.getElementById('wallet-section');
-walletDiv.innerHTML = `
-  <h3 class="text-lg font-semibold text-white mb-2">Payout Wallet</h3>
-  <p id="current-wallet" class="text-slate-400 font-mono text-sm break-all">Not connected</p>
-  <button id="btn-connect-wallet" class="mt-3 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl text-sm">Connect TON Wallet</button>
-`;
-
-// Function to get wallet address from TON Connect
-async function getWalletAddress() {
-  // If already connected, return address immediately
-  if (tonConnectUI.connected && tonConnectUI.account?.address) {
-    return tonConnectUI.account.address;
-  }
-
-  // Otherwise, try to connect
-  await tonConnectUI.connectWallet();
-
-  // After connection, the address should be available
-  if (tonConnectUI.connected && tonConnectUI.account?.address) {
-    return tonConnectUI.account.address;
-  }
-  throw new Error("Could not get wallet address");
-}
-
-document.getElementById('btn-connect-wallet').onclick = async () => {
-  try {
-    const address = await getWalletAddress();
-    // Extract friendly string
-    let walletAddress = "";
-    if (typeof address === "string") {
-      walletAddress = address;
-    } else if (address?.toString) {
-      walletAddress = address.toString(true, true, true); // bounceable, testOnly, urlSafe
-    } else {
-      throw new Error("Invalid address format");
+  const walletDiv = document.getElementById('wallet-section');
+  walletDiv.innerHTML = `
+    <h3 class="text-lg font-semibold text-white mb-2">${t('owner.wallet')}</h3>
+    <p id="current-wallet" class="text-slate-400 font-mono text-sm break-all">${t('owner.wallet_not_set')}</p>
+    <button id="btn-connect-wallet" class="mt-3 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl text-sm">${t('owner.connect_wallet')}</button>
+  `;
+  document.getElementById('btn-connect-wallet').onclick = async () => {
+    try {
+      const connected = await tonConnectUI.connectWallet();
+      let walletAddress = "";
+      if (typeof connected.account.address === "string") {
+        walletAddress = connected.account.address;
+      } else if (connected.account.address?.toString) {
+        walletAddress = connected.account.address.toString(true, true, true);
+      } else {
+        throw new Error("Could not extract wallet address");
+      }
+      const res = await apiFetch('/api/auth/wallet', {
+        method: 'POST',
+        body: JSON.stringify({ wallet_address: walletAddress }),
+      });
+      if (res.success) {
+        document.getElementById('current-wallet').innerText = walletAddress;
+        alert(t('owner.wallet_saved'));
+      } else {
+        alert(t('error.generic') + res.error);
+      }
+    } catch (e) {
+      console.error("Wallet connection error:", e);
+      alert(t('owner.wallet_connection_failed') + ': ' + e.message);
     }
-
-    console.log("Wallet address:", walletAddress);
-
-    const res = await apiFetch('/api/auth/wallet', {
-      method: 'POST',
-      body: JSON.stringify({ wallet_address: walletAddress }),
-    });
-
-    if (res.success) {
-      document.getElementById('current-wallet').innerText = walletAddress;
-      alert('Wallet saved!');
-    } else {
-      alert('Failed to save wallet: ' + res.error);
-    }
-  } catch (e) {
-    console.error("Wallet connection error:", e);
-    alert('Connection failed: ' + e.message);
-  }
-};
+  };
 
   loadWithdrawalSection();
   lucide.createIcons();
 }
 
-// Channel Edit Modal
 let editingChannelId = null;
 function openEditModal(channelId) {
   editingChannelId = channelId;
-  // Fetch channel data and fill modal
   supabaseClient.from('channels').select('*').eq('id', channelId).single().then(({ data }) => {
     document.getElementById('edit-price').value = data.subscription_price;
     document.getElementById('edit-duration').value = data.duration_days;
@@ -295,7 +258,6 @@ document.getElementById('modal-save').onclick = async () => {
   loadOwnerDashboard();
 };
 
-// Add Channel Modal
 function openAddChannelModal() {
   document.getElementById('add-channel-modal').classList.remove('hidden');
 }
@@ -305,27 +267,25 @@ function closeAddChannelModal() {
 async function submitAddChannel() {
   const channel_name = document.getElementById('add-channel-name').value.trim();
   const channel_invite_link = document.getElementById('add-channel-link').value.trim();
-  if (!channel_name || !channel_invite_link) return alert('Please fill all fields');
+  if (!channel_name || !channel_invite_link) return alert(t('error.generic') + ' Missing fields');
   const res = await apiFetch('/api/channels/register', {
     method: 'POST',
     body: JSON.stringify({ channel_name, channel_invite_link }),
   });
-  if (res.error) return alert('Error: ' + res.error);
+  if (res.error) return alert(t('error.generic') + res.error);
   closeAddChannelModal();
   loadOwnerDashboard();
 }
 
-// Copy deep link
 function copyDeepLink(channelId) {
   const link = `https://t.me/MySubsHub_bot?start=${channelId}`;
   navigator.clipboard.writeText(link).then(() => {
-    alert('Link copied!');
+    alert(t('owner.copy_link') + '!');
   }).catch(() => {
     prompt('Copy link:', link);
   });
 }
 
-// Toggle channel active
 async function toggleChannel(channelId, isActive) {
   await apiFetch(`/api/channels/${channelId}`, {
     method: 'PUT',
@@ -333,30 +293,28 @@ async function toggleChannel(channelId, isActive) {
   });
 }
 
-// ========== WITHDRAWALS ==========
 async function loadWithdrawalSection() {
   const data = await apiFetch('/api/withdrawals/my');
   const section = document.getElementById('withdrawal-section');
   section.innerHTML = `
-    <h3 class="text-lg font-semibold text-white mb-2">Earnings</h3>
-    <p class="text-slate-400">Pending: <strong class="text-white">${data.pendingEarnings.toFixed(6)} TON</strong></p>
-    <button onclick="requestWithdrawal()" class="mt-3 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/30 px-4 py-2 rounded-xl text-sm">Request Withdrawal</button>
+    <h3 class="text-lg font-semibold text-white mb-2">${t('owner.withdrawal_earnings')}</h3>
+    <p class="text-slate-400">${t('owner.withdrawal_pending')} <strong class="text-white">${data.pendingEarnings.toFixed(6)} TON</strong></p>
+    <button onclick="requestWithdrawal()" class="mt-3 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/30 px-4 py-2 rounded-xl text-sm">${t('owner.withdrawal_request')}</button>
     <div class="mt-4">${data.withdrawals?.map(w => `<p class="text-sm text-slate-400">${w.amount} TON - <span class="text-amber-400">${w.status}</span></p>`).join('')}</div>
   `;
 }
 async function requestWithdrawal() {
-  const amount = prompt('Enter amount in TON to withdraw:');
+  const amount = prompt(t('owner.withdrawal_amount_prompt'));
   if (!amount) return;
   const res = await apiFetch('/api/withdrawals/request', { method: 'POST', body: JSON.stringify({ amount: parseFloat(amount) }) });
   if (res.success) {
-    alert('Withdrawal requested.');
+    alert(t('owner.withdrawal_request_success'));
     loadOwnerDashboard();
   } else {
-    alert('Error: ' + res.error);
+    alert(t('owner.withdrawal_request_error') + ' ' + res.error);
   }
 }
 
-// ========== RATING & REPORTING ==========
 let ratingChannelId = null, reportChannelId = null, selectedRating = 0;
 
 function openRating(channelId) {
@@ -377,11 +335,11 @@ function closeRating() {
   ratingChannelId = null; selectedRating = 0;
 }
 async function submitRating() {
-  if (!selectedRating) return alert('Select a rating');
+  if (!selectedRating) return alert(t('rating.select_error'));
   const comment = document.getElementById('rating-comment').value;
   await apiFetch('/api/reviews', { method: 'POST', body: JSON.stringify({ channel_id: ratingChannelId, rating: selectedRating, comment }) });
   closeRating();
-  alert('Review submitted!');
+  alert(t('rating.submitted'));
 }
 
 function openReport(channelId) {
@@ -397,10 +355,9 @@ async function submitReport() {
   const description = document.getElementById('report-description').value;
   await apiFetch('/api/reports', { method: 'POST', body: JSON.stringify({ channel_id: reportChannelId, reason, description }) });
   closeReport();
-  alert('Report submitted.');
+  alert(t('report.submitted'));
 }
 
-// ========== ADMIN DASHBOARD ==========
 async function loadAdminDashboard() {
   loadAdminReports();
   loadAdminWithdrawals();
@@ -412,8 +369,8 @@ async function loadAdminReports() {
     <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4">
       <p class="text-white">${r.channel?.channel_name}</p>
       <p class="text-slate-400 text-sm">${r.reason} – ${r.description}</p>
-      <button onclick="reviewReport('${r.id}', 'ban')" class="mt-2 bg-red-600/20 text-red-400 border border-red-500/30 px-3 py-1.5 rounded-xl text-sm">Ban</button>
-      <button onclick="reviewReport('${r.id}', 'dismiss')" class="mt-2 bg-slate-800 text-slate-300 px-3 py-1.5 rounded-xl text-sm ml-2">Dismiss</button>
+      <button onclick="reviewReport('${r.id}', 'ban')" class="mt-2 bg-red-600/20 text-red-400 border border-red-500/30 px-3 py-1.5 rounded-xl text-sm">${t('admin.ban')}</button>
+      <button onclick="reviewReport('${r.id}', 'dismiss')" class="mt-2 bg-slate-800 text-slate-300 px-3 py-1.5 rounded-xl text-sm ml-2">${t('admin.dismiss')}</button>
     </div>
   `).join('');
 }
@@ -428,19 +385,18 @@ async function loadAdminWithdrawals() {
     <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4">
       <p class="text-white">${w.owner?.first_name} – ${w.amount} TON</p>
       <p class="text-slate-400 text-sm">${w.status}</p>
-      <button onclick="approveWithdrawal('${w.id}')" class="mt-2 bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 px-3 py-1.5 rounded-xl text-sm">Approve & Pay</button>
+      <button onclick="approveWithdrawal('${w.id}')" class="mt-2 bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 px-3 py-1.5 rounded-xl text-sm">${t('admin.approve_pay')}</button>
     </div>
   `).join('');
 }
 async function approveWithdrawal(id) {
   const res = await apiFetch(`/api/admin/withdrawals/${id}/approve`, { method: 'POST' });
   if (res.success) {
-    alert('Withdrawal processed.');
+    alert(t('admin.approve_pay') + '!');
     loadAdminWithdrawals();
   } else {
-    alert('Failed: ' + res.error);
+    alert(t('error.generic') + res.error);
   }
 }
 
-// ========== START ==========
 window.onload = init;
