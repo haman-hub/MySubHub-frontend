@@ -18,7 +18,6 @@ const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
   buttonRootId: 'ton-connect-button'
 });
 
-
 let currentUser = null;
 let isAdmin = false;
 
@@ -42,6 +41,7 @@ function showPage(pageId) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
+// ========== INIT ==========
 async function init() {
   applyTranslations();
   try {
@@ -86,6 +86,7 @@ async function init() {
   }
 }
 
+// ========== PURCHASE PAGE ==========
 async function loadPurchasePage(channelId) {
   const { data, error } = await supabaseClient
     .from('channels')
@@ -144,7 +145,7 @@ async function initiatePayment(channelId, price) {
     });
 
     if (confirmRes.success) {
-      alert(t('owner.wallet_saved')); // Replace with proper success message
+      alert(t('owner.wallet_saved')); // Replace with proper success message later
       showPage('subscriptions');
       loadSubscriptions();
     } else {
@@ -156,6 +157,7 @@ async function initiatePayment(channelId, price) {
   }
 }
 
+// ========== SUBSCRIPTIONS ==========
 async function loadSubscriptions() {
   const subs = await apiFetch('/api/subscriptions/my');
   const list = document.getElementById('subscriptions-list');
@@ -186,6 +188,7 @@ async function renewSubscription(subId) {
   alert('Renewal not implemented yet');
 }
 
+// ========== OWNER DASHBOARD ==========
 async function loadOwnerDashboard() {
   const channels = await apiFetch('/api/channels/my');
   const container = document.getElementById('channels-list');
@@ -244,6 +247,7 @@ async function loadOwnerDashboard() {
   lucide.createIcons();
 }
 
+// ========== CHANNEL EDIT ==========
 let editingChannelId = null;
 function openEditModal(channelId) {
   editingChannelId = channelId;
@@ -272,6 +276,7 @@ document.getElementById('modal-save').onclick = async () => {
   loadOwnerDashboard();
 };
 
+// ========== ADD CHANNEL ==========
 function openAddChannelModal() {
   document.getElementById('add-channel-modal').classList.remove('hidden');
 }
@@ -307,6 +312,7 @@ async function toggleChannel(channelId, isActive) {
   });
 }
 
+// ========== WITHDRAWALS ==========
 async function loadWithdrawalSection() {
   const data = await apiFetch('/api/withdrawals/my');
   const section = document.getElementById('withdrawal-section');
@@ -330,20 +336,104 @@ async function requestWithdrawal() {
   }
 }
 
-// Rating & Reporting functions (unchanged, but modals now have new styles)
+// ========== RATING & REPORTING ==========
 let ratingChannelId = null, reportChannelId = null, selectedRating = 0;
-function openRating(channelId) { ... } // same as before
-function closeRating() { ... }
-async function submitRating() { ... }
-function openReport(channelId) { ... }
-function closeReport() { ... }
-async function submitReport() { ... }
 
-// Admin dashboard functions (unchanged, but updated HTML classes)
-async function loadAdminDashboard() { ... }
-async function loadAdminReports() { ... }
-async function reviewReport(reportId, action) { ... }
-async function loadAdminWithdrawals() { ... }
-async function approveWithdrawal(id) { ... }
+function openRating(channelId) {
+  ratingChannelId = channelId;
+  document.getElementById('rating-modal').classList.remove('hidden');
+  const container = document.getElementById('star-rating');
+  container.innerHTML = '';
+  for (let i = 1; i <= 5; i++) {
+    const star = document.createElement('span');
+    star.textContent = i <= selectedRating ? '★' : '☆';
+    star.className = 'cursor-pointer text-amber-400 text-3xl';
+    star.onclick = () => { selectedRating = i; openRating(channelId); };
+    container.appendChild(star);
+  }
+}
+function closeRating() {
+  document.getElementById('rating-modal').classList.add('hidden');
+  ratingChannelId = null; selectedRating = 0;
+}
+async function submitRating() {
+  if (!selectedRating) return alert(t('rating.select_error'));
+  const comment = document.getElementById('rating-comment').value;
+  await apiFetch('/api/reviews', { method: 'POST', body: JSON.stringify({ channel_id: ratingChannelId, rating: selectedRating, comment }) });
+  closeRating();
+  alert(t('rating.submitted'));
+}
+
+function openReport(channelId) {
+  reportChannelId = channelId;
+  document.getElementById('report-modal').classList.remove('hidden');
+}
+function closeReport() {
+  document.getElementById('report-modal').classList.add('hidden');
+  reportChannelId = null;
+}
+async function submitReport() {
+  const reason = document.getElementById('report-reason').value;
+  const description = document.getElementById('report-description').value;
+  await apiFetch('/api/reports', { method: 'POST', body: JSON.stringify({ channel_id: reportChannelId, reason, description }) });
+  closeReport();
+  alert(t('report.submitted'));
+}
+
+// ========== ADMIN DASHBOARD ==========
+async function loadAdminDashboard() {
+  loadAdminReports();
+  loadAdminWithdrawals();
+}
+async function loadAdminReports() {
+  const reports = await apiFetch('/api/admin/reports');
+  const container = document.getElementById('admin-reports');
+  container.innerHTML = reports.map(r => `
+    <div class="glass-card p-4 hover:shadow-lg transition">
+      <div class="flex justify-between items-start">
+        <div>
+          <h3 class="font-semibold text-white">${r.channel?.channel_name}</h3>
+          <p class="text-slate-400 text-sm">${r.reason} – ${r.description}</p>
+          <p class="text-slate-500 text-xs mt-1">By: ${r.reporter?.first_name} (@${r.reporter?.username})</p>
+        </div>
+        <span class="badge bg-amber-500/10 text-amber-400 border border-amber-500/30">${r.status}</span>
+      </div>
+      <div class="flex gap-2 mt-3">
+        <button onclick="reviewReport('${r.id}', 'ban')" class="bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-500/30 px-3 py-1.5 rounded-xl text-sm font-medium transition">${t('admin.ban')}</button>
+        <button onclick="reviewReport('${r.id}', 'dismiss')" class="btn-secondary px-3 py-1.5 rounded-xl text-sm text-slate-300">${t('admin.dismiss')}</button>
+      </div>
+    </div>
+  `).join('');
+}
+async function reviewReport(reportId, action) {
+  await apiFetch(`/api/admin/reports/${reportId}/review`, { method: 'POST', body: JSON.stringify({ action }) });
+  loadAdminReports();
+}
+async function loadAdminWithdrawals() {
+  const withdrawals = await apiFetch('/api/admin/withdrawals');
+  const container = document.getElementById('admin-withdrawals');
+  container.innerHTML = withdrawals.map(w => `
+    <div class="glass-card p-4 hover:shadow-lg transition">
+      <div class="flex justify-between items-center">
+        <div>
+          <h3 class="font-semibold text-white">${w.owner?.first_name} (@${w.owner?.username})</h3>
+          <p class="text-slate-400 text-sm">${w.amount} TON</p>
+          <p class="text-slate-500 text-xs">Wallet: ${w.owner?.wallet_address || 'Not set'}</p>
+        </div>
+        <span class="badge bg-amber-500/10 text-amber-400 border border-amber-500/30">${w.status}</span>
+      </div>
+      <button onclick="approveWithdrawal('${w.id}')" class="btn-primary mt-3 w-full text-white px-3 py-1.5 rounded-xl text-sm font-medium shadow-lg shadow-emerald-500/20">${t('admin.approve_pay')}</button>
+    </div>
+  `).join('');
+}
+async function approveWithdrawal(id) {
+  const res = await apiFetch(`/api/admin/withdrawals/${id}/approve`, { method: 'POST' });
+  if (res.success) {
+    alert(t('admin.approve_pay') + '!');
+    loadAdminWithdrawals();
+  } else {
+    alert(t('error.generic') + res.error);
+  }
+}
 
 window.onload = init;
