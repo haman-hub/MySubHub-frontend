@@ -5,19 +5,28 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>TON Subscriptions</title>
 
+  <!-- Tailwind CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Telegram Web App SDK -->
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <!-- TON Connect UI -->
   <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
+  <!-- Supabase JS client -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- TonWeb -->
   <script src="https://unpkg.com/tonweb@0.0.61/dist/tonweb.min.js"></script>
+  <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 
+  <!-- Google Font Inter -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
   <style>
-    * { font-family: 'Inter', system-ui, -apple-system, sans-serif; }
+    * {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    }
     body {
       background: radial-gradient(circle at top left, rgba(37, 99, 235, 0.15) 0%, transparent 50%),
                   radial-gradient(circle at bottom right, rgba(16, 185, 129, 0.08) 0%, transparent 50%),
@@ -45,12 +54,27 @@
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
     }
-    .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 9999px; }
+    .status-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 9999px;
+    }
     .hidden-page { display: none; }
-    .modal-backdrop { animation: fadeIn 0.2s ease; }
-    .modal-content { animation: slideUp 0.25s ease; }
-    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-    @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    .modal-backdrop {
+      animation: fadeIn 0.2s ease;
+    }
+    .modal-content {
+      animation: slideUp 0.25s ease;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    @keyframes slideUp {
+      from { transform: translateY(20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
     .btn-primary {
       background: linear-gradient(135deg, #2563eb, #1d4ed8);
       transition: all 0.2s ease;
@@ -64,7 +88,9 @@
       border: 1px solid rgba(71, 85, 105, 0.5);
       transition: all 0.2s ease;
     }
-    .btn-secondary:hover { background: rgba(51, 65, 85, 0.7); }
+    .btn-secondary:hover {
+      background: rgba(51, 65, 85, 0.7);
+    }
     .input-dark {
       background: rgba(2, 6, 23, 0.8);
       border: 1px solid rgba(51, 65, 85, 0.6);
@@ -103,12 +129,7 @@
         <button id="nav-owner" onclick="showPage('owner'); loadOwnerDashboard();" class="px-3 py-1.5 text-xs font-medium rounded-full bg-slate-800/70 text-slate-300 hover:bg-slate-700/80 transition" style="display:none;"><span data-i18n="nav.owner">My Channels</span></button>
         <button id="nav-admin" onclick="showPage('admin'); loadAdminDashboard();" class="px-3 py-1.5 text-xs font-medium rounded-full bg-slate-800/70 text-slate-300 hover:bg-slate-700/80 transition" style="display:none;"><span data-i18n="nav.admin">Admin</span></button>
       </nav>
-      <div class="flex items-center gap-2">
-        <div id="ton-connect-button" class="flex-shrink-0"></div>
-        <button id="btn-language" onclick="openLanguageModal()" class="px-2 py-1.5 rounded-full bg-slate-800/70 hover:bg-slate-700/80 transition text-slate-300">
-          <i data-lucide="globe" class="w-4 h-4"></i>
-        </button>
-      </div>
+      <div id="ton-connect-button" class="flex-shrink-0"></div>
     </div>
   </header>
 
@@ -178,6 +199,7 @@
     </section>
   </main>
 
+  <!-- Modals (unchanged content, only styling) -->
   <!-- Edit Channel Modal -->
   <div id="edit-modal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm hidden flex items-center justify-center modal-backdrop">
     <div class="glass-card p-6 w-full max-w-md mx-4 modal-content">
@@ -243,25 +265,7 @@
     </div>
   </div>
 
-  <!-- Language Selector Modal -->
-  <div id="language-modal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm hidden flex items-center justify-center modal-backdrop">
-    <div class="glass-card p-6 w-full max-w-sm mx-4 modal-content">
-      <h3 class="text-lg font-semibold mb-4 text-white">🌐 Language / زبان</h3>
-      <div class="grid grid-cols-2 gap-2">
-        <button onclick="selectLanguage('en')" class="btn-secondary px-3 py-2 rounded-xl text-sm text-slate-300 hover:bg-slate-700 transition">English</button>
-        <button onclick="selectLanguage('fa')" class="btn-secondary px-3 py-2 rounded-xl text-sm text-slate-300 hover:bg-slate-700 transition">فارسی</button>
-        <button onclick="selectLanguage('hi')" class="btn-secondary px-3 py-2 rounded-xl text-sm text-slate-300 hover:bg-slate-700 transition">हिन्दी</button>
-        <button onclick="selectLanguage('ru')" class="btn-secondary px-3 py-2 rounded-xl text-sm text-slate-300 hover:bg-slate-700 transition">Русский</button>
-        <button onclick="selectLanguage('ar')" class="btn-secondary px-3 py-2 rounded-xl text-sm text-slate-300 hover:bg-slate-700 transition">العربية</button>
-        <button onclick="selectLanguage('zh')" class="btn-secondary px-3 py-2 rounded-xl text-sm text-slate-300 hover:bg-slate-700 transition">中文</button>
-        <button onclick="selectLanguage('id')" class="btn-secondary px-3 py-2 rounded-xl text-sm text-slate-300 hover:bg-slate-700 transition">Bahasa Indonesia</button>
-        <button onclick="selectLanguage('pt-BR')" class="btn-secondary px-3 py-2 rounded-xl text-sm text-slate-300 hover:bg-slate-700 transition">Português (BR)</button>
-        <button onclick="selectLanguage('tr')" class="btn-secondary px-3 py-2 rounded-xl text-sm text-slate-300 hover:bg-slate-700 transition">Türkçe</button>
-      </div>
-      <button onclick="closeLanguageModal()" class="btn-secondary w-full mt-4 px-4 py-2 rounded-xl text-sm text-slate-300" data-i18n="rating.cancel">Cancel</button>
-    </div>
-  </div>
-
+  <!-- Footer -->
   <footer class="sticky bottom-0 bg-slate-950/90 backdrop-blur-md border-t border-slate-800/80 px-4 py-2">
     <div class="flex items-center justify-between max-w-4xl mx-auto text-xs text-slate-500">
       <div class="flex items-center gap-2">
