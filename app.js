@@ -18,8 +18,10 @@ const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
   buttonRootId: 'ton-connect-button'
 });
 
+
 let currentUser = null;
 let isAdmin = false;
+let currentPage = 'subscriptions';
 
 async function apiFetch(url, options = {}) {
   const initData = TG.initData;
@@ -35,6 +37,7 @@ async function apiFetch(url, options = {}) {
 }
 
 function showPage(pageId) {
+  currentPage = pageId;
   document.querySelectorAll('.hidden-page').forEach(el => el.classList.add('hidden-page'));
   const page = document.getElementById(`page-${pageId}`);
   if (page) page.classList.remove('hidden-page');
@@ -145,7 +148,7 @@ async function initiatePayment(channelId, price) {
     });
 
     if (confirmRes.success) {
-      alert(t('owner.wallet_saved')); // Replace with proper success message later
+      alert(t('owner.wallet_saved')); // Placeholder: replace with proper success message
       showPage('subscriptions');
       loadSubscriptions();
     } else {
@@ -435,5 +438,37 @@ async function approveWithdrawal(id) {
     alert(t('error.generic') + res.error);
   }
 }
+
+// ========== LANGUAGE MODAL ==========
+function openLanguageModal() {
+  document.getElementById('language-modal').classList.remove('hidden');
+}
+
+function closeLanguageModal() {
+  document.getElementById('language-modal').classList.add('hidden');
+}
+
+function selectLanguage(lang) {
+  setLanguage(lang);
+  closeLanguageModal();
+}
+
+// ========== REFRESH CURRENT PAGE AFTER LANGUAGE CHANGE ==========
+window.refreshCurrentPage = function() {
+  switch (currentPage) {
+    case 'subscriptions':
+      loadSubscriptions();
+      break;
+    case 'owner':
+      loadOwnerDashboard();
+      break;
+    case 'admin':
+      loadAdminDashboard();
+      break;
+    case 'purchase':
+      // Optionally reload purchase page if needed
+      break;
+  }
+};
 
 window.onload = init;
