@@ -15,7 +15,8 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
 // ========== TON CONNECT ==========
 const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
   manifestUrl: 'https://haman-hub.github.io/MySubHub-frontend/manifest.json',
-  buttonRootId: 'ton-connect-button'
+  buttonRootId: 'ton-connect-button',
+  network: 'testnet'
 });
 
 
