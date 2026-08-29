@@ -50,6 +50,8 @@ async function init() {
   applyTranslations();
   try {
     const res = await apiFetch('/api/auth/validate', { method: 'POST', body: JSON.stringify({}) });
+    const urlStart = new URLSearchParams(window.location.search).get('startapp');
+const startParam = TG.initDataUnsafe?.start_param || urlStart;
     if (res.user) {
       currentUser = res.user;
       document.getElementById('nav-bar').classList.remove('hidden');
