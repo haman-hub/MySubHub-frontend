@@ -50,8 +50,7 @@ async function init() {
   applyTranslations();
   try {
     const res = await apiFetch('/api/auth/validate', { method: 'POST', body: JSON.stringify({}) });
-    const urlStart = new URLSearchParams(window.location.search).get('startapp');
-const startParam = TG.initDataUnsafe?.start_param || urlStart;
+    
     if (res.user) {
       currentUser = res.user;
       document.getElementById('nav-bar').classList.remove('hidden');
@@ -72,7 +71,9 @@ const startParam = TG.initDataUnsafe?.start_param || urlStart;
         }
       });
 
-      const startParam = TG.initDataUnsafe?.start_param;
+      //const startParam = TG.initDataUnsafe?.start_param;
+      const urlStart = new URLSearchParams(window.location.search).get('startapp');
+const startParam = TG.initDataUnsafe?.start_param || urlStart;
       if (startParam && /^[0-9a-fA-F-]{36}$/.test(startParam)) {
         loadPurchasePage(startParam);
         showPage('purchase');
