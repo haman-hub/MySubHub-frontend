@@ -105,13 +105,25 @@ async function loadPurchasePage(channelId) {
     card.innerHTML = `<p class="text-red-400">${t('purchase.not_found')}</p>`;
     return;
   }
+
+  const platformFee = data.subscription_price * 0.01;
+  const networkFee = 0.05; // should match backend
+  const total = data.subscription_price + platformFee + networkFee;
+
   card.innerHTML = `
     <div class="text-center mb-6">
       <div class="w-16 h-16 mx-auto rounded-2xl bg-blue-600/20 flex items-center justify-center mb-3">
         <i data-lucide="zap" class="w-8 h-8 text-blue-400"></i>
       </div>
       <h2 class="text-2xl font-bold">${data.channel_name}</h2>
-      <p class="text-slate-400 mt-2">${t('purchase.subscription')} <strong class="text-white">${data.subscription_price} TON</strong> ${t('purchase.per')} ${data.duration_days} ${t('purchase.days')}</p>
+      <p class="text-slate-400 mt-2">
+        ${t('purchase.subscription')} <strong class="text-white">${total.toFixed(2)} TON</strong> ${t('purchase.per')} ${data.duration_days} ${t('purchase.days')}
+      </p>
+      <div class="mt-3 text-sm text-slate-400 space-y-1">
+        <div>Base price: ${data.subscription_price} TON</div>
+        <div>Platform fee (1%): ${platformFee.toFixed(2)} TON</div>
+        <div>Network fee: ${networkFee.toFixed(2)} TON</div>
+      </div>
     </div>
     <button id="btn-pay" class="btn-primary w-full text-white font-semibold py-3 rounded-xl shadow-lg shadow-blue-500/20">${t('purchase.pay_button')}</button>
   `;
