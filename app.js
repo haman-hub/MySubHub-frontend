@@ -127,19 +127,13 @@ async function initiatePayment(channelId, price) {
     });
     if (!initRes.wallet) throw new Error('Failed to initiate payment');
 
-    const tonweb = new TonWeb();
-    const commentCell = new TonWeb.boc.Cell();
-    commentCell.bits.writeUint(0, 32);
-    commentCell.bits.writeString(initRes.memo);
-    const payloadBoc = await commentCell.toBoc();
-    const payloadBase64 = TonWeb.utils.bytesToBase64(payloadBoc);
-
+    // No need for TonWeb – send a plain transfer
     const transaction = {
       validUntil: Math.floor(Date.now() / 1000) + 360,
       messages: [{
         address: initRes.wallet,
-        amount: initRes.amountNano,
-        payload: payloadBase64,
+        amount: initRes.amountNano, // already in nanoTON
+        // payload omitted – backend does not verify it for MVP
       }],
     };
 
@@ -152,15 +146,15 @@ async function initiatePayment(channelId, price) {
     });
 
     if (confirmRes.success) {
-      alert(t('owner.wallet_saved')); // Placeholder: replace with proper success message
+      alert('Payment successful!'); // Replace with proper success message
       showPage('subscriptions');
       loadSubscriptions();
     } else {
-      alert(t('error.generic') + (confirmRes.error || 'Unknown error'));
+      alert('Payment failed: ' + (confirmRes.error || 'Unknown error'));
     }
   } catch (e) {
     console.error('Payment error:', e);
-    alert(t('owner.wallet_connection_failed') + ': ' + e.message);
+    alert('Payment error: ' + e.message);
   }
 }
 
