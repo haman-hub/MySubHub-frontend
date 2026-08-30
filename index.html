@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
+<head id="app-head">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>TON Subscriptions</title>
+  <title>TON Subscriptions Hub</title>
 
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
@@ -13,269 +13,444 @@
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 
   <style>
-    * { font-family: 'Inter', system-ui, -apple-system, sans-serif; }
+    * { font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif; }
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
+
+    :root {
+      --tg-bg: var(--tg-theme-bg-color, #090d16);
+      --tg-sec-bg: var(--tg-theme-secondary-bg-color, #111827);
+      --tg-text: var(--tg-theme-text-color, #f8fafc);
+      --tg-hint: var(--tg-theme-hint-color, #94a3b8);
+      --tg-link: var(--tg-theme-link-color, #38bdf8);
+      --tg-btn: var(--tg-theme-button-color, #0284c7);
+      --tg-btn-text: var(--tg-theme-button-text-color, #ffffff);
+    }
+
     body {
-      background: radial-gradient(circle at top left, rgba(37, 99, 235, 0.15) 0%, transparent 50%),
-                  radial-gradient(circle at bottom right, rgba(16, 185, 129, 0.08) 0%, transparent 50%),
-                  #020617;
+      background-color: #0b0f19;
+      background-image: 
+        radial-gradient(at 0% 0%, rgba(2, 132, 199, 0.15) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.08) 0px, transparent 50%);
+      color: #f8fafc;
       min-height: 100vh;
       margin: 0;
+      padding-bottom: 6rem;
     }
+
     .glass-card {
-      background: rgba(15, 23, 42, 0.7);
-      backdrop-filter: blur(12px);
-      border: 1px solid rgba(51, 65, 85, 0.5);
-      border-radius: 1.5rem;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-      transition: all 0.2s ease;
+      background: rgba(17, 24, 39, 0.8);
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 1.25rem;
+      box-shadow: 0 4px 24px -1px rgba(0, 0, 0, 0.35);
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
     }
     .glass-card:hover {
-      border-color: rgba(59, 130, 246, 0.3);
-      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+      border-color: rgba(56, 189, 248, 0.3);
+      box-shadow: 0 8px 30px -2px rgba(2, 132, 199, 0.15);
     }
-    .glow-blue {
-      box-shadow: 0 0 20px -5px rgba(37, 99, 235, 0.4), 0 0 40px -10px rgba(37, 99, 235, 0.2);
-    }
-    .gradient-text {
-      background: linear-gradient(135deg, #60a5fa, #a78bfa);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-    }
-    .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 9999px; }
-    .hidden-page { display: none; }
-    .modal-backdrop { animation: fadeIn 0.2s ease; }
-    .modal-content { animation: slideUp 0.25s ease; }
-    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-    @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
     .btn-primary {
-      background: linear-gradient(135deg, #2563eb, #1d4ed8);
-      transition: all 0.2s ease;
+      background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+      color: #ffffff;
+      font-weight: 600;
+      transition: all 0.15s ease;
     }
     .btn-primary:hover {
-      background: linear-gradient(135deg, #3b82f6, #2563eb);
-      box-shadow: 0 8px 20px -5px rgba(37, 99, 235, 0.5);
+      background: linear-gradient(135deg, #0369a1 0%, #075985 100%);
+      box-shadow: 0 4px 20px -2px rgba(2, 132, 199, 0.5);
     }
+    .btn-primary:active {
+      transform: scale(0.98);
+    }
+
     .btn-secondary {
       background: rgba(30, 41, 59, 0.7);
-      border: 1px solid rgba(71, 85, 105, 0.5);
-      transition: all 0.2s ease;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: #e2e8f0;
+      transition: all 0.15s ease;
     }
-    .btn-secondary:hover { background: rgba(51, 65, 85, 0.7); }
+    .btn-secondary:hover {
+      background: rgba(51, 65, 85, 0.8);
+      color: #ffffff;
+    }
+    .btn-secondary:active {
+      transform: scale(0.98);
+    }
+
     .input-dark {
-      background: rgba(2, 6, 23, 0.8);
-      border: 1px solid rgba(51, 65, 85, 0.6);
-      transition: all 0.2s ease;
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      transition: all 0.15s ease;
     }
     .input-dark:focus {
-      border-color: #3b82f6;
-      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+      border-color: #38bdf8;
+      box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.2);
       outline: none;
     }
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      padding: 0.25rem 0.75rem;
-      border-radius: 9999px;
-      font-size: 0.7rem;
-      font-weight: 600;
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
+
+    .hidden-page { display: none !important; }
+
+    /* Bottom Sheet Drawer on Mobile, Centered Modal on Desktop */
+    .sheet-backdrop {
+      animation: fadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .sheet-drawer {
+      animation: slideUpMobile 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    @keyframes slideUpMobile {
+      from { transform: translateY(100%); }
+      to { transform: translateY(0); }
+    }
+    @media (min-width: 640px) {
+      .sheet-drawer {
+        animation: popDialog 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      @keyframes popDialog {
+        from { transform: scale(0.95); opacity: 0; }
+        to { transform: scale(1); opacity: 1; }
+      }
+    }
+
+    .nav-tab.active {
+      color: #38bdf8;
+    }
+    .nav-tab.active .nav-icon-box {
+      background: rgba(56, 189, 248, 0.15);
+      color: #38bdf8;
     }
   </style>
 </head>
-<body class="bg-slate-950 text-slate-100 antialiased">
+<body id="app-body" class="antialiased selection:bg-sky-500 selection:text-white">
 
-  <!-- Frosted Header -->
-  <header id="nav-bar" class="sticky top-0 z-50 backdrop-blur-md bg-slate-900/80 border-b border-slate-800/80 px-4 py-3 hidden">
-    <div class="flex items-center justify-between max-w-4xl mx-auto">
-      <div class="flex items-center gap-3">
-        <div class="w-8 h-8 rounded-lg bg-blue-600/20 flex items-center justify-center">
-          <i data-lucide="zap" class="w-5 h-5 text-blue-400"></i>
+  <!-- Header -->
+  <header id="nav-bar" class="sticky top-0 z-40 backdrop-blur-xl bg-slate-950/85 border-b border-slate-800/80 px-4 py-3">
+    <div class="flex items-center justify-between max-w-3xl mx-auto">
+      <div class="flex items-center gap-2.5">
+        <div class="w-9 h-9 rounded-xl bg-sky-500/15 border border-sky-500/30 flex items-center justify-center text-sky-400 shadow-sm shadow-sky-500/20">
+          <i data-lucide="gem" class="w-5 h-5"></i>
         </div>
-        <h1 class="text-lg font-bold text-white tracking-tight">TON <span class="gradient-text">Subs</span></h1>
+        <div>
+          <div class="flex items-center gap-1.5">
+            <span class="text-sm font-bold text-white tracking-tight">TON Subs</span>
+            <span class="text-[10px] uppercase font-semibold tracking-wide px-1.5 py-0.2 rounded bg-sky-500/10 text-sky-400 border border-sky-500/20">Mini App</span>
+          </div>
+          <p class="text-[10px] text-slate-400 leading-none mt-0.5">Telegram Channel Monetization</p>
+        </div>
       </div>
-      <nav class="flex gap-2">
-        <button id="nav-subscriptions" onclick="showPage('subscriptions'); loadSubscriptions();" class="px-3 py-1.5 text-xs font-medium rounded-full bg-slate-800/70 text-slate-300 hover:bg-slate-700/80 transition"><span data-i18n="nav.subscriptions">My Subs</span></button>
-        <button id="nav-owner" onclick="showPage('owner'); loadOwnerDashboard();" class="px-3 py-1.5 text-xs font-medium rounded-full bg-slate-800/70 text-slate-300 hover:bg-slate-700/80 transition" style="display:none;"><span data-i18n="nav.owner">My Channels</span></button>
-        <button id="nav-admin" onclick="showPage('admin'); loadAdminDashboard();" class="px-3 py-1.5 text-xs font-medium rounded-full bg-slate-800/70 text-slate-300 hover:bg-slate-700/80 transition" style="display:none;"><span data-i18n="nav.admin">Admin</span></button>
-      </nav>
-      <div class="flex items-center gap-2">
+
+      <div class="flex items-center gap-2" id="header-actions">
         <div id="ton-connect-button" class="flex-shrink-0"></div>
-        <button id="btn-language" onclick="openLanguageModal()" class="px-2 py-1.5 rounded-full bg-slate-800/70 hover:bg-slate-700/80 transition text-slate-300">
+        <button id="btn-language" onclick="openLanguageModal()" class="w-8 h-8 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/60 flex items-center justify-center text-slate-300 transition" title="Language">
           <i data-lucide="globe" class="w-4 h-4"></i>
         </button>
       </div>
     </div>
   </header>
 
-  <main class="container mx-auto px-4 py-6 max-w-4xl">
+  <!-- Main Content Layout -->
+  <main class="container mx-auto px-4 py-4 max-w-3xl" id="main-content">
     <!-- Purchase Page -->
-    <section id="page-purchase" class="hidden-page">
-      <div id="purchase-card" class="glass-card p-6 max-w-md mx-auto"></div>
+    <section id="page-purchase" class="hidden-page max-w-md mx-auto">
+      <div id="purchase-card" class="glass-card p-6"></div>
     </section>
 
-    <!-- Subscriptions Page -->
-    <section id="page-subscriptions" class="hidden-page">
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8">
-        <div class="glass-card p-5 text-center">
-          <p class="text-slate-500 text-xs uppercase tracking-wider font-semibold" data-i18n="subscriptions.status.active">Active Subs</p>
-          <p id="stat-active" class="text-3xl font-bold text-white mt-1">0</p>
-          <span class="inline-flex items-center gap-1 text-xs text-emerald-400 mt-2">+0</span>
+    <!-- Subscriptions Page (Subscriber Hub) -->
+    <section id="page-subscriptions" class="hidden-page space-y-4">
+      <!-- 3 Metrics Bento -->
+      <div class="grid grid-cols-3 gap-2.5">
+        <div class="glass-card p-3 text-center">
+          <span class="text-[11px] font-semibold text-slate-400 block truncate" data-i18n="subscriptions.status.active">Active Subs</span>
+          <p id="stat-active" class="text-xl font-bold text-white mt-0.5">0</p>
+          <div class="flex items-center justify-center gap-1 text-[10px] text-emerald-400 mt-0.5">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Active
+          </div>
         </div>
-        <div class="glass-card p-5 text-center">
-          <p class="text-slate-500 text-xs uppercase tracking-wider font-semibold" data-i18n="subscriptions.expires">Expiring Soon</p>
-          <p id="stat-expiring" class="text-3xl font-bold text-white mt-1">0</p>
-          <span class="inline-flex items-center gap-1 text-xs text-amber-400 mt-2">7 days</span>
+        <div class="glass-card p-3 text-center">
+          <span class="text-[11px] font-semibold text-slate-400 block truncate" data-i18n="subscriptions.expires">Expiring Soon</span>
+          <p id="stat-expiring" class="text-xl font-bold text-amber-400 mt-0.5">0</p>
+          <div class="text-[10px] text-amber-400/80 mt-0.5">Within 7d</div>
         </div>
-        <div class="glass-card p-5 text-center">
-          <p class="text-slate-500 text-xs uppercase tracking-wider font-semibold">Total Spent</p>
-          <p id="stat-spent" class="text-3xl font-bold text-white mt-1">0 TON</p>
+        <div class="glass-card p-3 text-center">
+          <span class="text-[11px] font-semibold text-slate-400 block truncate">Total Spent</span>
+          <p id="stat-spent" class="text-xl font-bold text-sky-400 mt-0.5">0 TON</p>
+          <div class="text-[10px] text-slate-500 mt-0.5">All-time</div>
         </div>
       </div>
 
-      <h2 class="text-xl font-bold mb-4 flex items-center gap-2"><i data-lucide="list" class="w-5 h-5 text-blue-400"></i> <span data-i18n="nav.subscriptions">My Subs</span></h2>
-      <div id="subscriptions-list" class="space-y-3"></div>
+      <!-- Passes List -->
+      <div class="pt-2">
+        <div class="flex items-center justify-between mb-3 px-1">
+          <h2 class="text-base font-bold text-white flex items-center gap-2">
+            <i data-lucide="layers" class="w-4 h-4 text-sky-400"></i>
+            <span data-i18n="nav.subscriptions">My Subscriptions</span>
+          </h2>
+          <span class="text-xs text-slate-400" id="subs-count-badge">Live Telegram Passes</span>
+        </div>
+        <div id="subscriptions-list" class="space-y-3"></div>
+      </div>
     </section>
 
-    <!-- Owner Dashboard -->
-    <section id="page-owner" class="hidden-page">
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8">
-        <div class="glass-card p-5 text-center">
-          <p class="text-slate-500 text-xs uppercase tracking-wider font-semibold" data-i18n="owner.total_channels">Total Channels</p>
-          <p id="owner-stat-channels" class="text-3xl font-bold text-white mt-1">0</p>
+    <!-- Creator Dashboard -->
+    <section id="page-owner" class="hidden-page space-y-4">
+      <!-- Creator Revenue Hero -->
+      <div class="glass-card p-4 bg-gradient-to-br from-slate-900/90 via-slate-900/60 to-sky-950/40 border-sky-500/20">
+        <div class="flex justify-between items-start mb-3">
+          <div>
+            <span class="text-xs font-semibold text-sky-400 uppercase tracking-wider" data-i18n="owner.earnings_pending">Pending Earnings</span>
+            <p id="owner-stat-earnings" class="text-3xl font-extrabold text-white mt-1">0 TON</p>
+            <span class="text-[11px] text-slate-400">Ready for instant TON withdrawal</span>
+          </div>
+          <button id="hero-btn-withdraw" onclick="requestWithdrawal()" class="btn-primary text-xs px-3.5 py-2 rounded-xl flex items-center gap-1.5 shadow-md shadow-sky-500/20">
+            <i data-lucide="arrow-up-right" class="w-3.5 h-3.5"></i>
+            <span data-i18n="owner.withdrawal_request">Withdraw</span>
+          </button>
         </div>
-        <div class="glass-card p-5 text-center">
-          <p class="text-slate-500 text-xs uppercase tracking-wider font-semibold" data-i18n="owner.total_subscribers">Total Subscribers</p>
-          <p id="owner-stat-subs" class="text-3xl font-bold text-white mt-1">0</p>
-        </div>
-        <div class="glass-card p-5 text-center">
-          <p class="text-slate-500 text-xs uppercase tracking-wider font-semibold" data-i18n="owner.earnings_pending">Earnings (pending)</p>
-          <p id="owner-stat-earnings" class="text-3xl font-bold text-white mt-1">0 TON</p>
+        
+        <div class="grid grid-cols-2 gap-2 pt-3 border-t border-slate-800/80">
+          <div class="flex items-center gap-2.5">
+            <div class="w-8 h-8 rounded-lg bg-slate-800/80 flex items-center justify-center text-slate-400">
+              <i data-lucide="tv" class="w-4 h-4 text-slate-300"></i>
+            </div>
+            <div>
+              <span class="text-[10px] text-slate-400 uppercase block font-medium" data-i18n="owner.total_channels">Channels</span>
+              <span id="owner-stat-channels" class="text-base font-bold text-white">0</span>
+            </div>
+          </div>
+          <div class="flex items-center gap-2.5">
+            <div class="w-8 h-8 rounded-lg bg-slate-800/80 flex items-center justify-center text-slate-400">
+              <i data-lucide="users" class="w-4 h-4 text-slate-300"></i>
+            </div>
+            <div>
+              <span class="text-[10px] text-slate-400 uppercase block font-medium" data-i18n="owner.total_subscribers">Members</span>
+              <span id="owner-stat-subs" class="text-base font-bold text-white">0</span>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div class="flex items-center justify-between mb-4">
-        <h2 class="text-xl font-bold flex items-center gap-2"><i data-lucide="radio" class="w-5 h-5 text-blue-400"></i> <span data-i18n="owner.your_channels">Your Channels</span></h2>
-        <button onclick="openAddChannelModal()" class="btn-primary text-white px-4 py-2 rounded-xl text-sm shadow-lg shadow-blue-500/20"><span data-i18n="owner.add_channel">Add Channel</span></button>
+      <!-- Channels Header -->
+      <div class="flex items-center justify-between pt-1 px-1">
+        <h2 class="text-base font-bold text-white flex items-center gap-2">
+          <i data-lucide="radio" class="w-4 h-4 text-sky-400"></i>
+          <span data-i18n="owner.your_channels">Your Monetized Channels</span>
+        </h2>
+        <button id="btn-add-channel-main" onclick="openAddChannelModal()" class="btn-primary text-xs px-3 py-1.5 rounded-xl flex items-center gap-1.5 shadow-sm shadow-sky-500/20">
+          <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+          <span data-i18n="owner.add_channel">Add Channel</span>
+        </button>
       </div>
-      <div id="channels-list" class="space-y-3 mb-8"></div>
 
-      <div id="wallet-section" class="glass-card p-5 mt-6"></div>
-      <div id="withdrawal-section" class="glass-card p-5 mt-6"></div>
+      <!-- Channels List Container -->
+      <div id="channels-list" class="space-y-3"></div>
+
+      <!-- Creator Payout Wallet & History -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+        <div id="wallet-section" class="glass-card p-4"></div>
+        <div id="withdrawal-section" class="glass-card p-4"></div>
+      </div>
     </section>
 
     <!-- Admin Dashboard -->
-    <section id="page-admin" class="hidden-page">
-      <h2 class="text-xl font-bold mb-4 flex items-center gap-2"><i data-lucide="shield-alert" class="w-5 h-5 text-blue-400"></i> <span data-i18n="admin.reports">Reported Channels</span></h2>
-      <div id="admin-reports" class="space-y-3 mb-8"></div>
+    <section id="page-admin" class="hidden-page space-y-4">
+      <div class="flex items-center justify-between px-1">
+        <h2 class="text-base font-bold text-white flex items-center gap-2">
+          <i data-lucide="shield-alert" class="w-4 h-4 text-amber-400"></i>
+          <span data-i18n="admin.reports">Reported Channels</span>
+        </h2>
+        <span class="text-xs text-amber-400/80 font-medium">Platform Moderation</span>
+      </div>
+      <div id="admin-reports" class="space-y-3"></div>
 
-      <h2 class="text-xl font-bold mb-4 flex items-center gap-2"><i data-lucide="wallet" class="w-5 h-5 text-blue-400"></i> <span data-i18n="admin.withdrawals">Pending Withdrawals</span></h2>
+      <div class="flex items-center justify-between pt-3 px-1">
+        <h2 class="text-base font-bold text-white flex items-center gap-2">
+          <i data-lucide="wallet" class="w-4 h-4 text-emerald-400"></i>
+          <span data-i18n="admin.withdrawals">Pending Creator Withdrawals</span>
+        </h2>
+        <span class="text-xs text-slate-400">TON Payouts</span>
+      </div>
       <div id="admin-withdrawals" class="space-y-3"></div>
     </section>
   </main>
 
+  <!-- Bottom Floating Navigation Bar (Telegram Native Inset Style) -->
+  <nav id="bottom-bar" class="fixed bottom-0 left-0 right-0 z-40 backdrop-blur-xl bg-slate-950/90 border-t border-slate-800/80 px-4 py-2">
+    <div class="max-w-md mx-auto flex items-center justify-around">
+      <button id="nav-subscriptions" onclick="showPage('subscriptions'); loadSubscriptions();" class="nav-tab active flex flex-col items-center gap-1 text-slate-400 transition py-1 px-3">
+        <div class="nav-icon-box w-8 h-8 rounded-full flex items-center justify-center transition">
+          <i data-lucide="layers" class="w-4 h-4"></i>
+        </div>
+        <span class="text-[11px] font-medium" data-i18n="nav.subscriptions">My Subs</span>
+      </button>
+
+      <button id="nav-owner" onclick="showPage('owner'); loadOwnerDashboard();" class="nav-tab flex flex-col items-center gap-1 text-slate-400 transition py-1 px-3" style="display:none;">
+        <div class="nav-icon-box w-8 h-8 rounded-full flex items-center justify-center transition">
+          <i data-lucide="radio" class="w-4 h-4"></i>
+        </div>
+        <span class="text-[11px] font-medium" data-i18n="nav.owner">Channels</span>
+      </button>
+
+      <button id="nav-admin" onclick="showPage('admin'); loadAdminDashboard();" class="nav-tab flex flex-col items-center gap-1 text-slate-400 transition py-1 px-3" style="display:none;">
+        <div class="nav-icon-box w-8 h-8 rounded-full flex items-center justify-center transition">
+          <i data-lucide="shield-check" class="w-4 h-4"></i>
+        </div>
+        <span class="text-[11px] font-medium" data-i18n="nav.admin">Admin</span>
+      </button>
+    </div>
+  </nav>
+
   <!-- Edit Channel Modal -->
-  <div id="edit-modal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm hidden flex items-center justify-center modal-backdrop">
-    <div class="glass-card p-6 w-full max-w-md mx-4 modal-content">
-      <h2 class="text-xl font-bold mb-4" data-i18n="owner.edit">Edit Channel</h2>
-      <label class="block text-sm text-slate-400 mb-1" data-i18n="purchase.subscription">Subscription Price (TON)</label>
-      <input id="edit-price" type="number" step="0.01" class="w-full input-dark rounded-xl px-3 py-2 text-white font-mono mb-3" />
-      <label class="block text-sm text-slate-400 mb-1" data-i18n="purchase.days">Duration (days)</label>
-      <input id="edit-duration" type="number" class="w-full input-dark rounded-xl px-3 py-2 text-white font-mono mb-3" />
-      <label class="flex items-center gap-2 text-sm text-slate-300 mb-4">
-        <input id="edit-renewal" type="checkbox" class="accent-blue-500" /> Auto renewal reminders
-      </label>
-      <div class="flex justify-end gap-2">
-        <button id="modal-cancel" class="btn-secondary px-4 py-2 text-slate-300 rounded-xl" data-i18n="rating.cancel">Cancel</button>
-        <button id="modal-save" class="btn-primary text-white px-4 py-2 rounded-xl shadow-lg shadow-blue-500/20" data-i18n="owner.add_channel_submit">Save</button>
+  <div id="edit-modal" class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm hidden flex items-end sm:items-center justify-center sheet-backdrop">
+    <div class="glass-card p-6 w-full max-w-md mx-auto sm:mx-4 rounded-b-none sm:rounded-2xl sheet-drawer border-b-0 sm:border-b">
+      <div class="w-10 h-1 bg-slate-700 rounded-full mx-auto mb-4 sm:hidden"></div>
+      <h2 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
+        <i data-lucide="edit-3" class="w-5 h-5 text-sky-400"></i>
+        <span data-i18n="owner.edit">Edit Channel Plan</span>
+      </h2>
+      
+      <div class="space-y-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 mb-1" data-i18n="purchase.subscription">Subscription Price (TON)</label>
+          <div class="relative">
+            <input id="edit-price" type="number" step="0.01" class="w-full input-dark rounded-xl px-3 py-2.5 text-white font-mono text-sm" placeholder="2.5" />
+            <span class="absolute right-3 top-2.5 text-xs text-sky-400 font-semibold font-mono">TON</span>
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 mb-1" data-i18n="purchase.days">Duration (days)</label>
+          <input id="edit-duration" type="number" class="w-full input-dark rounded-xl px-3 py-2.5 text-white font-mono text-sm" placeholder="30" />
+        </div>
+        <label class="flex items-center gap-2.5 text-xs text-slate-300 py-1 cursor-pointer">
+          <input id="edit-renewal" type="checkbox" class="w-4 h-4 rounded accent-sky-500" />
+          <span>Auto renewal reminders for subscribers</span>
+        </label>
+      </div>
+
+      <div class="flex justify-end gap-2.5 mt-5">
+        <button id="modal-cancel" class="btn-secondary px-4 py-2 text-xs rounded-xl" data-i18n="rating.cancel">Cancel</button>
+        <button id="modal-save" class="btn-primary px-4 py-2 text-xs rounded-xl shadow-md shadow-sky-500/20" data-i18n="owner.add_channel_submit">Save Changes</button>
       </div>
     </div>
   </div>
 
   <!-- Add Channel Modal -->
-  <div id="add-channel-modal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm hidden flex items-center justify-center modal-backdrop">
-    <div class="glass-card p-6 w-full max-w-md mx-4 modal-content">
-      <h2 class="text-xl font-bold mb-4" data-i18n="owner.add_channel">Add Channel</h2>
-      <label class="block text-sm text-slate-400 mb-1" data-i18n="owner.add_channel_name">Channel Name</label>
-      <input id="add-channel-name" type="text" class="w-full input-dark rounded-xl px-3 py-2 text-white mb-3" />
-      <label class="block text-sm text-slate-400 mb-1" data-i18n="owner.add_channel_link">Invite Link (t.me/...)</label>
-      <input id="add-channel-link" type="text" class="w-full input-dark rounded-xl px-3 py-2 text-white font-mono mb-4" />
-      <div class="flex justify-end gap-2">
-        <button onclick="closeAddChannelModal()" class="btn-secondary px-4 py-2 text-slate-300 rounded-xl" data-i18n="rating.cancel">Cancel</button>
-        <button onclick="submitAddChannel()" class="btn-primary text-white px-4 py-2 rounded-xl" data-i18n="owner.add_channel_submit">Add</button>
+  <div id="add-channel-modal" class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm hidden flex items-end sm:items-center justify-center sheet-backdrop">
+    <div class="glass-card p-6 w-full max-w-md mx-auto sm:mx-4 rounded-b-none sm:rounded-2xl sheet-drawer border-b-0 sm:border-b">
+      <div class="w-10 h-1 bg-slate-700 rounded-full mx-auto mb-4 sm:hidden"></div>
+      <h2 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
+        <i data-lucide="plus-circle" class="w-5 h-5 text-sky-400"></i>
+        <span data-i18n="owner.add_channel">Add Telegram Channel</span>
+      </h2>
+      
+      <div class="space-y-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 mb-1" data-i18n="owner.channel_name">Channel Title or Username</label>
+          <input id="new-channel-name" type="text" class="w-full input-dark rounded-xl px-3 py-2.5 text-white text-sm" placeholder="e.g. TON Alpha Club (@alphaton)" />
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 mb-1" data-i18n="owner.channel_invite_link">Private Invite Link</label>
+          <input id="new-channel-link" type="text" class="w-full input-dark rounded-xl px-3 py-2.5 text-white text-sm font-mono text-xs" placeholder="https://t.me/+..." />
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-2.5 mt-5">
+        <button onclick="closeAddChannelModal()" class="btn-secondary px-4 py-2 text-xs rounded-xl" data-i18n="rating.cancel">Cancel</button>
+        <button onclick="saveNewChannel()" class="btn-primary px-4 py-2 text-xs rounded-xl shadow-md shadow-sky-500/20" data-i18n="owner.add_channel_submit">Add Channel</button>
       </div>
     </div>
   </div>
 
   <!-- Rating Modal -->
-  <div id="rating-modal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm hidden flex items-center justify-center modal-backdrop">
-    <div class="glass-card p-6 w-full max-w-sm mx-4 modal-content">
-      <h3 class="text-lg font-semibold mb-2" data-i18n="rating.title">Rate this Channel</h3>
-      <div id="star-rating" class="flex gap-1 text-2xl mb-3"></div>
-      <textarea id="rating-comment" placeholder="Write a review..." class="w-full input-dark rounded-xl p-2 text-white text-sm mb-3" rows="2"></textarea>
-      <div class="flex justify-end gap-2">
-        <button onclick="closeRating()" class="btn-secondary px-4 py-2 text-slate-300 rounded-xl" data-i18n="rating.cancel">Cancel</button>
-        <button onclick="submitRating()" class="btn-primary text-white px-4 py-2 rounded-xl" data-i18n="rating.submit">Submit</button>
+  <div id="rating-modal" class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm hidden flex items-end sm:items-center justify-center sheet-backdrop">
+    <div class="glass-card p-6 w-full max-w-md mx-auto sm:mx-4 rounded-b-none sm:rounded-2xl sheet-drawer border-b-0 sm:border-b">
+      <div class="w-10 h-1 bg-slate-700 rounded-full mx-auto mb-4 sm:hidden"></div>
+      <h2 class="text-lg font-bold text-white mb-1" data-i18n="rating.title">Rate Channel</h2>
+      <p id="rating-channel-name" class="text-slate-400 text-xs mb-3"></p>
+      
+      <div class="flex justify-center gap-3 my-4">
+        <button onclick="selectRating(1)" class="star-btn text-2xl text-slate-600 hover:text-amber-400 transition" data-star="1">★</button>
+        <button onclick="selectRating(2)" class="star-btn text-2xl text-slate-600 hover:text-amber-400 transition" data-star="2">★</button>
+        <button onclick="selectRating(3)" class="star-btn text-2xl text-slate-600 hover:text-amber-400 transition" data-star="3">★</button>
+        <button onclick="selectRating(4)" class="star-btn text-2xl text-slate-600 hover:text-amber-400 transition" data-star="4">★</button>
+        <button onclick="selectRating(5)" class="star-btn text-2xl text-slate-600 hover:text-amber-400 transition" data-star="5">★</button>
+      </div>
+      <textarea id="rating-comment" rows="2" class="w-full input-dark rounded-xl p-3 text-white text-xs mb-3" placeholder="Add optional feedback..."></textarea>
+      
+      <div class="flex justify-end gap-2.5">
+        <button onclick="closeRatingModal()" class="btn-secondary px-4 py-2 text-xs rounded-xl" data-i18n="rating.cancel">Cancel</button>
+        <button onclick="submitRating()" class="btn-primary px-4 py-2 text-xs rounded-xl shadow-md shadow-sky-500/20" data-i18n="rating.submit">Submit Rating</button>
       </div>
     </div>
   </div>
 
   <!-- Report Modal -->
-  <div id="report-modal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm hidden flex items-center justify-center modal-backdrop">
-    <div class="glass-card p-6 w-full max-w-sm mx-4 modal-content">
-      <h3 class="text-lg font-semibold mb-2" data-i18n="report.title">Report Channel</h3>
-      <select id="report-reason" class="w-full input-dark rounded-xl p-2 text-white text-sm mb-2">
-        <option value="scam" data-i18n="report.reason_scam">Scam</option>
-        <option value="inappropriate" data-i18n="report.reason_inappropriate">Inappropriate Content</option>
-        <option value="insult" data-i18n="report.reason_insult">Insult</option>
-        <option value="racism" data-i18n="report.reason_racism">Racism</option>
-        <option value="other" data-i18n="report.reason_other">Other</option>
-      </select>
-      <textarea id="report-description" placeholder="Additional details..." class="w-full input-dark rounded-xl p-2 text-white text-sm mb-3" rows="2"></textarea>
-      <div class="flex justify-end gap-2">
-        <button onclick="closeReport()" class="btn-secondary px-4 py-2 text-slate-300 rounded-xl" data-i18n="report.cancel">Cancel</button>
-        <button onclick="submitReport()" class="bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-xl shadow-lg shadow-red-500/20" data-i18n="report.submit">Submit Report</button>
+  <div id="report-modal" class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm hidden flex items-end sm:items-center justify-center sheet-backdrop">
+    <div class="glass-card p-6 w-full max-w-md mx-auto sm:mx-4 rounded-b-none sm:rounded-2xl sheet-drawer border-b-0 sm:border-b">
+      <div class="w-10 h-1 bg-slate-700 rounded-full mx-auto mb-4 sm:hidden"></div>
+      <h2 class="text-lg font-bold text-white mb-1" data-i18n="report.title">Report Channel</h2>
+      <p id="report-channel-name" class="text-slate-400 text-xs mb-3"></p>
+      
+      <div class="space-y-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 mb-1" data-i18n="report.reason">Reason</label>
+          <select id="report-reason" class="w-full input-dark rounded-xl px-3 py-2 text-white text-xs">
+            <option value="Scam">Scam / Fraud</option>
+            <option value="Inappropriate Content">Inappropriate Content</option>
+            <option value="Spam">Spam & Ads</option>
+            <option value="Inactive">Inactive Channel</option>
+            <option value="Other">Other Violation</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 mb-1" data-i18n="report.description">Details</label>
+          <textarea id="report-description" rows="2" class="w-full input-dark rounded-xl p-3 text-white text-xs" placeholder="Please describe the issue..."></textarea>
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-2.5 mt-4">
+        <button onclick="closeReportModal()" class="btn-secondary px-4 py-2 text-xs rounded-xl" data-i18n="rating.cancel">Cancel</button>
+        <button onclick="submitReport()" class="btn-primary px-4 py-2 text-xs rounded-xl shadow-md shadow-sky-500/20" data-i18n="report.submit">Submit Report</button>
       </div>
     </div>
   </div>
 
   <!-- Language Selector Modal -->
-  <div id="language-modal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm hidden flex items-center justify-center modal-backdrop">
-    <div class="glass-card p-6 w-full max-w-sm mx-4 modal-content">
-      <h3 class="text-lg font-semibold mb-4 text-white">🌐 Language / زبان</h3>
-      <div class="grid grid-cols-2 gap-2">
-        <button onclick="selectLanguage('en')" class="btn-secondary px-3 py-2 rounded-xl text-sm text-slate-300 hover:bg-slate-700 transition">English</button>
-        <button onclick="selectLanguage('fa')" class="btn-secondary px-3 py-2 rounded-xl text-sm text-slate-300 hover:bg-slate-700 transition">فارسی</button>
-        <button onclick="selectLanguage('hi')" class="btn-secondary px-3 py-2 rounded-xl text-sm text-slate-300 hover:bg-slate-700 transition">हिन्दी</button>
-        <button onclick="selectLanguage('ru')" class="btn-secondary px-3 py-2 rounded-xl text-sm text-slate-300 hover:bg-slate-700 transition">Русский</button>
-        <button onclick="selectLanguage('ar')" class="btn-secondary px-3 py-2 rounded-xl text-sm text-slate-300 hover:bg-slate-700 transition">العربية</button>
-        <button onclick="selectLanguage('zh')" class="btn-secondary px-3 py-2 rounded-xl text-sm text-slate-300 hover:bg-slate-700 transition">中文</button>
-        <button onclick="selectLanguage('id')" class="btn-secondary px-3 py-2 rounded-xl text-sm text-slate-300 hover:bg-slate-700 transition">Bahasa Indonesia</button>
-        <button onclick="selectLanguage('pt-BR')" class="btn-secondary px-3 py-2 rounded-xl text-sm text-slate-300 hover:bg-slate-700 transition">Português (BR)</button>
-        <button onclick="selectLanguage('tr')" class="btn-secondary px-3 py-2 rounded-xl text-sm text-slate-300 hover:bg-slate-700 transition">Türkçe</button>
+  <div id="language-modal" class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm hidden flex items-end sm:items-center justify-center sheet-backdrop">
+    <div class="glass-card p-6 w-full max-w-sm mx-auto sm:mx-4 rounded-b-none sm:rounded-2xl sheet-drawer border-b-0 sm:border-b">
+      <div class="w-10 h-1 bg-slate-700 rounded-full mx-auto mb-4 sm:hidden"></div>
+      <h2 class="text-base font-bold text-white mb-3 flex items-center gap-2">
+        <i data-lucide="languages" class="w-4 h-4 text-sky-400"></i>
+        <span data-i18n="language.title">Select Language</span>
+      </h2>
+      <div class="space-y-1.5">
+        <button onclick="setLanguage('en')" class="w-full text-left p-3 rounded-xl bg-slate-800/40 hover:bg-slate-800/80 border border-slate-700/40 transition flex justify-between items-center text-white">
+          <span class="text-sm font-medium">English</span>
+          <span class="text-xs text-sky-400 font-mono">EN</span>
+        </button>
+        <button onclick="setLanguage('ru')" class="w-full text-left p-3 rounded-xl bg-slate-800/40 hover:bg-slate-800/80 border border-slate-700/40 transition flex justify-between items-center text-white">
+          <span class="text-sm font-medium">Русский</span>
+          <span class="text-xs text-sky-400 font-mono">RU</span>
+        </button>
+        <button onclick="setLanguage('fa')" class="w-full text-left p-3 rounded-xl bg-slate-800/40 hover:bg-slate-800/80 border border-slate-700/40 transition flex justify-between items-center text-white">
+          <span class="text-sm font-medium">فارسی</span>
+          <span class="text-xs text-sky-400 font-mono">FA</span>
+        </button>
       </div>
-      <button onclick="closeLanguageModal()" class="btn-secondary w-full mt-4 px-4 py-2 rounded-xl text-sm text-slate-300" data-i18n="rating.cancel">Cancel</button>
+      <button onclick="closeLanguageModal()" class="btn-secondary w-full mt-3 py-2 text-xs rounded-xl" data-i18n="rating.cancel">Close</button>
     </div>
   </div>
-
-  <footer class="sticky bottom-0 bg-slate-950/90 backdrop-blur-md border-t border-slate-800/80 px-4 py-2">
-    <div class="flex items-center justify-between max-w-4xl mx-auto text-xs text-slate-500">
-      <div class="flex items-center gap-2">
-        <span class="status-dot bg-emerald-500"></span> <span data-i18n="footer.ton_network">TON Mainnet</span>
-      </div>
-      <div data-i18n="footer.platform_fee">Platform fee 1%</div>
-      <div class="font-mono" data-i18n="footer.version">v1.0</div>
-    </div>
-  </footer>
 
   <script src="translations.js"></script>
   <script src="app.js"></script>
   <script>
-    lucide.createIcons();
-    applyTranslations();
+    if (window.lucide) lucide.createIcons();
   </script>
 </body>
 </html>
