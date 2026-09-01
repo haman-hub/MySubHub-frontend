@@ -186,9 +186,10 @@ async function init() {
 
         if (currentUser && currentUser.telegram_id && currentUser.telegram_id.toString() === ADMIN_TELEGRAM_ID) {
             isAdmin = true;
-            const adminTab = document.getElementById('nav-admin');
-            if (adminTab) adminTab.style.display = 'flex';
         }
+
+        const adminTab = document.getElementById('nav-admin');
+        if (adminTab) adminTab.style.display = 'flex';
 
         if (tonConnectUI && tonConnectUI.onStatusChange) {
             tonConnectUI.onStatusChange((wallet) => {
@@ -210,7 +211,7 @@ async function init() {
             switchPage('purchase');
         } else if (startParam === 'owner') {
             switchPage('owner');
-        } else if (startParam === 'admin' && isAdmin) {
+        } else if (startParam === 'admin') {
             switchPage('admin');
         } else {
             switchPage('subscriptions');
