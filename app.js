@@ -85,6 +85,11 @@ async function apiFetch(url, options = {}) {
 }
 
 function switchPage(pageId) {
+    // If a non-admin attempts to switch to the admin view, redirect to subscriptions
+    if (pageId === 'admin' && !isAdmin) {
+        pageId = 'subscriptions';
+    }
+
     // 1. Explicitly hide all main page sections using both style.display and classes
     const allPages = ['purchase', 'subscriptions', 'owner', 'admin'];
     allPages.forEach(p => {
@@ -184,12 +189,17 @@ async function init() {
         const navBar = document.getElementById('nav-bar');
         if (navBar) navBar.classList.remove('hidden');
 
-        if (currentUser && currentUser.telegram_id && currentUser.telegram_id.toString() === ADMIN_TELEGRAM_ID) {
+        const tgUserId = TG.initDataUnsafe?.user?.id?.toString() || currentUser?.telegram_id?.toString();
+        if (tgUserId === ADMIN_TELEGRAM_ID || (currentUser && currentUser.telegram_id && currentUser.telegram_id.toString() === ADMIN_TELEGRAM_ID)) {
             isAdmin = true;
+        } else {
+            isAdmin = false;
         }
 
         const adminTab = document.getElementById('nav-admin');
-        if (adminTab) adminTab.style.display = 'flex';
+        if (adminTab) {
+            adminTab.style.display = isAdmin ? 'flex' : 'none';
+        }
 
         if (tonConnectUI && tonConnectUI.onStatusChange) {
             tonConnectUI.onStatusChange((wallet) => {
@@ -211,7 +221,7 @@ async function init() {
             switchPage('purchase');
         } else if (startParam === 'owner') {
             switchPage('owner');
-        } else if (startParam === 'admin') {
+        } else if (startParam === 'admin' && isAdmin) {
             switchPage('admin');
         } else {
             switchPage('subscriptions');
@@ -219,6 +229,8 @@ async function init() {
     } catch (error) {
         const navBar = document.getElementById('nav-bar');
         if (navBar) navBar.classList.remove('hidden');
+        const adminTab = document.getElementById('nav-admin');
+        if (adminTab) adminTab.style.display = 'none';
         switchPage('subscriptions');
     }
 }
