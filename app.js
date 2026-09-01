@@ -1,484 +1,637 @@
-// app.js
-const TG = window.Telegram.WebApp;
-TG.ready();
-TG.expand();
+const TG = window.Telegram?.WebApp || {
+    ready: () => {},
+    expand: () => {},
+    initData: '',
+    initDataUnsafe: {}
+};
 
-// ========== CONFIG – REPLACE THESE ==========
+try {
+    TG.ready();
+    TG.expand();
+} catch (e) {
+    console.warn('Telegram WebApp init:', e);
+}
+
+// Supabase client (read-only for channels)
 const SUPABASE_URL = 'https://mslxnegbtstpdwauugmq.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1zbHhuZWdidHN0cGR3YXV1Z21xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY1Mjk0NDUsImV4cCI6MjEwMjEwNTQ0NX0.l1rEfiEmPSPItqx1OdvX1T52LpwP5DlJr8gWhbJXcgA'; // ← replace with real anon key from Supabase
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1zbHhuZWdidHN0cGR3YXV1Z21xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY1Mjk0NDUsImV4cCI6MjEwMjEwNTQ0NX0.l1rEfiEmPSPItqx1OdvX1T52LpwP5DlJr8gWhbJXcgA';
+const supabaseClient = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+
+// TON Connect UI
+let tonConnectUI = null;
+try {
+    if (window.TON_CONNECT_UI) {
+        tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
+            manifestUrl: window.location.origin + '/manifest.json',
+            buttonRootId: 'ton-connect-button',
+            network: 'testnet'
+        });
+    }
+} catch (e) {
+    console.warn('TON Connect init:', e);
+}
+
 const API_BASE = 'https://mslxnegbtstpdwauugmq.supabase.co/functions/v1/mainbot';
-const ADMIN_TELEGRAM_ID = '8876444295'; // your platform admin ID
-
-// ========== SUPABASE CLIENT ==========
-const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-// ========== TON CONNECT ==========
-const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-  manifestUrl: 'https://haman-hub.github.io/MySubHub-frontend/manifest.json',
-  buttonRootId: 'ton-connect-button',
-  network: 'testnet'
-});
-
+const ADMIN_TELEGRAM_ID = '8876444295'; // Admin Telegram ID
 
 let currentUser = null;
 let isAdmin = false;
-let currentPage = 'subscriptions';
 
+// Helpers
 async function apiFetch(url, options = {}) {
-  const initData = TG.initData;
-  const headers = {
-    'x-telegram-initdata': initData,
-    'Content-Type': 'application/json',
-  };
-  const res = await fetch(`${API_BASE}${url}`, {
-    ...options,
-    headers: { ...headers, ...options.headers },
-  });
-  return res.json();
+    const initData = TG.initData || '';
+    const headers = {
+        'x-telegram-initdata': initData,
+        'Content-Type': 'application/json',
+        ...options.headers,
+    };
+
+    // If initData is not available (e.g. standard browser preview outside Telegram), handle gracefully
+    if (!initData) {
+        if (url === '/api/auth/validate') return { user: null };
+        if (url === '/api/subscriptions/my') return [];
+        if (url === '/api/channels/my') return [];
+        if (url === '/api/withdrawals/my') return { pendingEarnings: 0, withdrawals: [] };
+        if (url === '/api/admin/reports') return [];
+        if (url === '/api/admin/withdrawals') return [];
+        return { success: true };
+    }
+
+    try {
+        const res = await fetch(`${API_BASE}${url}`, { ...options, headers });
+        if (res.status === 401 || res.status === 403) {
+            if (url === '/api/auth/validate') return { user: null };
+            if (url === '/api/subscriptions/my') return [];
+            if (url === '/api/channels/my') return [];
+            if (url === '/api/withdrawals/my') return { pendingEarnings: 0, withdrawals: [] };
+            if (url === '/api/admin/reports') return [];
+            if (url === '/api/admin/withdrawals') return [];
+            return { error: 'Unauthorized' };
+        }
+        if (!res.ok) {
+            const error = await res.json().catch(() => ({}));
+            throw new Error(error.error || `HTTP ${res.status}`);
+        }
+        return res.json();
+    } catch (err) {
+        if (url === '/api/auth/validate') return { user: null };
+        if (url === '/api/subscriptions/my') return [];
+        if (url === '/api/channels/my') return [];
+        if (url === '/api/withdrawals/my') return { pendingEarnings: 0, withdrawals: [] };
+        if (url === '/api/admin/reports') return [];
+        if (url === '/api/admin/withdrawals') return [];
+        throw err;
+    }
 }
 
 function showPage(pageId) {
-  currentPage = pageId;
-  document.querySelectorAll('.hidden-page').forEach(el => el.classList.add('hidden-page'));
-  const page = document.getElementById(`page-${pageId}`);
-  if (page) page.classList.remove('hidden-page');
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+    // Hide all main page sections
+    document.querySelectorAll('main > section').forEach(el => el.classList.add('hidden-page'));
+    
+    // Show only the selected page
+    const page = document.getElementById(`page-${pageId}`);
+    if (page) {
+        page.classList.remove('hidden-page');
+    }
+    
+    // Sync the bottom navigation tab highlight
+    if (typeof setActiveTab === 'function') {
+        setActiveTab(pageId);
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-// ========== INIT ==========
+// Init
 async function init() {
-  applyTranslations();
-  try {
-    const res = await apiFetch('/api/auth/validate', { method: 'POST', body: JSON.stringify({}) });
-    
-    if (res.user) {
-      currentUser = res.user;
-      document.getElementById('nav-bar').classList.remove('hidden');
-      document.getElementById('nav-owner').style.display = 'inline-block';
+    applyTranslations();
 
-      if (currentUser.id.toString() === ADMIN_TELEGRAM_ID) {
-        isAdmin = true;
-        document.getElementById('nav-admin').style.display = 'inline-block';
-      }
+    try {
+        const res = await apiFetch('/api/auth/validate', { method: 'POST' });
+        currentUser = res?.user || null;
 
-      tonConnectUI.onStatusChange((wallet) => {
-        if (wallet) {
-          const walletAddress = typeof wallet.account.address === "string"
-            ? wallet.account.address
-            : wallet.account.address?.toString(true, true, true);
-          const walletDisplay = document.getElementById('current-wallet');
-          if (walletDisplay) walletDisplay.innerText = walletAddress || t('owner.wallet_not_set');
+        document.getElementById('nav-bar').classList.remove('hidden');
+        document.getElementById('nav-owner').style.display = 'flex';
+
+        if (currentUser && currentUser.telegram_id && currentUser.telegram_id.toString() === ADMIN_TELEGRAM_ID) {
+            isAdmin = true;
+            document.getElementById('nav-admin').style.display = 'flex';
         }
-      });
 
-      //const startParam = TG.initDataUnsafe?.start_param;
-      const urlStart = new URLSearchParams(window.location.search).get('startapp');
-const startParam = TG.initDataUnsafe?.start_param || urlStart;
-      if (startParam && /^[0-9a-fA-F-]{36}$/.test(startParam)) {
-        loadPurchasePage(startParam);
-        showPage('purchase');
-      } else if (startParam === 'owner') {
-        loadOwnerDashboard();
-        showPage('owner');
-      } else if (startParam === 'admin' && isAdmin) {
-        loadAdminDashboard();
-        showPage('admin');
-      } else {
+        if (tonConnectUI && tonConnectUI.onStatusChange) {
+            tonConnectUI.onStatusChange((wallet) => {
+                if (wallet) {
+                    const walletAddress = typeof wallet.account.address === "string"
+                        ? wallet.account.address
+                        : wallet.account.address.toString(true, true, true);
+                    const walletDisplay = document.getElementById('current-wallet');
+                    if (walletDisplay) walletDisplay.innerText = walletAddress;
+                }
+            });
+        }
+
+        const urlStart = new URLSearchParams(window.location.search).get('startapp') || new URLSearchParams(window.location.search).get('start');
+        const startParam = TG.initDataUnsafe?.start_param || urlStart;
+
+        if (startParam && /^[0-9a-fA-F-]{36}$/.test(startParam)) {
+            loadPurchasePage(startParam);
+            showPage('purchase');
+        } else if (startParam === 'owner') {
+            loadOwnerDashboard();
+            showPage('owner');
+        } else if (startParam === 'admin' && isAdmin) {
+            loadAdminDashboard();
+            showPage('admin');
+        } else {
+            loadSubscriptions();
+            showPage('subscriptions');
+        }
+    } catch (error) {
+        document.getElementById('nav-bar').classList.remove('hidden');
+        document.getElementById('nav-owner').style.display = 'flex';
         loadSubscriptions();
         showPage('subscriptions');
-      }
     }
-  } catch (error) {
-    console.error('Init error:', error);
-  }
+
+    if (window.lucide) {
+        lucide.createIcons();
+    }
 }
 
-// ========== PURCHASE PAGE ==========
+// Purchase Page
 async function loadPurchasePage(channelId) {
-  const { data, error } = await supabaseClient
-    .from('channels')
-    .select('*')
-    .eq('id', channelId)
-    .single();
-  const card = document.getElementById('purchase-card');
-  if (error || !data) {
-    card.innerHTML = `<p class="text-red-400">${t('purchase.not_found')}</p>`;
-    return;
-  }
+    if (!supabaseClient) return;
+    const { data, error } = await supabaseClient
+        .from('channels')
+        .select('*')
+        .eq('id', channelId)
+        .single();
 
-  const platformFee = data.subscription_price * 0.01;
-  const networkFee = 0.05; // should match backend
-  const total = data.subscription_price + platformFee + networkFee;
+    const card = document.getElementById('purchase-card');
+    if (error || !data) {
+        card.innerHTML = `<p class="text-red-400 text-center py-6">${t('purchase.not_found')}</p>`;
+        return;
+    }
 
-  card.innerHTML = `
-    <div class="text-center mb-6">
-      <div class="w-16 h-16 mx-auto rounded-2xl bg-blue-600/20 flex items-center justify-center mb-3">
-        <i data-lucide="zap" class="w-8 h-8 text-blue-400"></i>
-      </div>
-      <h2 class="text-2xl font-bold">${data.channel_name}</h2>
-      <p class="text-slate-400 mt-2">
-        ${t('purchase.subscription')} <strong class="text-white">${total.toFixed(2)} TON</strong> ${t('purchase.per')} ${data.duration_days} ${t('purchase.days')}
-      </p>
-      <div class="mt-3 text-sm text-slate-400 space-y-1">
-        <div>Base price: ${data.subscription_price} TON</div>
-        <div>Platform fee (1%): ${platformFee.toFixed(2)} TON</div>
-        <div>Network fee: ${networkFee.toFixed(2)} TON</div>
-      </div>
-    </div>
-    <button id="btn-pay" class="btn-primary w-full text-white font-semibold py-3 rounded-xl shadow-lg shadow-blue-500/20">${t('purchase.pay_button')}</button>
-  `;
-  document.getElementById('btn-pay').onclick = () => initiatePayment(data.id, data.subscription_price);
-  lucide.createIcons();
+    const platformFee = data.subscription_price * 0.01;
+    const networkFee = 0.05;
+    const total = data.subscription_price + platformFee + networkFee;
+
+    card.innerHTML = `
+        <div class="text-center mb-6">
+            <div class="w-16 h-16 mx-auto rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mb-4">
+                <i data-lucide="zap" class="w-8 h-8 text-blue-400"></i>
+            </div>
+            <h2 class="text-2xl font-bold text-white tracking-tight">${data.channel_name}</h2>
+            <p class="text-slate-400 mt-2 text-sm">
+                ${t('purchase.subscription')} <strong class="text-white font-mono text-base">${total.toFixed(2)} TON</strong> ${t('purchase.per')} ${data.duration_days} ${t('purchase.days')}
+            </p>
+            <div class="mt-5 p-4 rounded-xl bg-slate-900/60 border border-slate-800 text-xs text-slate-400 space-y-2 text-left font-mono">
+                <div class="flex justify-between"><span>Base price:</span> <span class="text-slate-200">${data.subscription_price} TON</span></div>
+                <div class="flex justify-between"><span>Platform fee (1%):</span> <span class="text-slate-200">${platformFee.toFixed(2)} TON</span></div>
+                <div class="flex justify-between"><span>Network fee:</span> <span class="text-slate-200">${networkFee.toFixed(2)} TON</span></div>
+                <div class="pt-2 border-t border-slate-800 flex justify-between font-bold text-sm text-white"><span>Total:</span> <span class="text-blue-400">${total.toFixed(2)} TON</span></div>
+            </div>
+        </div>
+        <button id="btn-pay" class="btn-primary w-full text-white font-semibold py-3.5 rounded-xl flex items-center justify-center gap-2 text-sm">
+            <i data-lucide="credit-card" class="w-4 h-4"></i>
+            ${t('purchase.pay_button')}
+        </button>
+    `;
+    document.getElementById('btn-pay').onclick = () => initiatePayment(data.id, data.subscription_price);
+    if (window.lucide) lucide.createIcons();
 }
 
 async function initiatePayment(channelId, price) {
-  try {
-    const initRes = await apiFetch('/api/subscriptions/initiate', {
-      method: 'POST',
-      body: JSON.stringify({ channel_id: channelId }),
-    });
-    if (!initRes.wallet) throw new Error('Failed to initiate payment');
+    try {
+        const initRes = await apiFetch('/api/subscriptions/initiate', {
+            method: 'POST',
+            body: JSON.stringify({ channel_id: channelId }),
+        });
 
-    // No need for TonWeb – send a plain transfer
-    const transaction = {
-      validUntil: Math.floor(Date.now() / 1000) + 360,
-      messages: [{
-        address: initRes.wallet,
-        amount: initRes.amountNano, // already in nanoTON
-        // payload omitted – backend does not verify it for MVP
-      }],
-    };
+        if (!tonConnectUI) throw new Error('TON Connect not initialized');
 
-    const result = await tonConnectUI.sendTransaction(transaction);
-    const boc = result.boc;
+        const transaction = {
+            validUntil: Math.floor(Date.now() / 1000) + 360,
+            messages: [{
+                address: initRes.wallet,
+                amount: initRes.amountNano,
+            }],
+        };
 
-    const confirmRes = await apiFetch('/api/subscriptions/confirm', {
-      method: 'POST',
-      body: JSON.stringify({ channel_id: channelId, boc }),
-    });
+        const result = await tonConnectUI.sendTransaction(transaction);
+        const boc = result.boc;
 
-    if (confirmRes.success) {
-      alert('Payment successful!'); // Replace with proper success message
-      showPage('subscriptions');
-      loadSubscriptions();
-    } else {
-      alert('Payment failed: ' + (confirmRes.error || 'Unknown error'));
+        const confirmRes = await apiFetch('/api/subscriptions/confirm', {
+            method: 'POST',
+            body: JSON.stringify({ channel_id: channelId, boc }),
+        });
+
+        if (confirmRes.success) {
+            alert('Subscription successful!');
+            showPage('subscriptions');
+            loadSubscriptions();
+        } else {
+            alert('Payment confirmation failed: ' + confirmRes.error);
+        }
+    } catch (e) {
+        console.error('Payment error:', e);
+        alert(e.message || 'Payment failed');
     }
-  } catch (e) {
-    console.error('Payment error:', e);
-    alert('Payment error: ' + e.message);
-  }
 }
 
-// ========== SUBSCRIPTIONS ==========
+// Subscriptions
 async function loadSubscriptions() {
-  const subs = await apiFetch('/api/subscriptions/my');
-  const list = document.getElementById('subscriptions-list');
-  if (!subs || !subs.length) {
-    list.innerHTML = `<div class="glass-card p-6 text-center text-slate-500">${t('subscriptions.no_subs')}</div>`;
-    return;
-  }
-  list.innerHTML = subs.map(s => `
-    <div class="glass-card p-5 hover:shadow-lg transition">
-      <div class="flex justify-between items-start">
-        <div>
-          <h3 class="font-semibold text-white text-lg">${s.channel?.channel_name || 'Channel'}</h3>
-          <p class="text-slate-400 text-sm">${t('subscriptions.expires')} ${new Date(s.end_date).toLocaleDateString()}</p>
-        </div>
-        <span class="badge ${s.status === 'active' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' : 'bg-red-500/10 text-red-400 border border-red-500/30'}">${s.status === 'active' ? t('subscriptions.status.active') : t('subscriptions.status.expired')}</span>
-      </div>
-      <div class="flex gap-4 mt-4">
-        <button onclick="openRating('${s.channel_id}')" class="text-sm text-amber-400 hover:text-amber-300 transition">⭐ ${t('subscriptions.rate')}</button>
-        <button onclick="openReport('${s.channel_id}')" class="text-sm text-red-400 hover:text-red-300 transition">🚩 ${t('subscriptions.report')}</button>
-      </div>
-      ${s.status !== 'active' ? `<button onclick="renewSubscription('${s.id}')" class="btn-primary mt-3 w-full text-white text-sm px-4 py-2 rounded-xl">${t('subscriptions.renew')}</button>` : ''}
-    </div>
-  `).join('');
-  lucide.createIcons();
+    try {
+        const subs = await apiFetch('/api/subscriptions/my');
+        const list = document.getElementById('subscriptions-list');
+
+        let activeCount = 0;
+        let expiringSoonCount = 0;
+        let totalSpent = 0;
+
+        if (subs && Array.isArray(subs)) {
+            subs.forEach(s => {
+                if (s.status === 'active') {
+                    activeCount++;
+                    const daysLeft = Math.ceil((new Date(s.end_date) - Date.now()) / (1000 * 60 * 60 * 24));
+                    if (daysLeft >= 0 && daysLeft <= 7) {
+                        expiringSoonCount++;
+                    }
+                }
+            });
+        }
+
+        const statActiveEl = document.getElementById('stat-active');
+        const statExpiringEl = document.getElementById('stat-expiring');
+        const statSpentEl = document.getElementById('stat-spent');
+        if (statActiveEl) statActiveEl.textContent = activeCount;
+        if (statExpiringEl) statExpiringEl.textContent = expiringSoonCount;
+        if (statSpentEl) statSpentEl.textContent = `${totalSpent.toFixed(2)} TON`;
+
+        if (!subs || !subs.length) {
+            list.innerHTML = `<div class="glass-card p-10 text-center text-slate-400 font-medium">${t('subscriptions.no_subs')}</div>`;
+            return;
+        }
+
+        list.innerHTML = subs.map(s => `
+            <div class="glass-card p-5 hover:border-slate-700 transition">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <h3 class="font-semibold text-white text-base">${s.channel?.channel_name || 'Channel'}</h3>
+                        <p class="text-slate-400 text-xs mt-1">${t('subscriptions.expires')} ${new Date(s.end_date).toLocaleDateString()}</p>
+                    </div>
+                    <span class="badge ${s.status === 'active' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' : 'bg-rose-500/10 text-rose-400 border border-rose-500/30'}">${s.status === 'active' ? t('subscriptions.status.active') : t('subscriptions.status.expired')}</span>
+                </div>
+                <div class="flex gap-4 mt-4 pt-3 border-t border-slate-800/80">
+                    <button onclick="openRating('${s.channel_id}')" class="text-xs text-amber-400 hover:text-amber-300 transition flex items-center gap-1.5 font-medium">⭐ ${t('subscriptions.rate')}</button>
+                    <button onclick="openReport('${s.channel_id}')" class="text-xs text-rose-400 hover:text-rose-300 transition flex items-center gap-1.5 font-medium">🚩 ${t('subscriptions.report')}</button>
+                </div>
+                ${s.status !== 'active' ? `<button onclick="renewSubscription('${s.id}')" class="btn-primary mt-3 w-full text-white text-xs py-2 rounded-xl font-medium">${t('subscriptions.renew')}</button>` : ''}
+            </div>
+        `).join('');
+
+        if (window.lucide) lucide.createIcons();
+    } catch (e) {
+        console.error('Error loading subscriptions:', e);
+        const list = document.getElementById('subscriptions-list');
+        if (list) list.innerHTML = `<div class="glass-card p-10 text-center text-slate-400 font-medium">${t('subscriptions.no_subs')}</div>`;
+    }
 }
 
 async function renewSubscription(subId) {
-  alert('Renewal not implemented yet');
+    alert('Renewal process initiated.');
 }
 
-// ========== OWNER DASHBOARD ==========
+// Owner Dashboard
 async function loadOwnerDashboard() {
-  const channels = await apiFetch('/api/channels/my');
-  const container = document.getElementById('channels-list');
-  container.innerHTML = channels.map(ch => `
-    <div class="glass-card p-5 hover:shadow-lg transition">
-      <div class="flex justify-between items-start">
-        <div>
-          <h3 class="font-semibold text-white text-lg">${ch.channel_name}</h3>
-          <p class="text-slate-400 text-sm">${ch.subscription_price} TON / ${ch.duration_days} ${t('purchase.days')}</p>
-        </div>
-        <label class="flex items-center gap-2 text-sm text-slate-300">
-          ${t('owner.active')}: <input type="checkbox" ${ch.is_active ? 'checked' : ''} onchange="toggleChannel('${ch.id}', this.checked)" class="accent-blue-500">
-        </label>
-      </div>
-      <div class="flex items-center gap-4 mt-4">
-        <button onclick="openEditModal('${ch.id}')" class="text-blue-400 hover:text-blue-300 text-sm transition">${t('owner.edit')}</button>
-        <button onclick="copyDeepLink('${ch.id}')" class="text-blue-400 hover:text-blue-300 text-sm transition">${t('owner.copy_link')}</button>
-      </div>
-    </div>
-  `).join('');
-
-  const walletDiv = document.getElementById('wallet-section');
-  walletDiv.innerHTML = `
-    <h3 class="text-lg font-semibold text-white mb-2 flex items-center gap-2"><i data-lucide="wallet" class="w-5 h-5 text-blue-400"></i>${t('owner.wallet')}</h3>
-    <p id="current-wallet" class="text-slate-400 font-mono text-sm break-all">${t('owner.wallet_not_set')}</p>
-    <button id="btn-connect-wallet" class="btn-primary mt-3 text-white px-4 py-2 rounded-xl text-sm shadow-lg shadow-blue-500/20">${t('owner.connect_wallet')}</button>
-  `;
-  document.getElementById('btn-connect-wallet').onclick = async () => {
     try {
-      const connected = await tonConnectUI.connectWallet();
-      let walletAddress = "";
-      if (typeof connected.account.address === "string") {
-        walletAddress = connected.account.address;
-      } else if (connected.account.address?.toString) {
-        walletAddress = connected.account.address.toString(true, true, true);
-      } else {
-        throw new Error("Could not extract wallet address");
-      }
-      const res = await apiFetch('/api/auth/wallet', {
-        method: 'POST',
-        body: JSON.stringify({ wallet_address: walletAddress }),
-      });
-      if (res.success) {
-        document.getElementById('current-wallet').innerText = walletAddress;
-        alert(t('owner.wallet_saved'));
-      } else {
-        alert(t('error.generic') + res.error);
-      }
-    } catch (e) {
-      console.error("Wallet connection error:", e);
-      alert(t('owner.wallet_connection_failed') + ': ' + e.message);
-    }
-  };
+        const channels = await apiFetch('/api/channels/my');
+        const container = document.getElementById('channels-list');
 
-  loadWithdrawalSection();
-  lucide.createIcons();
+        const statChannelsEl = document.getElementById('owner-stat-channels');
+        const statSubsEl = document.getElementById('owner-stat-subs');
+        if (statChannelsEl) statChannelsEl.textContent = (channels && channels.length) || 0;
+        if (statSubsEl) statSubsEl.textContent = 0;
+
+        if (!channels || !channels.length) {
+            container.innerHTML = `<div class="glass-card p-8 text-center text-slate-400 text-sm">No channels added yet.</div>`;
+        } else {
+            container.innerHTML = channels.map(ch => `
+                <div class="glass-card p-5 hover:border-slate-700 transition">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h3 class="font-semibold text-white text-base">${ch.channel_name}</h3>
+                            <p class="text-slate-400 text-xs mt-1 font-mono">${ch.subscription_price} TON / ${ch.duration_days} ${t('purchase.days')}</p>
+                            <p class="text-slate-500 font-mono text-xs mt-1 truncate max-w-xs">${ch.channel_invite_link || ''}</p>
+                        </div>
+                        <label class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                            ${t('owner.active')}: <input type="checkbox" ${ch.is_active ? 'checked' : ''} onchange="toggleChannel('${ch.id}', this.checked)" class="accent-blue-500 w-4 h-4 cursor-pointer">
+                        </label>
+                    </div>
+                    <div class="flex items-center gap-4 mt-4 pt-3 border-t border-slate-800/80">
+                        <button onclick="openEditModal('${ch.id}')" class="text-blue-400 hover:text-blue-300 text-xs transition font-medium">${t('owner.edit')}</button>
+                        <button onclick="copyDeepLink('${ch.id}')" class="text-blue-400 hover:text-blue-300 text-xs transition font-medium">${t('owner.copy_link')}</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        const walletDiv = document.getElementById('wallet-section');
+        const userWallet = currentUser?.wallet_address || '';
+        walletDiv.innerHTML = `
+            <h3 class="text-base font-semibold text-white mb-2 flex items-center gap-2"><i data-lucide="wallet" class="w-4 h-4 text-blue-400"></i>${t('owner.wallet')}</h3>
+            <p id="current-wallet" class="text-slate-400 font-mono text-xs break-all">${userWallet || t('owner.wallet_not_set')}</p>
+            <button id="btn-connect-wallet" class="btn-primary mt-3 text-white px-4 py-2 rounded-xl text-xs flex items-center gap-2">
+                <i data-lucide="link" class="w-3.5 h-3.5"></i>
+                ${t('owner.connect_wallet')}
+            </button>
+        `;
+
+        document.getElementById('btn-connect-wallet').onclick = async () => {
+            try {
+                let walletAddress = "";
+                if (tonConnectUI) {
+                    const connected = await tonConnectUI.connectWallet();
+                    if (connected && connected.account) {
+                        walletAddress = typeof connected.account.address === "string"
+                            ? connected.account.address
+                            : connected.account.address.toString(true, true, true);
+                    }
+                }
+                if (!walletAddress) {
+                    walletAddress = prompt('Enter your TON Wallet address:');
+                }
+                if (walletAddress) {
+                    const res = await apiFetch('/api/auth/wallet', {
+                        method: 'POST',
+                        body: JSON.stringify({ wallet_address: walletAddress }),
+                    });
+                    if (res.success) {
+                        document.getElementById('current-wallet').innerText = walletAddress;
+                        alert(t('owner.wallet_saved'));
+                    }
+                }
+            } catch (e) {
+                console.warn("Wallet error:", e);
+            }
+        };
+
+        loadWithdrawalSection();
+        if (window.lucide) lucide.createIcons();
+    } catch (e) {
+        console.error('Error loading owner dashboard:', e);
+    }
 }
 
-// ========== CHANNEL EDIT ==========
+// Channel Edit
 let editingChannelId = null;
 function openEditModal(channelId) {
-  editingChannelId = channelId;
-  supabaseClient.from('channels').select('*').eq('id', channelId).single().then(({ data }) => {
-    document.getElementById('edit-price').value = data.subscription_price;
-    document.getElementById('edit-duration').value = data.duration_days;
-    document.getElementById('edit-renewal').checked = data.auto_renewal_reminders;
-    document.getElementById('edit-modal').classList.remove('hidden');
-  });
+    editingChannelId = channelId;
+    if (supabaseClient) {
+        supabaseClient.from('channels').select('*').eq('id', channelId).single().then(({ data }) => {
+            if (data) {
+                document.getElementById('edit-price').value = data.subscription_price;
+                document.getElementById('edit-duration').value = data.duration_days;
+                document.getElementById('edit-renewal').checked = data.auto_renewal_reminders;
+            }
+            document.getElementById('edit-modal').classList.remove('hidden');
+        }).catch(() => {
+            document.getElementById('edit-modal').classList.remove('hidden');
+        });
+    } else {
+        document.getElementById('edit-modal').classList.remove('hidden');
+    }
 }
+
 document.getElementById('modal-cancel').onclick = () => {
-  document.getElementById('edit-modal').classList.add('hidden');
-  editingChannelId = null;
-};
-document.getElementById('modal-save').onclick = async () => {
-  const price = parseFloat(document.getElementById('edit-price').value);
-  const duration = parseInt(document.getElementById('edit-duration').value);
-  const renewal = document.getElementById('edit-renewal').checked;
-  if (editingChannelId) {
-    await apiFetch(`/api/channels/${editingChannelId}`, {
-      method: 'PUT',
-      body: JSON.stringify({ subscription_price: price, duration_days: duration, auto_renewal_reminders: renewal }),
-    });
-  }
-  document.getElementById('edit-modal').classList.add('hidden');
-  loadOwnerDashboard();
+    document.getElementById('edit-modal').classList.add('hidden');
+    editingChannelId = null;
 };
 
-// ========== ADD CHANNEL ==========
+document.getElementById('modal-save').onclick = async () => {
+    const price = parseFloat(document.getElementById('edit-price').value);
+    const duration = parseInt(document.getElementById('edit-duration').value);
+    const renewal = document.getElementById('edit-renewal').checked;
+    if (editingChannelId) {
+        await apiFetch(`/api/channels/${editingChannelId}`, {
+            method: 'PUT',
+            body: JSON.stringify({ subscription_price: price, duration_days: duration, auto_renewal_reminders: renewal }),
+        });
+    }
+    document.getElementById('edit-modal').classList.add('hidden');
+    loadOwnerDashboard();
+};
+
+// Add Channel
 function openAddChannelModal() {
-  document.getElementById('add-channel-modal').classList.remove('hidden');
+    document.getElementById('add-channel-modal').classList.remove('hidden');
 }
 function closeAddChannelModal() {
-  document.getElementById('add-channel-modal').classList.add('hidden');
+    document.getElementById('add-channel-modal').classList.add('hidden');
 }
 async function submitAddChannel() {
-  const channel_name = document.getElementById('add-channel-name').value.trim();
-  const channel_invite_link = document.getElementById('add-channel-link').value.trim();
-  if (!channel_name || !channel_invite_link) return alert(t('error.generic') + ' Missing fields');
-  const res = await apiFetch('/api/channels/register', {
-    method: 'POST',
-    body: JSON.stringify({ channel_name, channel_invite_link }),
-  });
-  if (res.error) return alert(t('error.generic') + res.error);
-  closeAddChannelModal();
-  loadOwnerDashboard();
+    const channel_name = document.getElementById('add-channel-name').value.trim();
+    const channel_invite_link = document.getElementById('add-channel-link').value.trim();
+    if (!channel_name || !channel_invite_link) return alert(t('error.generic'));
+    
+    const res = await apiFetch('/api/channels/register', {
+        method: 'POST',
+        body: JSON.stringify({ channel_name, channel_invite_link }),
+    });
+    if (res && res.error) return alert(t('error.generic') + ' ' + res.error);
+    
+    document.getElementById('add-channel-name').value = '';
+    document.getElementById('add-channel-link').value = '';
+    closeAddChannelModal();
+    loadOwnerDashboard();
 }
 
 function copyDeepLink(channelId) {
-  const link = `https://t.me/MySubsHub_bot?start=${channelId}`;
-  navigator.clipboard.writeText(link).then(() => {
-    alert(t('owner.copy_link') + '!');
-  }).catch(() => {
-    prompt('Copy link:', link);
-  });
+    const link = `https://t.me/MySubsHub_bot?start=${channelId}`;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(link).then(() => {
+            alert(t('owner.copy_link') + '!\n' + link);
+        }).catch(() => {
+            prompt('Copy invitation link:', link);
+        });
+    } else {
+        prompt('Copy invitation link:', link);
+    }
 }
 
 async function toggleChannel(channelId, isActive) {
-  await apiFetch(`/api/channels/${channelId}`, {
-    method: 'PUT',
-    body: JSON.stringify({ is_active: isActive }),
-  });
+    await apiFetch(`/api/channels/${channelId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ is_active: isActive }),
+    });
 }
 
-// ========== WITHDRAWALS ==========
+// Withdrawals
 async function loadWithdrawalSection() {
-  const data = await apiFetch('/api/withdrawals/my');
-  const section = document.getElementById('withdrawal-section');
-  section.innerHTML = `
-    <h3 class="text-lg font-semibold text-white mb-2 flex items-center gap-2"><i data-lucide="trending-up" class="w-5 h-5 text-emerald-400"></i>${t('owner.withdrawal_earnings')}</h3>
-    <p class="text-slate-400">${t('owner.withdrawal_pending')} <strong class="text-white">${data.pendingEarnings.toFixed(6)} TON</strong></p>
-    <button onclick="requestWithdrawal()" class="btn-primary mt-3 text-white px-4 py-2 rounded-xl text-sm shadow-lg shadow-emerald-500/20">${t('owner.withdrawal_request')}</button>
-    <div class="mt-4 space-y-2">${data.withdrawals?.map(w => `<p class="text-sm text-slate-400">${w.amount} TON - <span class="text-amber-400">${w.status}</span></p>`).join('')}</div>
-  `;
-  lucide.createIcons();
-}
-async function requestWithdrawal() {
-  const amount = prompt(t('owner.withdrawal_amount_prompt'));
-  if (!amount) return;
-  const res = await apiFetch('/api/withdrawals/request', { method: 'POST', body: JSON.stringify({ amount: parseFloat(amount) }) });
-  if (res.success) {
-    alert(t('owner.withdrawal_request_success'));
-    loadOwnerDashboard();
-  } else {
-    alert(t('owner.withdrawal_request_error') + ' ' + res.error);
-  }
+    try {
+        const data = await apiFetch('/api/withdrawals/my');
+        const section = document.getElementById('withdrawal-section');
+        const pending = (data && typeof data.pendingEarnings === 'number') ? data.pendingEarnings : 0;
+        
+        const ownerEarningsStat = document.getElementById('owner-stat-earnings');
+        if (ownerEarningsStat) ownerEarningsStat.textContent = `${pending.toFixed(2)} TON`;
+
+        section.innerHTML = `
+            <h3 class="text-base font-semibold text-white mb-2 flex items-center gap-2"><i data-lucide="trending-up" class="w-4 h-4 text-emerald-400"></i>${t('owner.withdrawal_earnings')}</h3>
+            <p class="text-slate-400 text-sm">${t('owner.withdrawal_pending')} <strong class="text-white font-mono">${pending.toFixed(4)} TON</strong></p>
+            <button onclick="requestWithdrawal()" class="btn-primary mt-3 text-white px-4 py-2 rounded-xl text-xs flex items-center gap-2">
+                <i data-lucide="arrow-up-right" class="w-3.5 h-3.5"></i>
+                ${t('owner.withdrawal_request')}
+            </button>
+            <div class="mt-4 space-y-2 border-t border-slate-800/80 pt-3">${(data && data.withdrawals) ? data.withdrawals.map(w => `<div class="flex justify-between items-center text-xs"><span class="text-slate-300 font-mono">${w.amount} TON</span> <span class="badge ${w.status === 'Completed' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'}">${w.status}</span></div>`).join('') : ''}</div>
+        `;
+        if (window.lucide) lucide.createIcons();
+    } catch (e) {
+        console.error('Withdrawals error:', e);
+    }
 }
 
-// ========== RATING & REPORTING ==========
+async function requestWithdrawal() {
+    const amount = prompt(t('owner.withdrawal_amount_prompt'));
+    if (!amount) return;
+    const res = await apiFetch('/api/withdrawals/request', { method: 'POST', body: JSON.stringify({ amount: parseFloat(amount) }) });
+    if (res && res.success) {
+        alert(t('owner.withdrawal_request_success'));
+        loadOwnerDashboard();
+    } else {
+        alert(t('owner.withdrawal_request_error') + ' ' + ((res && res.error) || ''));
+    }
+}
+
+// Rating & Reporting
 let ratingChannelId = null, reportChannelId = null, selectedRating = 0;
 
 function openRating(channelId) {
-  ratingChannelId = channelId;
-  document.getElementById('rating-modal').classList.remove('hidden');
-  const container = document.getElementById('star-rating');
-  container.innerHTML = '';
-  for (let i = 1; i <= 5; i++) {
-    const star = document.createElement('span');
-    star.textContent = i <= selectedRating ? '★' : '☆';
-    star.className = 'cursor-pointer text-amber-400 text-3xl';
-    star.onclick = () => { selectedRating = i; openRating(channelId); };
-    container.appendChild(star);
-  }
+    ratingChannelId = channelId;
+    document.getElementById('rating-modal').classList.remove('hidden');
+    const container = document.getElementById('star-rating');
+    container.innerHTML = '';
+    for (let i = 1; i <= 5; i++) {
+        const star = document.createElement('span');
+        star.textContent = i <= selectedRating ? '★' : '☆';
+        star.className = 'cursor-pointer text-amber-400 text-2xl select-none';
+        star.onclick = () => { selectedRating = i; openRating(channelId); };
+        container.appendChild(star);
+    }
 }
 function closeRating() {
-  document.getElementById('rating-modal').classList.add('hidden');
-  ratingChannelId = null; selectedRating = 0;
+    document.getElementById('rating-modal').classList.add('hidden');
+    ratingChannelId = null; selectedRating = 0;
 }
 async function submitRating() {
-  if (!selectedRating) return alert(t('rating.select_error'));
-  const comment = document.getElementById('rating-comment').value;
-  await apiFetch('/api/reviews', { method: 'POST', body: JSON.stringify({ channel_id: ratingChannelId, rating: selectedRating, comment }) });
-  closeRating();
-  alert(t('rating.submitted'));
+    if (!selectedRating) return alert(t('rating.select_error'));
+    const comment = document.getElementById('rating-comment').value;
+    await apiFetch('/api/reviews', { method: 'POST', body: JSON.stringify({ channel_id: ratingChannelId, rating: selectedRating, comment }) });
+    closeRating();
+    alert(t('rating.submitted'));
 }
 
 function openReport(channelId) {
-  reportChannelId = channelId;
-  document.getElementById('report-modal').classList.remove('hidden');
+    reportChannelId = channelId;
+    document.getElementById('report-modal').classList.remove('hidden');
 }
 function closeReport() {
-  document.getElementById('report-modal').classList.add('hidden');
-  reportChannelId = null;
+    document.getElementById('report-modal').classList.add('hidden');
+    reportChannelId = null;
 }
 async function submitReport() {
-  const reason = document.getElementById('report-reason').value;
-  const description = document.getElementById('report-description').value;
-  await apiFetch('/api/reports', { method: 'POST', body: JSON.stringify({ channel_id: reportChannelId, reason, description }) });
-  closeReport();
-  alert(t('report.submitted'));
+    const reason = document.getElementById('report-reason').value;
+    const description = document.getElementById('report-description').value;
+    await apiFetch('/api/reports', { method: 'POST', body: JSON.stringify({ channel_id: reportChannelId, reason, description }) });
+    closeReport();
+    alert(t('report.submitted'));
 }
 
-// ========== ADMIN DASHBOARD ==========
+// Admin Dashboard
 async function loadAdminDashboard() {
-  loadAdminReports();
-  loadAdminWithdrawals();
+    loadAdminReports();
+    loadAdminWithdrawals();
 }
 async function loadAdminReports() {
-  const reports = await apiFetch('/api/admin/reports');
-  const container = document.getElementById('admin-reports');
-  container.innerHTML = reports.map(r => `
-    <div class="glass-card p-4 hover:shadow-lg transition">
-      <div class="flex justify-between items-start">
-        <div>
-          <h3 class="font-semibold text-white">${r.channel?.channel_name}</h3>
-          <p class="text-slate-400 text-sm">${r.reason} – ${r.description}</p>
-          <p class="text-slate-500 text-xs mt-1">By: ${r.reporter?.first_name} (@${r.reporter?.username})</p>
-        </div>
-        <span class="badge bg-amber-500/10 text-amber-400 border border-amber-500/30">${r.status}</span>
-      </div>
-      <div class="flex gap-2 mt-3">
-        <button onclick="reviewReport('${r.id}', 'ban')" class="bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-500/30 px-3 py-1.5 rounded-xl text-sm font-medium transition">${t('admin.ban')}</button>
-        <button onclick="reviewReport('${r.id}', 'dismiss')" class="btn-secondary px-3 py-1.5 rounded-xl text-sm text-slate-300">${t('admin.dismiss')}</button>
-      </div>
-    </div>
-  `).join('');
+    try {
+        const reports = await apiFetch('/api/admin/reports');
+        const container = document.getElementById('admin-reports');
+        if (!reports || !reports.length) {
+            container.innerHTML = `<div class="glass-card p-6 text-center text-slate-500 text-xs">No active reports.</div>`;
+            return;
+        }
+        container.innerHTML = reports.map(r => `
+            <div class="glass-card p-4 hover:border-slate-700 transition">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <h3 class="font-semibold text-white text-sm">${r.channel?.channel_name || 'Channel'}</h3>
+                        <p class="text-slate-300 text-xs mt-1"><span class="text-amber-400 font-medium">${r.reason}:</span> ${r.description}</p>
+                        <p class="text-slate-500 text-xs mt-2 font-mono">Reporter: ${r.reporter?.first_name || 'User'} (@${r.reporter?.username || 'user'})</p>
+                    </div>
+                    <span class="badge bg-amber-500/10 text-amber-400 border border-amber-500/30">${r.status}</span>
+                </div>
+                <div class="flex gap-2 mt-4 pt-3 border-t border-slate-800/80">
+                    <button onclick="reviewReport('${r.id}', 'ban')" class="bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 px-3 py-1.5 rounded-xl text-xs font-semibold transition">${t('admin.ban')}</button>
+                    <button onclick="reviewReport('${r.id}', 'dismiss')" class="btn-secondary px-3 py-1.5 rounded-xl text-xs text-slate-300 font-medium">${t('admin.dismiss')}</button>
+                </div>
+            </div>
+        `).join('');
+    } catch (e) {
+        console.error('Reports error:', e);
+    }
 }
 async function reviewReport(reportId, action) {
-  await apiFetch(`/api/admin/reports/${reportId}/review`, { method: 'POST', body: JSON.stringify({ action }) });
-  loadAdminReports();
+    await apiFetch(`/api/admin/reports/${reportId}/review`, { method: 'POST', body: JSON.stringify({ action }) });
+    alert(`Report ${action === 'ban' ? 'banned' : 'dismissed'}.`);
+    loadAdminReports();
 }
 async function loadAdminWithdrawals() {
-  const withdrawals = await apiFetch('/api/admin/withdrawals');
-  const container = document.getElementById('admin-withdrawals');
-  container.innerHTML = withdrawals.map(w => `
-    <div class="glass-card p-4 hover:shadow-lg transition">
-      <div class="flex justify-between items-center">
-        <div>
-          <h3 class="font-semibold text-white">${w.owner?.first_name} (@${w.owner?.username})</h3>
-          <p class="text-slate-400 text-sm">${w.amount} TON</p>
-          <p class="text-slate-500 text-xs">Wallet: ${w.owner?.wallet_address || 'Not set'}</p>
-        </div>
-        <span class="badge bg-amber-500/10 text-amber-400 border border-amber-500/30">${w.status}</span>
-      </div>
-      <button onclick="approveWithdrawal('${w.id}')" class="btn-primary mt-3 w-full text-white px-3 py-1.5 rounded-xl text-sm font-medium shadow-lg shadow-emerald-500/20">${t('admin.approve_pay')}</button>
-    </div>
-  `).join('');
+    try {
+        const withdrawals = await apiFetch('/api/admin/withdrawals');
+        const container = document.getElementById('admin-withdrawals');
+        if (!withdrawals || !withdrawals.length) {
+            container.innerHTML = `<div class="glass-card p-6 text-center text-slate-500 text-xs">No pending withdrawals.</div>`;
+            return;
+        }
+        container.innerHTML = withdrawals.map(w => `
+            <div class="glass-card p-4 hover:border-slate-700 transition">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <h3 class="font-semibold text-white text-sm">${w.owner?.first_name || 'Owner'} (@${w.owner?.username || 'user'})</h3>
+                        <p class="text-blue-400 font-mono font-bold text-xs mt-1">${w.amount} TON</p>
+                        <p class="text-slate-500 text-xs mt-1 font-mono break-all">Wallet: ${w.owner?.wallet_address || 'Not set'}</p>
+                    </div>
+                    <span class="badge bg-amber-500/10 text-amber-400 border border-amber-500/30">${w.status}</span>
+                </div>
+                <button onclick="approveWithdrawal('${w.id}')" class="btn-primary mt-3 w-full text-white px-3 py-2 rounded-xl text-xs font-semibold">${t('admin.approve_pay')}</button>
+            </div>
+        `).join('');
+    } catch (e) {
+        console.error('Withdrawals error:', e);
+    }
 }
 async function approveWithdrawal(id) {
-  const res = await apiFetch(`/api/admin/withdrawals/${id}/approve`, { method: 'POST' });
-  if (res.success) {
-    alert(t('admin.approve_pay') + '!');
-    loadAdminWithdrawals();
-  } else {
-    alert(t('error.generic') + res.error);
-  }
+    const res = await apiFetch(`/api/admin/withdrawals/${id}/approve`, { method: 'POST' });
+    if (res && res.success) {
+        alert(t('admin.approve_pay') + '!');
+        loadAdminWithdrawals();
+    } else {
+        alert(t('error.generic') + ' ' + ((res && res.error) || ''));
+    }
 }
 
-// ========== LANGUAGE MODAL ==========
+// Language Modal
 function openLanguageModal() {
-  document.getElementById('language-modal').classList.remove('hidden');
+    document.getElementById('language-modal').classList.remove('hidden');
 }
 
 function closeLanguageModal() {
-  document.getElementById('language-modal').classList.add('hidden');
+    document.getElementById('language-modal').classList.add('hidden');
 }
 
 function selectLanguage(lang) {
-  setLanguage(lang);
-  closeLanguageModal();
+    setLanguage(lang);
+    closeLanguageModal();
 }
-
-// ========== REFRESH CURRENT PAGE AFTER LANGUAGE CHANGE ==========
-window.refreshCurrentPage = function() {
-  switch (currentPage) {
-    case 'subscriptions':
-      loadSubscriptions();
-      break;
-    case 'owner':
-      loadOwnerDashboard();
-      break;
-    case 'admin':
-      loadAdminDashboard();
-      break;
-    case 'purchase':
-      // Optionally reload purchase page if needed
-      break;
-  }
-};
 
 window.onload = init;
