@@ -84,22 +84,94 @@ async function apiFetch(url, options = {}) {
     }
 }
 
-function showPage(pageId) {
-    // Hide all main page sections
-    document.querySelectorAll('main > section').forEach(el => el.classList.add('hidden-page'));
-    
-    // Show only the selected page
-    const page = document.getElementById(`page-${pageId}`);
-    if (page) {
-        page.classList.remove('hidden-page');
+function switchPage(pageId) {
+    // 1. Explicitly hide all main page sections using both style.display and classes
+    const allPages = ['purchase', 'subscriptions', 'owner', 'admin'];
+    allPages.forEach(p => {
+        const sec = document.getElementById(`page-${p}`);
+        if (sec) {
+            sec.style.display = 'none';
+            sec.classList.add('hidden-page');
+        }
+    });
+
+    // 2. Explicitly show the requested page
+    const target = document.getElementById(`page-${pageId}`);
+    if (target) {
+        target.style.display = 'block';
+        target.classList.remove('hidden-page');
     }
-    
-    // Sync the bottom navigation tab highlight
-    if (typeof setActiveTab === 'function') {
-        setActiveTab(pageId);
+
+    // 3. Highlight the active bottom navigation tab and reset inactive tabs
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('active-tab', 'text-ton-400', 'text-emerald-400', 'text-amber-400');
+        btn.classList.add('text-slate-400');
+
+        const iconBox = btn.querySelector('.tab-icon-box');
+        if (iconBox) {
+            iconBox.className = 'tab-icon-box w-10 h-8 flex items-center justify-center rounded-xl bg-transparent text-slate-400 border border-transparent transition-all duration-200';
+        }
+
+        const ind = btn.querySelector('.tab-indicator');
+        if (ind) {
+            ind.classList.remove('scale-x-100', 'opacity-100');
+            ind.classList.add('scale-x-0', 'opacity-0');
+        }
+    });
+
+    const activeBtn = document.getElementById(`nav-${pageId}`);
+    if (activeBtn) {
+        activeBtn.classList.add('active-tab');
+        activeBtn.classList.remove('text-slate-400');
+
+        let colorText = 'text-ton-400';
+        let bgBox = 'bg-ton-500/20';
+        let borderBox = 'border-ton-500/30';
+
+        if (pageId === 'owner') {
+            colorText = 'text-emerald-400';
+            bgBox = 'bg-emerald-500/20';
+            borderBox = 'border-emerald-500/30';
+        } else if (pageId === 'admin') {
+            colorText = 'text-amber-400';
+            bgBox = 'bg-amber-500/20';
+            borderBox = 'border-amber-500/30';
+        }
+
+        activeBtn.classList.add(colorText);
+
+        const iconBox = activeBtn.querySelector('.tab-icon-box');
+        if (iconBox) {
+            iconBox.className = `tab-icon-box w-10 h-8 flex items-center justify-center rounded-xl ${bgBox} ${colorText} border ${borderBox} transition-all duration-200`;
+        }
+
+        const ind = activeBtn.querySelector('.tab-indicator');
+        if (ind) {
+            ind.classList.remove('scale-x-0', 'opacity-0');
+            ind.classList.add('scale-x-100', 'opacity-100');
+        }
     }
+
+    // 4. Automatically trigger relevant data loader
+    if (pageId === 'subscriptions') {
+        loadSubscriptions();
+    } else if (pageId === 'owner') {
+        loadOwnerDashboard();
+    } else if (pageId === 'admin') {
+        loadAdminDashboard();
+    }
+
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
+
+// Keep showPage as an alias
+function showPage(pageId) {
+    switchPage(pageId);
+}
+
+// Global exposure
+window.switchPage = switchPage;
+window.showPage = showPage;
 
 // Init
 async function init() {
@@ -109,12 +181,13 @@ async function init() {
         const res = await apiFetch('/api/auth/validate', { method: 'POST' });
         currentUser = res?.user || null;
 
-        document.getElementById('nav-bar').classList.remove('hidden');
-        document.getElementById('nav-owner').style.display = 'flex';
+        const navBar = document.getElementById('nav-bar');
+        if (navBar) navBar.classList.remove('hidden');
 
         if (currentUser && currentUser.telegram_id && currentUser.telegram_id.toString() === ADMIN_TELEGRAM_ID) {
             isAdmin = true;
-            document.getElementById('nav-admin').style.display = 'flex';
+            const adminTab = document.getElementById('nav-admin');
+            if (adminTab) adminTab.style.display = 'flex';
         }
 
         if (tonConnectUI && tonConnectUI.onStatusChange) {
@@ -134,26 +207,18 @@ async function init() {
 
         if (startParam && /^[0-9a-fA-F-]{36}$/.test(startParam)) {
             loadPurchasePage(startParam);
-            showPage('purchase');
+            switchPage('purchase');
         } else if (startParam === 'owner') {
-            loadOwnerDashboard();
-            showPage('owner');
+            switchPage('owner');
         } else if (startParam === 'admin' && isAdmin) {
-            loadAdminDashboard();
-            showPage('admin');
+            switchPage('admin');
         } else {
-            loadSubscriptions();
-            showPage('subscriptions');
+            switchPage('subscriptions');
         }
     } catch (error) {
-        document.getElementById('nav-bar').classList.remove('hidden');
-        document.getElementById('nav-owner').style.display = 'flex';
-        loadSubscriptions();
-        showPage('subscriptions');
-    }
-
-    if (window.lucide) {
-        lucide.createIcons();
+        const navBar = document.getElementById('nav-bar');
+        if (navBar) navBar.classList.remove('hidden');
+        switchPage('subscriptions');
     }
 }
 
