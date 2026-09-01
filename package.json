@@ -1,0 +1,14 @@
+{
+  "name": "ton-subscriptions",
+  "version": "1.0.0",
+  "description": "Telegram Mini App and web dashboard for TON Subscriptions",
+  "main": "server.js",
+  "scripts": {
+    "dev": "node server.js",
+    "start": "node server.js",
+    "build": "echo 'No build required for static site'"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}

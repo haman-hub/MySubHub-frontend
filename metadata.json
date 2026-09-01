@@ -1,0 +1,6 @@
+{
+  "name": "TON Subscriptions",
+  "description": "Telegram Mini App and web dashboard for managing paid channel subscriptions on the TON blockchain.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
