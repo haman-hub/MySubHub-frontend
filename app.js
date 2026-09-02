@@ -429,6 +429,7 @@ async function loadOwnerDashboard() {
     try {
         const channels = await apiFetch('/api/channels/my');
         console.log('Raw channels response:', channels);
+        document.getElementById('debug-output').textContent = 'Channels API response: ' + JSON.stringify(channels, null, 2);
         const container = document.getElementById('channels-list');
 
         const statChannelsEl = document.getElementById('owner-stat-channels');
