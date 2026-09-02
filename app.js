@@ -36,6 +36,7 @@ const NETWORK_FEE_TON = 0.05;
 
 let currentUser = null;
 let isAdmin = false;
+let currentPage = 'subscriptions'; // <-- Added currentPage declaration
 
 async function apiFetch(url, options = {}) {
     const initData = TG.initData || '';
@@ -149,6 +150,8 @@ function switchPage(pageId) {
     if (pageId === 'subscriptions') loadSubscriptions();
     else if (pageId === 'owner') loadOwnerDashboard();
     else if (pageId === 'admin') loadAdminDashboard();
+
+    currentPage = pageId; // <-- Update currentPage
 
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -442,227 +445,233 @@ async function loadOwnerDashboard() {
     }
 }
 
-
-
 // ========== CHANNEL EDIT ==========
 let editingChannelId = null;
 function openEditModal(channelId) {
-  editingChannelId = channelId;
-  supabaseClient.from('channels').select('*').eq('id', channelId).single().then(({ data }) => {
-    document.getElementById('edit-price').value = data.subscription_price;
-    document.getElementById('edit-duration').value = data.duration_days;
-    document.getElementById('edit-renewal').checked = data.auto_renewal_reminders;
-    document.getElementById('edit-modal').classList.remove('hidden');
-  });
+    editingChannelId = channelId;
+    if (!supabaseClient) {
+        document.getElementById('edit-modal').classList.remove('hidden');
+        return;
+    }
+    supabaseClient.from('channels').select('*').eq('id', channelId).single().then(({ data }) => {
+        if (data) {
+            document.getElementById('edit-price').value = data.subscription_price;
+            document.getElementById('edit-duration').value = data.duration_days;
+            document.getElementById('edit-renewal').checked = data.auto_renewal_reminders;
+        }
+        document.getElementById('edit-modal').classList.remove('hidden');
+    }).catch(() => {
+        document.getElementById('edit-modal').classList.remove('hidden');
+    });
 }
 document.getElementById('modal-cancel').onclick = () => {
-  document.getElementById('edit-modal').classList.add('hidden');
-  editingChannelId = null;
+    document.getElementById('edit-modal').classList.add('hidden');
+    editingChannelId = null;
 };
 document.getElementById('modal-save').onclick = async () => {
-  const price = parseFloat(document.getElementById('edit-price').value);
-  const duration = parseInt(document.getElementById('edit-duration').value);
-  const renewal = document.getElementById('edit-renewal').checked;
-  if (editingChannelId) {
-    await apiFetch(`/api/channels/${editingChannelId}`, {
-      method: 'PUT',
-      body: JSON.stringify({ subscription_price: price, duration_days: duration, auto_renewal_reminders: renewal }),
-    });
-  }
-  document.getElementById('edit-modal').classList.add('hidden');
-  loadOwnerDashboard();
+    const price = parseFloat(document.getElementById('edit-price').value);
+    const duration = parseInt(document.getElementById('edit-duration').value);
+    const renewal = document.getElementById('edit-renewal').checked;
+    if (editingChannelId) {
+        await apiFetch(`/api/channels/${editingChannelId}`, {
+            method: 'PUT',
+            body: JSON.stringify({ subscription_price: price, duration_days: duration, auto_renewal_reminders: renewal }),
+        });
+    }
+    document.getElementById('edit-modal').classList.add('hidden');
+    loadOwnerDashboard();
 };
 
 // ========== ADD CHANNEL ==========
 function openAddChannelModal() {
-  document.getElementById('add-channel-modal').classList.remove('hidden');
+    document.getElementById('add-channel-modal').classList.remove('hidden');
 }
 function closeAddChannelModal() {
-  document.getElementById('add-channel-modal').classList.add('hidden');
+    document.getElementById('add-channel-modal').classList.add('hidden');
 }
 async function submitAddChannel() {
-  const channel_name = document.getElementById('add-channel-name').value.trim();
-  const channel_invite_link = document.getElementById('add-channel-link').value.trim();
-  if (!channel_name || !channel_invite_link) return alert(t('error.generic') + ' Missing fields');
-  const res = await apiFetch('/api/channels/register', {
-    method: 'POST',
-    body: JSON.stringify({ channel_name, channel_invite_link }),
-  });
-  if (res.error) return alert(t('error.generic') + res.error);
-  closeAddChannelModal();
-  loadOwnerDashboard();
+    const channel_name = document.getElementById('add-channel-name').value.trim();
+    const channel_invite_link = document.getElementById('add-channel-link').value.trim();
+    if (!channel_name || !channel_invite_link) return alert(t('error.generic') + ' Missing fields');
+    const res = await apiFetch('/api/channels/register', {
+        method: 'POST',
+        body: JSON.stringify({ channel_name, channel_invite_link }),
+    });
+    if (res.error) return alert(t('error.generic') + res.error);
+    closeAddChannelModal();
+    loadOwnerDashboard();
 }
 
 function copyDeepLink(channelId) {
-  const link = `https://t.me/MySubsHub_bot?start=${channelId}`;
-  navigator.clipboard.writeText(link).then(() => {
-    alert(t('owner.copy_link') + '!');
-  }).catch(() => {
-    prompt('Copy link:', link);
-  });
+    const link = `https://t.me/MySubsHub_bot?start=${channelId}`;
+    navigator.clipboard.writeText(link).then(() => {
+        alert(t('owner.copy_link') + '!');
+    }).catch(() => {
+        prompt('Copy link:', link);
+    });
 }
 
 async function toggleChannel(channelId, isActive) {
-  await apiFetch(`/api/channels/${channelId}`, {
-    method: 'PUT',
-    body: JSON.stringify({ is_active: isActive }),
-  });
+    await apiFetch(`/api/channels/${channelId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ is_active: isActive }),
+    });
 }
 
 // ========== WITHDRAWALS ==========
 async function loadWithdrawalSection() {
-  const data = await apiFetch('/api/withdrawals/my');
-  const section = document.getElementById('withdrawal-section');
-  section.innerHTML = `
-    <h3 class="text-lg font-semibold text-white mb-2 flex items-center gap-2"><i data-lucide="trending-up" class="w-5 h-5 text-emerald-400"></i>${t('owner.withdrawal_earnings')}</h3>
-    <p class="text-slate-400">${t('owner.withdrawal_pending')} <strong class="text-white">${data.pendingEarnings.toFixed(6)} TON</strong></p>
-    <button onclick="requestWithdrawal()" class="btn-primary mt-3 text-white px-4 py-2 rounded-xl text-sm shadow-lg shadow-emerald-500/20">${t('owner.withdrawal_request')}</button>
-    <div class="mt-4 space-y-2">${data.withdrawals?.map(w => `<p class="text-sm text-slate-400">${w.amount} TON - <span class="text-amber-400">${w.status}</span></p>`).join('')}</div>
-  `;
-  lucide.createIcons();
+    const data = await apiFetch('/api/withdrawals/my');
+    const section = document.getElementById('withdrawal-section');
+    section.innerHTML = `
+        <h3 class="text-lg font-semibold text-white mb-2 flex items-center gap-2"><i data-lucide="trending-up" class="w-5 h-5 text-emerald-400"></i>${t('owner.withdrawal_earnings')}</h3>
+        <p class="text-slate-400">${t('owner.withdrawal_pending')} <strong class="text-white">${data.pendingEarnings.toFixed(6)} TON</strong></p>
+        <button onclick="requestWithdrawal()" class="btn-primary mt-3 text-white px-4 py-2 rounded-xl text-sm shadow-lg shadow-emerald-500/20">${t('owner.withdrawal_request')}</button>
+        <div class="mt-4 space-y-2">${data.withdrawals?.map(w => `<p class="text-sm text-slate-400">${w.amount} TON - <span class="text-amber-400">${w.status}</span></p>`).join('')}</div>
+    `;
+    lucide.createIcons();
 }
 async function requestWithdrawal() {
-  const amount = prompt(t('owner.withdrawal_amount_prompt'));
-  if (!amount) return;
-  const res = await apiFetch('/api/withdrawals/request', { method: 'POST', body: JSON.stringify({ amount: parseFloat(amount) }) });
-  if (res.success) {
-    alert(t('owner.withdrawal_request_success'));
-    loadOwnerDashboard();
-  } else {
-    alert(t('owner.withdrawal_request_error') + ' ' + res.error);
-  }
+    const amount = prompt(t('owner.withdrawal_amount_prompt'));
+    if (!amount) return;
+    const res = await apiFetch('/api/withdrawals/request', { method: 'POST', body: JSON.stringify({ amount: parseFloat(amount) }) });
+    if (res.success) {
+        alert(t('owner.withdrawal_request_success'));
+        loadOwnerDashboard();
+    } else {
+        alert(t('owner.withdrawal_request_error') + ' ' + res.error);
+    }
 }
 
 // ========== RATING & REPORTING ==========
 let ratingChannelId = null, reportChannelId = null, selectedRating = 0;
 
 function openRating(channelId) {
-  ratingChannelId = channelId;
-  document.getElementById('rating-modal').classList.remove('hidden');
-  const container = document.getElementById('star-rating');
-  container.innerHTML = '';
-  for (let i = 1; i <= 5; i++) {
-    const star = document.createElement('span');
-    star.textContent = i <= selectedRating ? '★' : '☆';
-    star.className = 'cursor-pointer text-amber-400 text-3xl';
-    star.onclick = () => { selectedRating = i; openRating(channelId); };
-    container.appendChild(star);
-  }
+    ratingChannelId = channelId;
+    document.getElementById('rating-modal').classList.remove('hidden');
+    const container = document.getElementById('star-rating');
+    container.innerHTML = '';
+    for (let i = 1; i <= 5; i++) {
+        const star = document.createElement('span');
+        star.textContent = i <= selectedRating ? '★' : '☆';
+        star.className = 'cursor-pointer text-amber-400 text-3xl';
+        star.onclick = () => { selectedRating = i; openRating(channelId); };
+        container.appendChild(star);
+    }
 }
 function closeRating() {
-  document.getElementById('rating-modal').classList.add('hidden');
-  ratingChannelId = null; selectedRating = 0;
+    document.getElementById('rating-modal').classList.add('hidden');
+    ratingChannelId = null; selectedRating = 0;
 }
 async function submitRating() {
-  if (!selectedRating) return alert(t('rating.select_error'));
-  const comment = document.getElementById('rating-comment').value;
-  await apiFetch('/api/reviews', { method: 'POST', body: JSON.stringify({ channel_id: ratingChannelId, rating: selectedRating, comment }) });
-  closeRating();
-  alert(t('rating.submitted'));
+    if (!selectedRating) return alert(t('rating.select_error'));
+    const comment = document.getElementById('rating-comment').value;
+    await apiFetch('/api/reviews', { method: 'POST', body: JSON.stringify({ channel_id: ratingChannelId, rating: selectedRating, comment }) });
+    closeRating();
+    alert(t('rating.submitted'));
 }
 
 function openReport(channelId) {
-  reportChannelId = channelId;
-  document.getElementById('report-modal').classList.remove('hidden');
+    reportChannelId = channelId;
+    document.getElementById('report-modal').classList.remove('hidden');
 }
 function closeReport() {
-  document.getElementById('report-modal').classList.add('hidden');
-  reportChannelId = null;
+    document.getElementById('report-modal').classList.add('hidden');
+    reportChannelId = null;
 }
 async function submitReport() {
-  const reason = document.getElementById('report-reason').value;
-  const description = document.getElementById('report-description').value;
-  await apiFetch('/api/reports', { method: 'POST', body: JSON.stringify({ channel_id: reportChannelId, reason, description }) });
-  closeReport();
-  alert(t('report.submitted'));
+    const reason = document.getElementById('report-reason').value;
+    const description = document.getElementById('report-description').value;
+    await apiFetch('/api/reports', { method: 'POST', body: JSON.stringify({ channel_id: reportChannelId, reason, description }) });
+    closeReport();
+    alert(t('report.submitted'));
 }
 
 // ========== ADMIN DASHBOARD ==========
 async function loadAdminDashboard() {
-  loadAdminReports();
-  loadAdminWithdrawals();
+    loadAdminReports();
+    loadAdminWithdrawals();
 }
 async function loadAdminReports() {
-  const reports = await apiFetch('/api/admin/reports');
-  const container = document.getElementById('admin-reports');
-  container.innerHTML = reports.map(r => `
-    <div class="glass-card p-4 hover:shadow-lg transition">
-      <div class="flex justify-between items-start">
-        <div>
-          <h3 class="font-semibold text-white">${r.channel?.channel_name}</h3>
-          <p class="text-slate-400 text-sm">${r.reason} – ${r.description}</p>
-          <p class="text-slate-500 text-xs mt-1">By: ${r.reporter?.first_name} (@${r.reporter?.username})</p>
+    const reports = await apiFetch('/api/admin/reports');
+    const container = document.getElementById('admin-reports');
+    container.innerHTML = reports.map(r => `
+        <div class="glass-card p-4 hover:shadow-lg transition">
+            <div class="flex justify-between items-start">
+                <div>
+                    <h3 class="font-semibold text-white">${r.channel?.channel_name}</h3>
+                    <p class="text-slate-400 text-sm">${r.reason} – ${r.description}</p>
+                    <p class="text-slate-500 text-xs mt-1">By: ${r.reporter?.first_name} (@${r.reporter?.username})</p>
+                </div>
+                <span class="badge bg-amber-500/10 text-amber-400 border border-amber-500/30">${r.status}</span>
+            </div>
+            <div class="flex gap-2 mt-3">
+                <button onclick="reviewReport('${r.id}', 'ban')" class="bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-500/30 px-3 py-1.5 rounded-xl text-sm font-medium transition">${t('admin.ban')}</button>
+                <button onclick="reviewReport('${r.id}', 'dismiss')" class="btn-secondary px-3 py-1.5 rounded-xl text-sm text-slate-300">${t('admin.dismiss')}</button>
+            </div>
         </div>
-        <span class="badge bg-amber-500/10 text-amber-400 border border-amber-500/30">${r.status}</span>
-      </div>
-      <div class="flex gap-2 mt-3">
-        <button onclick="reviewReport('${r.id}', 'ban')" class="bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-500/30 px-3 py-1.5 rounded-xl text-sm font-medium transition">${t('admin.ban')}</button>
-        <button onclick="reviewReport('${r.id}', 'dismiss')" class="btn-secondary px-3 py-1.5 rounded-xl text-sm text-slate-300">${t('admin.dismiss')}</button>
-      </div>
-    </div>
-  `).join('');
+    `).join('');
 }
 async function reviewReport(reportId, action) {
-  await apiFetch(`/api/admin/reports/${reportId}/review`, { method: 'POST', body: JSON.stringify({ action }) });
-  loadAdminReports();
+    await apiFetch(`/api/admin/reports/${reportId}/review`, { method: 'POST', body: JSON.stringify({ action }) });
+    loadAdminReports();
 }
 async function loadAdminWithdrawals() {
-  const withdrawals = await apiFetch('/api/admin/withdrawals');
-  const container = document.getElementById('admin-withdrawals');
-  container.innerHTML = withdrawals.map(w => `
-    <div class="glass-card p-4 hover:shadow-lg transition">
-      <div class="flex justify-between items-center">
-        <div>
-          <h3 class="font-semibold text-white">${w.owner?.first_name} (@${w.owner?.username})</h3>
-          <p class="text-slate-400 text-sm">${w.amount} TON</p>
-          <p class="text-slate-500 text-xs">Wallet: ${w.owner?.wallet_address || 'Not set'}</p>
+    const withdrawals = await apiFetch('/api/admin/withdrawals');
+    const container = document.getElementById('admin-withdrawals');
+    container.innerHTML = withdrawals.map(w => `
+        <div class="glass-card p-4 hover:shadow-lg transition">
+            <div class="flex justify-between items-center">
+                <div>
+                    <h3 class="font-semibold text-white">${w.owner?.first_name} (@${w.owner?.username})</h3>
+                    <p class="text-slate-400 text-sm">${w.amount} TON</p>
+                    <p class="text-slate-500 text-xs">Wallet: ${w.owner?.wallet_address || 'Not set'}</p>
+                </div>
+                <span class="badge bg-amber-500/10 text-amber-400 border border-amber-500/30">${w.status}</span>
+            </div>
+            <button onclick="approveWithdrawal('${w.id}')" class="btn-primary mt-3 w-full text-white px-3 py-1.5 rounded-xl text-sm font-medium shadow-lg shadow-emerald-500/20">${t('admin.approve_pay')}</button>
         </div>
-        <span class="badge bg-amber-500/10 text-amber-400 border border-amber-500/30">${w.status}</span>
-      </div>
-      <button onclick="approveWithdrawal('${w.id}')" class="btn-primary mt-3 w-full text-white px-3 py-1.5 rounded-xl text-sm font-medium shadow-lg shadow-emerald-500/20">${t('admin.approve_pay')}</button>
-    </div>
-  `).join('');
+    `).join('');
 }
 async function approveWithdrawal(id) {
-  const res = await apiFetch(`/api/admin/withdrawals/${id}/approve`, { method: 'POST' });
-  if (res.success) {
-    alert(t('admin.approve_pay') + '!');
-    loadAdminWithdrawals();
-  } else {
-    alert(t('error.generic') + res.error);
-  }
+    const res = await apiFetch(`/api/admin/withdrawals/${id}/approve`, { method: 'POST' });
+    if (res.success) {
+        alert(t('admin.approve_pay') + '!');
+        loadAdminWithdrawals();
+    } else {
+        alert(t('error.generic') + res.error);
+    }
 }
 
 // ========== LANGUAGE MODAL ==========
 function openLanguageModal() {
-  document.getElementById('language-modal').classList.remove('hidden');
+    document.getElementById('language-modal').classList.remove('hidden');
 }
 
 function closeLanguageModal() {
-  document.getElementById('language-modal').classList.add('hidden');
+    document.getElementById('language-modal').classList.add('hidden');
 }
 
 function selectLanguage(lang) {
-  setLanguage(lang);
-  closeLanguageModal();
+    setLanguage(lang);
+    closeLanguageModal();
 }
 
 // ========== REFRESH CURRENT PAGE AFTER LANGUAGE CHANGE ==========
 window.refreshCurrentPage = function() {
-  switch (currentPage) {
-    case 'subscriptions':
-      loadSubscriptions();
-      break;
-    case 'owner':
-      loadOwnerDashboard();
-      break;
-    case 'admin':
-      loadAdminDashboard();
-      break;
-    case 'purchase':
-      // Optionally reload purchase page if needed
-      break;
-  }
+    switch (currentPage) {
+        case 'subscriptions':
+            loadSubscriptions();
+            break;
+        case 'owner':
+            loadOwnerDashboard();
+            break;
+        case 'admin':
+            loadAdminDashboard();
+            break;
+        case 'purchase':
+            // Optionally reload purchase page if needed
+            break;
+    }
 };
 
 window.onload = init;
