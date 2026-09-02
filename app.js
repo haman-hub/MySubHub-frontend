@@ -426,7 +426,9 @@ async function renewSubscription(subId) {
 
 // Owner Dashboard
 async function loadOwnerDashboard() {
-    //try {
+    alert('loadOwnerDashboard called');
+
+    try {
         const channels = await apiFetch('/api/channels/my');
         //console.log('Raw channels response:', channels);
         //document.getElementById('debug-output').textContent = 'Channels API response: ' + JSON.stringify(channels, null, 2);
@@ -504,9 +506,9 @@ async function loadOwnerDashboard() {
 
         loadWithdrawalSection();
         if (window.lucide) lucide.createIcons();
-    //} catch (e) {
-    //    console.error('Error loading owner dashboard:', e);
-   // }
+    } catch (e) {
+        console.error('Error loading owner dashboard:', e);
+    }
 }
 
 // Channel Edit
