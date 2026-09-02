@@ -189,18 +189,56 @@ async function init() {
         const navBar = document.getElementById('nav-bar');
         if (navBar) navBar.classList.remove('hidden');
 
-        const tgUserId = TG.initDataUnsafe?.user?.id?.toString() || currentUser?.telegram_id?.toString();
-        if (tgUserId === ADMIN_TELEGRAM_ID || (currentUser && currentUser.telegram_id && currentUser.telegram_id.toString() === ADMIN_TELEGRAM_ID)) {
-            isAdmin = true;
+        // ---------- ROBUST ADMIN DETECTION ----------
+        // 1. From initDataUnsafe
+        const fromUnsafe = TG.initDataUnsafe?.user?.id;
+        // 2. From database user object
+        const fromCurrentUser = currentUser?.telegram_id;
+        // 3. From raw initData string (if initDataUnsafe is missing)
+        const fromInitData = (() => {
+            try {
+                const params = new URLSearchParams(TG.initData);
+                const userParam = params.get('user');
+                if (userParam) {
+                    const userObj = JSON.parse(userParam);
+                    return userObj.id;
+                }
+            } catch (e) {}
+            return null;
+        })();
+
+        const tgUserId = fromUnsafe || fromCurrentUser || fromInitData;
+        const adminIdNum = Number(ADMIN_TELEGRAM_ID);
+
+        // Compare as string or number
+        if (tgUserId !== undefined && tgUserId !== null) {
+            isAdmin = (tgUserId.toString() === ADMIN_TELEGRAM_ID) || (Number(tgUserId) === adminIdNum);
         } else {
             isAdmin = false;
         }
 
+        // Force show/hide admin tab
         const adminTab = document.getElementById('nav-admin');
         if (adminTab) {
-            adminTab.style.display = isAdmin ? 'flex' : 'none';
+            if (isAdmin) {
+                adminTab.style.setProperty('display', 'flex', 'important');
+                adminTab.classList.remove('hidden');
+            } else {
+                adminTab.style.setProperty('display', 'none', 'important');
+                adminTab.classList.add('hidden');
+            }
         }
 
+        // Fallback: if currentUser is admin but isAdmin still false
+        if (!isAdmin && currentUser && currentUser.telegram_id && currentUser.telegram_id.toString() === ADMIN_TELEGRAM_ID) {
+            isAdmin = true;
+            if (adminTab) {
+                adminTab.style.setProperty('display', 'flex', 'important');
+                adminTab.classList.remove('hidden');
+            }
+        }
+
+        // TON Connect status handler
         if (tonConnectUI && tonConnectUI.onStatusChange) {
             tonConnectUI.onStatusChange((wallet) => {
                 if (wallet) {
@@ -213,7 +251,9 @@ async function init() {
             });
         }
 
-        const urlStart = new URLSearchParams(window.location.search).get('startapp') || new URLSearchParams(window.location.search).get('start');
+        // Determine start parameter and navigate
+        const urlStart = new URLSearchParams(window.location.search).get('startapp') ||
+                         new URLSearchParams(window.location.search).get('start');
         const startParam = TG.initDataUnsafe?.start_param || urlStart;
 
         if (startParam && /^[0-9a-fA-F-]{36}$/.test(startParam)) {
@@ -226,11 +266,15 @@ async function init() {
         } else {
             switchPage('subscriptions');
         }
+
+        // Debug log – remove after testing
+        console.log('Admin detection:', { tgUserId, isAdmin, ADMIN_TELEGRAM_ID, fromUnsafe, fromCurrentUser, fromInitData });
     } catch (error) {
+        console.error('Init error:', error);
         const navBar = document.getElementById('nav-bar');
         if (navBar) navBar.classList.remove('hidden');
         const adminTab = document.getElementById('nav-admin');
-        if (adminTab) adminTab.style.display = 'none';
+        if (adminTab) adminTab.style.setProperty('display', 'none', 'important');
         switchPage('subscriptions');
     }
 }
