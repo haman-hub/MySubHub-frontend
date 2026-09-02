@@ -163,6 +163,7 @@ window.switchPage = switchPage;
 window.showPage = showPage;
 
 async function init() {
+    alert('init started');
     applyTranslations();
 
     try {
