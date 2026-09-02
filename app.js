@@ -428,6 +428,7 @@ async function renewSubscription(subId) {
 async function loadOwnerDashboard() {
     try {
         const channels = await apiFetch('/api/channels/my');
+        console.log('Raw channels response:', channels);
         const container = document.getElementById('channels-list');
 
         const statChannelsEl = document.getElementById('owner-stat-channels');
