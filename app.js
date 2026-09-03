@@ -165,79 +165,9 @@ window.switchPage = switchPage;
 window.showPage = showPage;
 
 async function init() {
-    alert('init started');
-    applyTranslations();
-
-    try {
-        const res = await apiFetch('/api/auth/validate', { method: 'POST' });
-        currentUser = res?.user || null;
-
-        const navBar = document.getElementById('nav-bar');
-        if (navBar) navBar.classList.remove('hidden');
-
-        // Admin detection
-        const fromUnsafe = TG.initDataUnsafe?.user?.id;
-        const fromCurrentUser = currentUser?.telegram_id;
-        const fromInitData = (() => {
-            try {
-                const params = new URLSearchParams(TG.initData);
-                const userParam = params.get('user');
-                if (userParam) return JSON.parse(userParam).id;
-            } catch (e) {}
-            return null;
-        })();
-
-        const tgUserId = fromUnsafe || fromCurrentUser || fromInitData;
-        const adminIdNum = Number(ADMIN_TELEGRAM_ID);
-        if (tgUserId !== undefined && tgUserId !== null) {
-            isAdmin = (tgUserId.toString() === ADMIN_TELEGRAM_ID) || (Number(tgUserId) === adminIdNum);
-        } else {
-            isAdmin = false;
-        }
-
-        const adminTab = document.getElementById('nav-admin');
-        if (adminTab) {
-            adminTab.style.setProperty('display', isAdmin ? 'flex' : 'none', 'important');
-        }
-
-        // Show owner tab always (for now)
-        const ownerTab = document.getElementById('nav-owner');
-        if (ownerTab) ownerTab.style.setProperty('display', 'flex', 'important');
-
-        if (tonConnectUI && tonConnectUI.onStatusChange) {
-            tonConnectUI.onStatusChange((wallet) => {
-                if (wallet) {
-                    const walletAddress = typeof wallet.account.address === "string"
-                        ? wallet.account.address
-                        : wallet.account.address.toString(true, true, true);
-                    const walletDisplay = document.getElementById('current-wallet');
-                    if (walletDisplay) walletDisplay.innerText = walletAddress;
-                }
-            });
-        }
-
-        const urlStart = new URLSearchParams(window.location.search).get('startapp') ||
-                         new URLSearchParams(window.location.search).get('start');
-        const startParam = TG.initDataUnsafe?.start_param || urlStart;
-
-        if (startParam && /^[0-9a-fA-F-]{36}$/.test(startParam)) {
-            loadPurchasePage(startParam);
-            switchPage('purchase');
-        } else if (startParam === 'owner') {
-            switchPage('owner');
-        } else if (startParam === 'admin' && isAdmin) {
-            switchPage('admin');
-        } else {
-            switchPage('subscriptions');
-        }
-    } catch (error) {
-        console.error('Init error:', error);
-        const navBar = document.getElementById('nav-bar');
-        if (navBar) navBar.classList.remove('hidden');
-        const adminTab = document.getElementById('nav-admin');
-        if (adminTab) adminTab.style.setProperty('display', 'none', 'important');
-        switchPage('subscriptions');
-    }
+    alert('init simple');
+    document.getElementById('nav-bar').classList.remove('hidden');
+    switchPage('subscriptions');
 }
 
 async function loadPurchasePage(channelId) {
