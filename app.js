@@ -397,23 +397,30 @@ function openEditModal(channelId) {
         document.getElementById('edit-modal').classList.remove('hidden');
     });
 }
-document.getElementById('modal-cancel').onclick = () => {
-    document.getElementById('edit-modal').classList.add('hidden');
-    editingChannelId = null;
-};
-document.getElementById('modal-save').onclick = async () => {
-    const price = parseFloat(document.getElementById('edit-price').value);
-    const duration = parseInt(document.getElementById('edit-duration').value);
-    const renewal = document.getElementById('edit-renewal').checked;
-    if (editingChannelId) {
-        await apiFetch(`/api/channels/${editingChannelId}`, {
-            method: 'PUT',
-            body: JSON.stringify({ subscription_price: price, duration_days: duration, auto_renewal_reminders: renewal }),
-        });
-    }
-    document.getElementById('edit-modal').classList.add('hidden');
-    loadOwnerDashboard();
-};
+const modalCancelBtn = document.getElementById('modal-cancel');
+if (modalCancelBtn) {
+    modalCancelBtn.onclick = () => {
+        document.getElementById('edit-modal').classList.add('hidden');
+        editingChannelId = null;
+    };
+}
+
+const modalSaveBtn = document.getElementById('modal-save');
+if (modalSaveBtn) {
+    modalSaveBtn.onclick = async () => {
+        const price = parseFloat(document.getElementById('edit-price').value);
+        const duration = parseInt(document.getElementById('edit-duration').value);
+        const renewal = document.getElementById('edit-renewal').checked;
+        if (editingChannelId) {
+            await apiFetch(`/api/channels/${editingChannelId}`, {
+                method: 'PUT',
+                body: JSON.stringify({ subscription_price: price, duration_days: duration, auto_renewal_reminders: renewal }),
+            });
+        }
+        document.getElementById('edit-modal').classList.add('hidden');
+        loadOwnerDashboard();
+    };
+}
 
 // ========== ADD CHANNEL ==========
 function openAddChannelModal() {
