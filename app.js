@@ -419,33 +419,33 @@ async function loadOwnerDashboard() {
             </button>
         `;
 
-        document.getElementById('btn-connect-wallet').onclick = async () => {
-            try {
-                let walletAddress = "";
-                if (tonConnectUI) {
-                    const connected = await tonConnectUI.connectWallet();
-                    if (connected && connected.account) {
-                        walletAddress = typeof connected.account.address === "string"
-                            ? connected.account.address
-                            : connected.account.address.toString(true, true, true);
-                    }
-                }
-                if (!walletAddress) walletAddress = prompt('Enter your TON Wallet address:');
-                if (walletAddress) {
-                    const res = await apiFetch('/api/auth/wallet', {
-                        method: 'POST',
-                        body: JSON.stringify({ wallet_address: walletAddress }),
-                    });
-                    if (res.success) {
-                        document.getElementById('current-wallet').innerText = walletAddress;
-                        alert(t('owner.wallet_saved'));
-                    }
-                }
-catch (e) {
-    console.error("Wallet connect error:", e);
-    alert('Wallet connection failed: ' + e.message);
-}
-        };
+document.getElementById('btn-connect-wallet').onclick = async () => {
+    try {
+        let walletAddress = "";
+        if (tonConnectUI) {
+            const connected = await tonConnectUI.connectWallet();
+            if (connected && connected.account) {
+                walletAddress = typeof connected.account.address === "string"
+                    ? connected.account.address
+                    : connected.account.address.toString(true, true, true);
+            }
+        }
+        if (!walletAddress) walletAddress = prompt('Enter your TON Wallet address:');
+        if (walletAddress) {
+            const res = await apiFetch('/api/auth/wallet', {
+                method: 'POST',
+                body: JSON.stringify({ wallet_address: walletAddress }),
+            });
+            if (res.success) {
+                document.getElementById('current-wallet').innerText = walletAddress;
+                alert(t('owner.wallet_saved'));
+            }
+        }
+    } catch (e) {
+        console.error("Wallet connect error:", e);
+        alert('Wallet connection failed: ' + e.message);
+    }
+};
 
         loadWithdrawalSection();
         if (window.lucide) lucide.createIcons();
