@@ -296,6 +296,15 @@ async function initiatePayment(channelId, price) {
 
         if (!tonConnectUI) throw new Error('TON Connect not initialized');
 
+        // 1. Check if wallet is already connected
+        let wallet = tonConnectUI.wallet;
+        if (!wallet) {
+            // 2. Not connected – ask user to connect
+            await tonConnectUI.connectWallet();
+            wallet = tonConnectUI.wallet;
+            if (!wallet) throw new Error('Wallet connection cancelled');
+        }
+
         const transaction = {
             validUntil: Math.floor(Date.now() / 1000) + 360,
             messages: [{
@@ -321,7 +330,7 @@ async function initiatePayment(channelId, price) {
         }
     } catch (e) {
         console.error('Payment error:', e);
-        alert(e.message || 'Payment failed');
+        alert('Payment error: ' + e.message);
     }
 }
 
