@@ -26,7 +26,7 @@ let tonConnectUI = null;
 try {
     if (window.TON_CONNECT_UI) {
         tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-            manifestUrl: window.location.origin + '/manifest.json',
+            manifestUrl: 'https://haman-hub.github.io/MySubHub-frontend/manifest.json',
             buttonRootId: 'ton-connect-button',
             network: 'testnet'
         });
