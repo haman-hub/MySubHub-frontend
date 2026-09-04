@@ -269,13 +269,13 @@ async function loadPurchasePage(channelId) {
             </div>
             <h2 class="text-2xl font-bold text-white tracking-tight">${data.channel_name}</h2>
             <p class="text-slate-400 mt-2 text-sm">
-                ${t('purchase.subscription')} <strong class="text-white font-mono text-base">${total.toFixed(2)} TON</strong> ${t('purchase.per')} ${data.duration_days} ${t('purchase.days')}
+                ${t('purchase.subscription')} <strong class="text-white font-mono text-base">${total.toFixed(6)} TON</strong> ${t('purchase.per')} ${data.duration_days} ${t('purchase.days')}
             </p>
             <div class="mt-5 p-4 rounded-xl bg-slate-900/60 border border-slate-800 text-xs text-slate-400 space-y-2 text-left font-mono">
                 <div class="flex justify-between"><span>Base price:</span> <span class="text-slate-200">${data.subscription_price} TON</span></div>
-                <div class="flex justify-between"><span>Platform fee (1%):</span> <span class="text-slate-200">${platformFee.toFixed(2)} TON</span></div>
-                <div class="flex justify-between"><span>Network fee:</span> <span class="text-slate-200">${NETWORK_FEE_TON.toFixed(2)} TON</span></div>
-                <div class="pt-2 border-t border-slate-800 flex justify-between font-bold text-sm text-white"><span>Total:</span> <span class="text-blue-400">${total.toFixed(2)} TON</span></div>
+                <div class="flex justify-between"><span>Platform fee (1%):</span> <span class="text-slate-200">${platformFee.toFixed(6)} TON</span></div>
+                <div class="flex justify-between"><span>Network fee:</span> <span class="text-slate-200">${NETWORK_FEE_TON.toFixed(6)} TON</span></div>
+                <div class="pt-2 border-t border-slate-800 flex justify-between font-bold text-sm text-white"><span>Total:</span> <span class="text-blue-400">${total.toFixed(6)} TON</span></div>
             </div>
         </div>
         <button id="btn-pay" class="btn-primary w-full text-white font-semibold py-3.5 rounded-xl flex items-center justify-center gap-2 text-sm">
