@@ -1,3 +1,6 @@
+window.onerror = function(message) {
+    alert('JS Error: ' + message);
+};
 //alert('app.js loaded');
 
 // app.js (merged: working logic + new UI)
