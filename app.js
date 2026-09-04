@@ -1,4 +1,4 @@
-alert('app.js loaded');
+//alert('app.js loaded');
 
 // app.js (merged: working logic + new UI)
 const TG = window.Telegram?.WebApp || {
