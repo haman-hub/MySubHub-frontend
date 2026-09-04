@@ -441,9 +441,10 @@ async function loadOwnerDashboard() {
                         alert(t('owner.wallet_saved'));
                     }
                 }
-            } catch (e) {
-                console.warn("Wallet error:", e);
-            }
+catch (e) {
+    console.error("Wallet connect error:", e);
+    alert('Wallet connection failed: ' + e.message);
+}
         };
 
         loadWithdrawalSection();
