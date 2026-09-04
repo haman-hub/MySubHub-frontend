@@ -400,9 +400,13 @@ async function loadOwnerDashboard() {
                             ${t('owner.active')}: <input type="checkbox" ${ch.is_active ? 'checked' : ''} onchange="toggleChannel('${ch.id}', this.checked)" class="accent-blue-500 w-4 h-4 cursor-pointer">
                         </label>
                     </div>
-                    <div class="flex items-center gap-4 mt-4 pt-3 border-t border-slate-800/80">
+                    <div class="flex items-center gap-4 mt-4 pt-3 border-t border-slate-800/80 flex-wrap">
                         <button onclick="openEditModal('${ch.id}')" class="text-blue-400 hover:text-blue-300 text-xs transition font-medium">${t('owner.edit')}</button>
                         <button onclick="copyDeepLink('${ch.id}')" class="text-blue-400 hover:text-blue-300 text-xs transition font-medium">${t('owner.copy_link')}</button>
+                        <button onclick="forwardChannel('${ch.id}')" class="text-emerald-400 hover:text-emerald-300 text-xs transition font-medium flex items-center gap-1">
+                            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+                            Forward
+                        </button>
                     </div>
                 </div>
             `).join('');
@@ -525,6 +529,43 @@ function copyDeepLink(channelId) {
     }).catch(() => {
         prompt('Copy link:', link);
     });
+}
+
+async function forwardChannel(channelId) {
+    // Fetch channel details
+    if (!supabaseClient) {
+        alert('Database not available');
+        return;
+    }
+    const { data: channel, error } = await supabaseClient
+        .from('channels')
+        .select('channel_name, subscription_price, duration_days')
+        .eq('id', channelId)
+        .single();
+
+    if (error || !channel) {
+        alert('Channel not found');
+        return;
+    }
+
+    // Ask for optional custom message
+    const customMessage = prompt('Add a custom message (optional):', '');
+    if (customMessage === null) return; // user cancelled
+
+    // Build deep link
+    const deepLink = `https://t.me/MySubsHub_bot?start=${channelId}`;
+
+    // Compose message
+    let text = `📢 Subscribe to *${channel.channel_name}*\n`;
+    text += `💰 Price: ${channel.subscription_price} TON / ${channel.duration_days} days\n`;
+    text += `🔗 ${deepLink}`;
+    if (customMessage.trim()) {
+        text += `\n\n${customMessage.trim()}`;
+    }
+
+    // Open Telegram share dialog
+    const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(deepLink)}&text=${encodeURIComponent(text)}`;
+    window.open(shareUrl, '_blank');
 }
 
 async function toggleChannel(channelId, isActive) {
