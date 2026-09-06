@@ -1,7 +1,6 @@
 window.onerror = function(message) {
     alert('JS Error: ' + message);
 };
-//alert('app.js loaded');
 
 // app.js (merged: working logic + new UI)
 const TG = window.Telegram?.WebApp || {
@@ -23,16 +22,24 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const supabaseClient = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 
 let tonConnectUI = null;
-try {
-    if (window.TON_CONNECT_UI) {
-        tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-            manifestUrl: 'https://haman-hub.github.io/MySubHub-frontend/manifest.json',
-            buttonRootId: 'ton-connect-button',
-            network: 'testnet'
-        });
+
+async function initTonConnect() {
+    try {
+        if (window.TON_CONNECT_UI) {
+            tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
+                manifestUrl: 'https://haman-hub.github.io/MySubHub-frontend/manifest.json',
+                buttonRootId: 'ton-connect-button',
+                network: 'testnet'
+            });
+            console.log('TON Connect initialized');
+        } else {
+            console.error('TON Connect UI script not loaded');
+            alert('TON Connect SDK not loaded. Check your network and reload.');
+        }
+    } catch (e) {
+        console.error('TON Connect init error:', e);
+        alert('TON Connect init failed: ' + e.message);
     }
-} catch (e) {
-    console.warn('TON Connect init:', e);
 }
 
 const API_BASE = 'https://mslxnegbtstpdwauugmq.supabase.co/functions/v1/mainbot';
@@ -41,7 +48,7 @@ const NETWORK_FEE_TON = 0.05;
 
 let currentUser = null;
 let isAdmin = false;
-let currentPage = 'subscriptions'; // <-- Added currentPage declaration
+let currentPage = 'subscriptions';
 
 async function apiFetch(url, options = {}) {
     const initData = TG.initData || '';
@@ -156,8 +163,7 @@ function switchPage(pageId) {
     else if (pageId === 'owner') loadOwnerDashboard();
     else if (pageId === 'admin') loadAdminDashboard();
 
-    currentPage = pageId; // <-- Update currentPage
-
+    currentPage = pageId;
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -169,6 +175,7 @@ window.showPage = showPage;
 
 async function init() {
     applyTranslations();
+    await initTonConnect();  // <-- Initialize TON Connect first
 
     try {
         const res = await apiFetch('/api/auth/validate', { method: 'POST' });
@@ -197,17 +204,14 @@ async function init() {
             isAdmin = false;
         }
 
-        // Show/hide admin tab
         const adminTab = document.getElementById('nav-admin');
         if (adminTab) {
             adminTab.style.setProperty('display', isAdmin ? 'flex' : 'none', 'important');
         }
 
-        // Always show owner tab (you can adjust later if needed)
         const ownerTab = document.getElementById('nav-owner');
         if (ownerTab) ownerTab.style.setProperty('display', 'flex', 'important');
 
-        // TON Connect wallet status handler
         if (tonConnectUI && tonConnectUI.onStatusChange) {
             tonConnectUI.onStatusChange((wallet) => {
                 if (wallet) {
@@ -220,7 +224,6 @@ async function init() {
             });
         }
 
-        // Determine start parameter and navigate
         const urlStart = new URLSearchParams(window.location.search).get('startapp') ||
                          new URLSearchParams(window.location.search).get('start');
         const startParam = TG.initDataUnsafe?.start_param || urlStart;
@@ -296,10 +299,8 @@ async function initiatePayment(channelId, price) {
 
         if (!tonConnectUI) throw new Error('TON Connect not initialized');
 
-        // 1. Check if wallet is already connected
         let wallet = tonConnectUI.wallet;
         if (!wallet) {
-            // 2. Not connected – ask user to connect
             await tonConnectUI.connectWallet();
             wallet = tonConnectUI.wallet;
             if (!wallet) throw new Error('Wallet connection cancelled');
@@ -541,7 +542,6 @@ function copyDeepLink(channelId) {
 }
 
 async function forwardChannel(channelId) {
-    // Fetch channel details
     if (!supabaseClient) {
         alert('Database not available');
         return;
@@ -557,14 +557,10 @@ async function forwardChannel(channelId) {
         return;
     }
 
-    // Ask for optional custom message
     const customMessage = prompt('Add a custom message (optional):', '');
-    if (customMessage === null) return; // user cancelled
+    if (customMessage === null) return;
 
-    // Build deep link
     const deepLink = `https://t.me/MySubsHub_bot?start=${channelId}`;
-
-    // Compose message
     let text = `📢 Subscribe to *${channel.channel_name}*\n`;
     text += `💰 Price: ${channel.subscription_price} TON / ${channel.duration_days} days\n`;
     text += `🔗 ${deepLink}`;
@@ -572,7 +568,6 @@ async function forwardChannel(channelId) {
         text += `\n\n${customMessage.trim()}`;
     }
 
-    // Open Telegram share dialog
     const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(deepLink)}&text=${encodeURIComponent(text)}`;
     window.open(shareUrl, '_blank');
 }
