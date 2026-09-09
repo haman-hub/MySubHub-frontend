@@ -1,7 +1,3 @@
---- fixed/app.js (原始)
-
-
-+++ fixed/app.js (修改后)
 window.onerror = function(message) {
     alert('JS Error: ' + message);
 };
