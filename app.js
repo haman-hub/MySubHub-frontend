@@ -1,8 +1,12 @@
+--- fixed/app.js (原始)
+
+
++++ fixed/app.js (修改后)
 window.onerror = function(message) {
     alert('JS Error: ' + message);
 };
 
-// app.js (merged: working logic + new UI)
+// app.js (FIXED VERSION — no direct Supabase queries, all via backend API)
 const TG = window.Telegram?.WebApp || {
     ready: () => {},
     expand: () => {},
@@ -13,15 +17,23 @@ const TG = window.Telegram?.WebApp || {
 try {
     TG.ready();
     TG.expand();
+    // Apply Telegram theme colors
+    if (TG.themeParams) {
+        const tp = TG.themeParams;
+        if (tp.bg_color) document.body.style.backgroundColor = tp.bg_color;
+    }
 } catch (e) {
     console.warn('Telegram WebApp init:', e);
 }
 
-const SUPABASE_URL = 'https://mslxnegbtstpdwauugmq.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1zbHhuZWdidHN0cGR3YXV1Z21xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY1Mjk0NDUsImV4cCI6MjEwMjEwNTQ0NX0.l1rEfiEmPSPItqx1OdvX1T52LpwP5DlJr8gWhbJXcgA';
-const supabaseClient = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+// ================== CONFIG — NO HARDCODED SECRETS ==================
+// Backend URL — set via environment or detect from page context
+const API_BASE = (typeof window.__API_BASE__ !== 'undefined')
+    ? window.__API_BASE__
+    : 'https://mslxnegbtstpdwauugmq.supabase.co/functions/v1/mainbot';
 
 let tonConnectUI = null;
+let currentNetwork = 'mainnet'; // Will be updated from backend
 
 async function initTonConnect() {
     try {
@@ -29,27 +41,23 @@ async function initTonConnect() {
             tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
                 manifestUrl: 'https://haman-hub.github.io/MySubHub-frontend/manifest.json',
                 buttonRootId: 'ton-connect-button',
-                network: 'testnet'
+                // Network will be set dynamically after backend responds
+                network: 'mainnet'
             });
             console.log('TON Connect initialized');
         } else {
             console.error('TON Connect UI script not loaded');
-            alert('TON Connect SDK not loaded. Check your network and reload.');
         }
     } catch (e) {
         console.error('TON Connect init error:', e);
-        alert('TON Connect init failed: ' + e.message);
     }
 }
-
-const API_BASE = 'https://mslxnegbtstpdwauugmq.supabase.co/functions/v1/mainbot';
-const ADMIN_TELEGRAM_ID = '8876444295'; // <-- Replace with your actual Telegram ID
-const NETWORK_FEE_TON = 0.05;
 
 let currentUser = null;
 let isAdmin = false;
 let currentPage = 'subscriptions';
 
+// ================== API HELPER (ALL requests go through backend) ==================
 async function apiFetch(url, options = {}) {
     const initData = TG.initData || '';
     const headers = {
@@ -59,6 +67,7 @@ async function apiFetch(url, options = {}) {
     };
 
     if (!initData) {
+        // Return safe defaults for unauthenticated requests
         if (url === '/api/auth/validate') return { user: null };
         if (url === '/api/subscriptions/my') return [];
         if (url === '/api/channels/my') return [];
@@ -70,6 +79,7 @@ async function apiFetch(url, options = {}) {
 
     try {
         const res = await fetch(`${API_BASE}${url}`, { ...options, headers });
+
         if (res.status === 401 || res.status === 403) {
             if (url === '/api/auth/validate') return { user: null };
             if (url === '/api/subscriptions/my') return [];
@@ -79,6 +89,12 @@ async function apiFetch(url, options = {}) {
             if (url === '/api/admin/withdrawals') return [];
             return { error: 'Unauthorized' };
         }
+
+        if (res.status === 429) {
+            alert('Too many requests. Please wait a moment and try again.');
+            return { error: 'Rate limited' };
+        }
+
         if (!res.ok) {
             const error = await res.json().catch(() => ({}));
             throw new Error(error.error || `HTTP ${res.status}`);
@@ -96,7 +112,9 @@ async function apiFetch(url, options = {}) {
     }
 }
 
+// ================== PAGE NAVIGATION ==================
 function switchPage(pageId) {
+    // Server-side admin check — only show admin page if backend says so
     if (pageId === 'admin' && !isAdmin) {
         pageId = 'subscriptions';
     }
@@ -173,9 +191,10 @@ function showPage(pageId) {
 window.switchPage = switchPage;
 window.showPage = showPage;
 
+// ================== INIT ==================
 async function init() {
     applyTranslations();
-    await initTonConnect();  // <-- Initialize TON Connect first
+    await initTonConnect();
 
     try {
         const res = await apiFetch('/api/auth/validate', { method: 'POST' });
@@ -184,24 +203,18 @@ async function init() {
         const navBar = document.getElementById('nav-bar');
         if (navBar) navBar.classList.remove('hidden');
 
-        // ---------- ADMIN DETECTION ----------
-        const fromUnsafe = TG.initDataUnsafe?.user?.id;
-        const fromCurrentUser = currentUser?.telegram_id;
-        const fromInitData = (() => {
-            try {
-                const params = new URLSearchParams(TG.initData);
-                const userParam = params.get('user');
-                if (userParam) return JSON.parse(userParam).id;
-            } catch (e) {}
-            return null;
-        })();
+        // ---------- ADMIN DETECTION — SERVER-SIDE ONLY ----------
+        // Admin status comes from the backend response, not from client-side checks
+        // The backend validates the initData HMAC and checks the Telegram ID server-side
+        isAdmin = !!currentUser?.is_admin; // Backend should set this flag
 
-        const tgUserId = fromUnsafe || fromCurrentUser || fromInitData;
-        const adminIdNum = Number(ADMIN_TELEGRAM_ID);
-        if (tgUserId !== undefined && tgUserId !== null) {
-            isAdmin = (tgUserId.toString() === ADMIN_TELEGRAM_ID) || (Number(tgUserId) === adminIdNum);
-        } else {
-            isAdmin = false;
+        // Fallback: if backend doesn't set is_admin, check against ADMIN_TELEGRAM_ID
+        // But this is less secure — backend should be the source of truth
+        if (!currentUser?.is_admin && currentUser?.telegram_id) {
+            // This is a fallback — ideally backend returns is_admin flag
+            // For now we keep this but it should be removed once backend is updated
+            const adminId = '8876444295'; // This should come from backend config
+            isAdmin = currentUser.telegram_id.toString() === adminId;
         }
 
         const adminTab = document.getElementById('nav-admin');
@@ -211,6 +224,15 @@ async function init() {
 
         const ownerTab = document.getElementById('nav-owner');
         if (ownerTab) ownerTab.style.setProperty('display', 'flex', 'important');
+
+        // Update network display based on backend response
+        if (currentUser?.network) {
+            currentNetwork = currentUser.network;
+        }
+        const networkLabel = document.querySelector('[data-i18n="footer.ton_network"]');
+        if (networkLabel) {
+            networkLabel.textContent = currentNetwork === 'testnet' ? 'TON Testnet' : 'TON Mainnet';
+        }
 
         if (tonConnectUI && tonConnectUI.onStatusChange) {
             tonConnectUI.onStatusChange((wallet) => {
@@ -248,21 +270,19 @@ async function init() {
     }
 }
 
+// ================== PURCHASE PAGE (FIXED — uses backend API) ==================
 async function loadPurchasePage(channelId) {
-    if (!supabaseClient) return;
-    const { data, error } = await supabaseClient
-        .from('channels')
-        .select('*')
-        .eq('id', channelId)
-        .single();
+    // FIXED: Use backend API instead of direct Supabase query
+    const data = await apiFetch(`/api/channels/${channelId}`, { method: 'GET' });
 
     const card = document.getElementById('purchase-card');
-    if (error || !data) {
+    if (!data || data.error) {
         card.innerHTML = `<p class="text-red-400 text-center py-6">${t('purchase.not_found')}</p>`;
         return;
     }
 
     const platformFee = data.subscription_price * 0.01;
+    const NETWORK_FEE_TON = 0.05;
     const total = data.subscription_price + platformFee + NETWORK_FEE_TON;
 
     card.innerHTML = `
@@ -297,7 +317,14 @@ async function initiatePayment(channelId, price) {
             body: JSON.stringify({ channel_id: channelId }),
         });
 
+        if (initRes.error) throw new Error(initRes.error);
+
         if (!tonConnectUI) throw new Error('TON Connect not initialized');
+
+        // Update TonConnect network to match backend
+        if (initRes.network && tonConnectUI.setNetwork) {
+            try { tonConnectUI.setNetwork(initRes.network); } catch {}
+        }
 
         let wallet = tonConnectUI.wallet;
         if (!wallet) {
@@ -335,6 +362,7 @@ async function initiatePayment(channelId, price) {
     }
 }
 
+// ================== SUBSCRIPTIONS ==================
 async function loadSubscriptions() {
     try {
         const subs = await apiFetch('/api/subscriptions/my');
@@ -350,6 +378,7 @@ async function loadSubscriptions() {
                     activeCount++;
                     const daysLeft = Math.ceil((new Date(s.end_date) - Date.now()) / (1000 * 60 * 60 * 24));
                     if (daysLeft >= 0 && daysLeft <= 7) expiringSoonCount++;
+                    totalSpent += parseFloat(s.amount || 0);
                 }
             });
         }
@@ -360,53 +389,60 @@ async function loadSubscriptions() {
 
         if (!subs || !subs.length) {
             list.innerHTML = `<div class="glass-card p-10 text-center text-slate-400 font-medium">${t('subscriptions.no_subs')}</div>`;
+            if (window.lucide) lucide.createIcons();
             return;
         }
 
-        list.innerHTML = subs.map(s => `
-            <div class="glass-card p-5 hover:border-slate-700 transition">
-                <div class="flex justify-between items-start">
-                    <div>
-                        <h3 class="font-semibold text-white text-base">${s.channel?.channel_name || 'Channel'}</h3>
-                        <p class="text-slate-400 text-xs mt-1">${t('subscriptions.expires')} ${new Date(s.end_date).toLocaleDateString()}</p>
+        list.innerHTML = subs.map(s => {
+            const channel = s.channel || {};
+            const daysLeft = Math.ceil((new Date(s.end_date) - Date.now()) / (1000 * 60 * 60 * 24));
+            const isExpired = daysLeft < 0;
+            const isExpiring = daysLeft >= 0 && daysLeft <= 7;
+
+            return `
+                <div class="glass-card p-4 hover:shadow-lg transition">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h3 class="font-semibold text-white">${channel.channel_name || 'Unknown'}</h3>
+                            <p class="text-slate-400 text-sm mt-1">${t('subscriptions.expires')} ${new Date(s.end_date).toLocaleDateString()}</p>
+                        </div>
+                        <span class="badge ${isExpired ? 'bg-red-500/10 text-red-400 border border-red-500/30' : isExpiring ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'}">
+                            ${isExpired ? t('subscriptions.status.expired') : isExpiring ? '⚠️ ' + daysLeft + 'd' : t('subscriptions.status.active')}
+                        </span>
                     </div>
-                    <span class="badge ${s.status === 'active' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' : 'bg-rose-500/10 text-rose-400 border border-rose-500/30'}">${s.status === 'active' ? t('subscriptions.status.active') : t('subscriptions.status.expired')}</span>
+                    <div class="flex gap-2 mt-3">
+                        <button onclick="openRating('${s.channel_id}')" class="btn-secondary px-3 py-1.5 rounded-xl text-xs text-slate-300">${t('subscriptions.rate')}</button>
+                        <button onclick="openReport('${s.channel_id}')" class="btn-secondary px-3 py-1.5 rounded-xl text-xs text-slate-300">${t('subscriptions.report')}</button>
+                        ${isExpired ? `<button onclick="loadPurchasePage('${s.channel_id}'); switchPage('purchase')" class="btn-primary px-3 py-1.5 rounded-xl text-xs text-white">${t('subscriptions.renew')}</button>` : ''}
+                    </div>
                 </div>
-                <div class="flex gap-4 mt-4 pt-3 border-t border-slate-800/80">
-                    <button onclick="openRating('${s.channel_id}')" class="text-xs text-amber-400 hover:text-amber-300 transition flex items-center gap-1.5 font-medium">⭐ ${t('subscriptions.rate')}</button>
-                    <button onclick="openReport('${s.channel_id}')" class="text-xs text-rose-400 hover:text-rose-300 transition flex items-center gap-1.5 font-medium">🚩 ${t('subscriptions.report')}</button>
-                </div>
-                ${s.status !== 'active' ? `<button onclick="renewSubscription('${s.id}')" class="btn-primary mt-3 w-full text-white text-xs py-2 rounded-xl font-medium">${t('subscriptions.renew')}</button>` : ''}
-            </div>
-        `).join('');
+            `;
+        }).join('');
 
         if (window.lucide) lucide.createIcons();
     } catch (e) {
         console.error('Error loading subscriptions:', e);
-        document.getElementById('subscriptions-list').innerHTML = `<div class="glass-card p-10 text-center text-slate-400 font-medium">${t('subscriptions.no_subs')}</div>`;
     }
 }
 
+// ================== OWNER DASHBOARD (FIXED — all via backend API) ==================
 async function loadOwnerDashboard() {
     try {
         const channels = await apiFetch('/api/channels/my');
         const container = document.getElementById('channels-list');
 
-        document.getElementById('owner-stat-channels').textContent = (channels && channels.length) || 0;
-        document.getElementById('owner-stat-subs').textContent = 0; // Replace with real count later
+        let totalSubscribers = 0;
+        let totalEarnings = 0;
 
-        if (!channels || !channels.length) {
-            container.innerHTML = `<div class="glass-card p-8 text-center text-slate-400 text-sm">No channels added yet.</div>`;
-        } else {
+        if (channels && Array.isArray(channels)) {
             container.innerHTML = channels.map(ch => `
-                <div class="glass-card p-5 hover:border-slate-700 transition">
+                <div class="glass-card p-4 hover:shadow-lg transition">
                     <div class="flex justify-between items-start">
                         <div>
-                            <h3 class="font-semibold text-white text-base">${ch.channel_name}</h3>
-                            <p class="text-slate-400 text-xs mt-1 font-mono">${ch.subscription_price} TON / ${ch.duration_days} ${t('purchase.days')}</p>
-                            <p class="text-slate-500 font-mono text-xs mt-1 truncate max-w-xs">${ch.channel_invite_link || ''}</p>
+                            <h3 class="font-semibold text-white">${ch.channel_name}</h3>
+                            <p class="text-slate-400 text-sm mt-1">${ch.subscription_price} TON / ${ch.duration_days} days</p>
                         </div>
-                        <label class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                        <label class="flex items-center gap-2 text-xs font-medium text-slate-300 cursor-pointer">
                             ${t('owner.active')}: <input type="checkbox" ${ch.is_active ? 'checked' : ''} onchange="toggleChannel('${ch.id}', this.checked)" class="accent-blue-500 w-4 h-4 cursor-pointer">
                         </label>
                     </div>
@@ -420,6 +456,8 @@ async function loadOwnerDashboard() {
                     </div>
                 </div>
             `).join('');
+        } else {
+            container.innerHTML = '<div class="text-center text-slate-400 py-6">No channels yet. Add one above!</div>';
         }
 
         const walletDiv = document.getElementById('wallet-section');
@@ -433,33 +471,35 @@ async function loadOwnerDashboard() {
             </button>
         `;
 
-document.getElementById('btn-connect-wallet').onclick = async () => {
-    try {
-        let walletAddress = "";
-        if (tonConnectUI) {
-            const connected = await tonConnectUI.connectWallet();
-            if (connected && connected.account) {
-                walletAddress = typeof connected.account.address === "string"
-                    ? connected.account.address
-                    : connected.account.address.toString(true, true, true);
+        document.getElementById('btn-connect-wallet').onclick = async () => {
+            try {
+                let walletAddress = "";
+                if (tonConnectUI) {
+                    const connected = await tonConnectUI.connectWallet();
+                    if (connected && connected.account) {
+                        walletAddress = typeof connected.account.address === "string"
+                            ? connected.account.address
+                            : connected.account.address.toString(true, true, true);
+                    }
+                }
+                if (!walletAddress) walletAddress = prompt('Enter your TON Wallet address:');
+                if (walletAddress) {
+                    const res = await apiFetch('/api/auth/wallet', {
+                        method: 'POST',
+                        body: JSON.stringify({ wallet_address: walletAddress }),
+                    });
+                    if (res.success) {
+                        document.getElementById('current-wallet').innerText = walletAddress;
+                        alert(t('owner.wallet_saved'));
+                    } else {
+                        alert(res.error || t('owner.wallet_connection_failed'));
+                    }
+                }
+            } catch (e) {
+                console.error("Wallet connect error:", e);
+                alert('Wallet connection failed: ' + e.message);
             }
-        }
-        if (!walletAddress) walletAddress = prompt('Enter your TON Wallet address:');
-        if (walletAddress) {
-            const res = await apiFetch('/api/auth/wallet', {
-                method: 'POST',
-                body: JSON.stringify({ wallet_address: walletAddress }),
-            });
-            if (res.success) {
-                document.getElementById('current-wallet').innerText = walletAddress;
-                alert(t('owner.wallet_saved'));
-            }
-        }
-    } catch (e) {
-        console.error("Wallet connect error:", e);
-        alert('Wallet connection failed: ' + e.message);
-    }
-};
+        };
 
         loadWithdrawalSection();
         if (window.lucide) lucide.createIcons();
@@ -468,25 +508,21 @@ document.getElementById('btn-connect-wallet').onclick = async () => {
     }
 }
 
-// ========== CHANNEL EDIT ==========
+// ========== CHANNEL EDIT (FIXED — uses backend API) ==========
 let editingChannelId = null;
-function openEditModal(channelId) {
+
+async function openEditModal(channelId) {
     editingChannelId = channelId;
-    if (!supabaseClient) {
-        document.getElementById('edit-modal').classList.remove('hidden');
-        return;
+    // FIXED: Use backend API instead of direct Supabase query
+    const data = await apiFetch(`/api/channels/${channelId}`, { method: 'GET' });
+    if (data && !data.error) {
+        document.getElementById('edit-price').value = data.subscription_price;
+        document.getElementById('edit-duration').value = data.duration_days;
+        document.getElementById('edit-renewal').checked = data.auto_renewal_reminders;
     }
-    supabaseClient.from('channels').select('*').eq('id', channelId).single().then(({ data }) => {
-        if (data) {
-            document.getElementById('edit-price').value = data.subscription_price;
-            document.getElementById('edit-duration').value = data.duration_days;
-            document.getElementById('edit-renewal').checked = data.auto_renewal_reminders;
-        }
-        document.getElementById('edit-modal').classList.remove('hidden');
-    }).catch(() => {
-        document.getElementById('edit-modal').classList.remove('hidden');
-    });
+    document.getElementById('edit-modal').classList.remove('hidden');
 }
+
 const modalCancelBtn = document.getElementById('modal-cancel');
 if (modalCancelBtn) {
     modalCancelBtn.onclick = () => {
@@ -541,18 +577,12 @@ function copyDeepLink(channelId) {
     });
 }
 
+// FIXED: forwardChannel now uses backend API instead of direct Supabase query
 async function forwardChannel(channelId) {
-    if (!supabaseClient) {
-        alert('Database not available');
-        return;
-    }
-    const { data: channel, error } = await supabaseClient
-        .from('channels')
-        .select('channel_name, subscription_price, duration_days')
-        .eq('id', channelId)
-        .single();
+    // FIXED: Use backend API instead of direct Supabase query
+    const channel = await apiFetch(`/api/channels/${channelId}`, { method: 'GET' });
 
-    if (error || !channel) {
+    if (!channel || channel.error) {
         alert('Channel not found');
         return;
     }
@@ -585,12 +615,13 @@ async function loadWithdrawalSection() {
     const section = document.getElementById('withdrawal-section');
     section.innerHTML = `
         <h3 class="text-lg font-semibold text-white mb-2 flex items-center gap-2"><i data-lucide="trending-up" class="w-5 h-5 text-emerald-400"></i>${t('owner.withdrawal_earnings')}</h3>
-        <p class="text-slate-400">${t('owner.withdrawal_pending')} <strong class="text-white">${data.pendingEarnings.toFixed(6)} TON</strong></p>
+        <p class="text-slate-400">${t('owner.withdrawal_pending')} <strong class="text-white">${(data.pendingEarnings || 0).toFixed(6)} TON</strong></p>
         <button onclick="requestWithdrawal()" class="btn-primary mt-3 text-white px-4 py-2 rounded-xl text-sm shadow-lg shadow-emerald-500/20">${t('owner.withdrawal_request')}</button>
-        <div class="mt-4 space-y-2">${data.withdrawals?.map(w => `<p class="text-sm text-slate-400">${w.amount} TON - <span class="text-amber-400">${w.status}</span></p>`).join('')}</div>
+        <div class="mt-4 space-y-2">${(data.withdrawals || []).map(w => `<p class="text-sm text-slate-400">${w.amount} TON - <span class="text-amber-400">${w.status}</span></p>`).join('')}</div>
     `;
     lucide.createIcons();
 }
+
 async function requestWithdrawal() {
     const amount = prompt(t('owner.withdrawal_amount_prompt'));
     if (!amount) return;
@@ -599,7 +630,7 @@ async function requestWithdrawal() {
         alert(t('owner.withdrawal_request_success'));
         loadOwnerDashboard();
     } else {
-        alert(t('owner.withdrawal_request_error') + ' ' + res.error);
+        alert(t('owner.withdrawal_request_error') + ' ' + (res.error || ''));
     }
 }
 
@@ -655,6 +686,10 @@ async function loadAdminDashboard() {
 async function loadAdminReports() {
     const reports = await apiFetch('/api/admin/reports');
     const container = document.getElementById('admin-reports');
+    if (!Array.isArray(reports)) {
+        container.innerHTML = '<p class="text-slate-400">No reports.</p>';
+        return;
+    }
     container.innerHTML = reports.map(r => `
         <div class="glass-card p-4 hover:shadow-lg transition">
             <div class="flex justify-between items-start">
@@ -679,6 +714,10 @@ async function reviewReport(reportId, action) {
 async function loadAdminWithdrawals() {
     const withdrawals = await apiFetch('/api/admin/withdrawals');
     const container = document.getElementById('admin-withdrawals');
+    if (!Array.isArray(withdrawals)) {
+        container.innerHTML = '<p class="text-slate-400">No pending withdrawals.</p>';
+        return;
+    }
     container.innerHTML = withdrawals.map(w => `
         <div class="glass-card p-4 hover:shadow-lg transition">
             <div class="flex justify-between items-center">
@@ -699,7 +738,7 @@ async function approveWithdrawal(id) {
         alert(t('admin.approve_pay') + '!');
         loadAdminWithdrawals();
     } else {
-        alert(t('error.generic') + res.error);
+        alert(t('error.generic') + (res.error || ''));
     }
 }
 
@@ -707,11 +746,9 @@ async function approveWithdrawal(id) {
 function openLanguageModal() {
     document.getElementById('language-modal').classList.remove('hidden');
 }
-
 function closeLanguageModal() {
     document.getElementById('language-modal').classList.add('hidden');
 }
-
 function selectLanguage(lang) {
     setLanguage(lang);
     closeLanguageModal();
@@ -730,7 +767,6 @@ window.refreshCurrentPage = function() {
             loadAdminDashboard();
             break;
         case 'purchase':
-            // Optionally reload purchase page if needed
             break;
     }
 };
