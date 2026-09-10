@@ -1,92 +1,28 @@
-window.onerror = function(message, source, lineno) {
-    console.error('App error:', message, source, lineno);
-    showErrorBanner('Something went wrong. Please refresh the page.');
-    return true;
+window.onerror = function(message) {
+    alert('JS Error: ' + message);
 };
 
-// ================== ERROR HANDLING ==================
-function showErrorBanner(message) {
-    if (document.getElementById('error-banner')) return;
-    const banner = document.createElement('div');
-    banner.id = 'error-banner';
-    banner.className = 'fixed top-0 left-0 right-0 bg-red-500 text-white p-4 text-center z-50';
-    banner.innerHTML = `
-        <p>${escapeHtml(message)}</p>
-        <button onclick="location.reload()" class="mt-2 px-4 py-2 bg-white text-red-500 rounded font-semibold">
-            Refresh
-        </button>
-    `;
-    document.body.prepend(banner);
-}
-
-// ================== INPUT SANITIZATION (XSS Prevention) ==================
-function escapeHtml(str) {
-    if (!str) return '';
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
-}
-
-// ================== TELEGRAM WEBAPP INIT ==================
+// app.js (FIXED VERSION — all queries via backend API)
 const TG = window.Telegram?.WebApp || {
     ready: () => {},
     expand: () => {},
     initData: '',
-    initDataUnsafe: {},
-    themeParams: null,
-    BackButton: { show: () => {}, hide: () => {}, onClick: () => {} },
-    HapticFeedback: { impactOccurred: () => {}, selectionChanged: () => {}, notificationOccurred: () => {} }
+    initDataUnsafe: {}
 };
 
 try {
     TG.ready();
     TG.expand();
-    applyTelegramTheme();
-    
-    // Listen for theme changes
-    if (TG.onEvent) {
-        TG.onEvent('themeChanged', applyTelegramTheme);
-    }
 } catch (e) {
     console.warn('Telegram WebApp init:', e);
 }
 
-// ================== TELEGRAM THEME INTEGRATION ==================
-function applyTelegramTheme() {
-    if (!TG.themeParams) return;
-    
-    const theme = TG.themeParams;
-    
-    // Set CSS variables
-    document.documentElement.style.setProperty('--tg-bg-color', theme.bg_color || '#040711');
-    document.documentElement.style.setProperty('--tg-text-color', theme.text_color || '#f1f5f9');
-    document.documentElement.style.setProperty('--tg-button-color', theme.button_color || '#0088cc');
-    document.documentElement.style.setProperty('--tg-hint-color', theme.hint_color || '#708499');
-    
-    // Update body
-    document.body.style.backgroundColor = theme.bg_color;
-    document.body.style.color = theme.text_color;
-}
-
-// ================== HAPTIC FEEDBACK ==================
-function hapticFeedback(type = 'light') {
-    try {
-        TG.HapticFeedback.impactOccurred(type);
-    } catch (e) {
-        // Silent fail - haptic not available
-    }
-}
-
-// ================== CONFIG ==================
+// Backend API URL
 const API_BASE = 'https://mslxnegbtstpdwauugmq.supabase.co/functions/v1/mainbot';
 
 let tonConnectUI = null;
 let currentNetwork = 'testnet';
-let currentUser = null;
-let isAdmin = false;
-let currentPage = 'subscriptions';
 
-// ================== TON CONNECT INIT ==================
 async function initTonConnect() {
     try {
         if (window.TON_CONNECT_UI) {
@@ -102,7 +38,11 @@ async function initTonConnect() {
     }
 }
 
-// ================== API HELPER ==================
+let currentUser = null;
+let isAdmin = false;
+let currentPage = 'subscriptions';
+
+// API Helper
 async function apiFetch(url, options = {}) {
     const initData = TG.initData || '';
     const headers = {
@@ -128,7 +68,7 @@ async function apiFetch(url, options = {}) {
         }
 
         if (res.status === 429) {
-            showErrorBanner('Too many requests. Please wait a moment.');
+            alert('Too many requests. Please wait a moment.');
             return { error: 'Rate limited' };
         }
 
@@ -143,7 +83,7 @@ async function apiFetch(url, options = {}) {
     }
 }
 
-// ================== PAGE NAVIGATION ==================
+// Page Navigation
 function switchPage(pageId) {
     if (pageId === 'admin' && !isAdmin) pageId = 'subscriptions';
 
@@ -162,9 +102,6 @@ function switchPage(pageId) {
         target.classList.remove('hidden-page');
     }
 
-    // Update back button
-    updateBackButton(pageId);
-
     if (pageId === 'subscriptions') loadSubscriptions();
     else if (pageId === 'owner') loadOwnerDashboard();
     else if (pageId === 'admin') loadAdminDashboard();
@@ -173,22 +110,9 @@ function switchPage(pageId) {
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-function updateBackButton(pageId) {
-    if (pageId === 'subscriptions') {
-        TG.BackButton.hide();
-    } else {
-        TG.BackButton.show();
-    }
-}
-
-// Handle back button click
-TG.BackButton.onClick(() => {
-    switchPage('subscriptions');
-});
-
 window.switchPage = switchPage;
 
-// ================== INIT ==================
+// Init
 async function init() {
     applyTranslations();
     await initTonConnect();
@@ -237,20 +161,11 @@ async function init() {
     }
 }
 
-// ================== PURCHASE PAGE (WITH RATING DISPLAY) ==================
+// Purchase Page
 async function loadPurchasePage(channelId) {
-    // Show loading skeleton
-    const card = document.getElementById('purchase-card');
-    card.innerHTML = `
-        <div class="animate-pulse">
-            <div class="h-16 bg-slate-800 rounded-xl mb-4"></div>
-            <div class="h-8 bg-slate-800 rounded mb-2"></div>
-            <div class="h-32 bg-slate-800 rounded-xl"></div>
-        </div>
-    `;
-    
     const data = await apiFetch(`/api/channels/${channelId}`, { method: 'GET' });
 
+    const card = document.getElementById('purchase-card');
     if (!data || data.error) {
         card.innerHTML = `<p class="text-red-400 text-center py-6">Channel not found</p>`;
         return;
@@ -260,42 +175,23 @@ async function loadPurchasePage(channelId) {
     const platformFee = data.subscription_price * 0.01;
     const total = data.subscription_price + platformFee + NETWORK_FEE_TON;
 
-    // Display rating
-    const ratingHtml = data.avg_rating > 0 ? `
-        <div class="flex items-center justify-center gap-2 mb-4">
-            <span class="text-amber-400 text-lg">${'★'.repeat(Math.round(data.avg_rating))}${'☆'.repeat(5 - Math.round(data.avg_rating))}</span>
-            <span class="text-slate-400 text-sm">(${data.total_reviews} reviews)</span>
-        </div>
-    ` : '';
-
     card.innerHTML = `
         <div class="text-center mb-6">
-            <h2 class="text-2xl font-bold text-white tracking-tight">${escapeHtml(data.channel_name)}</h2>
-            ${ratingHtml}
+            <h2 class="text-2xl font-bold text-white tracking-tight">${data.channel_name}</h2>
             <p class="text-slate-400 mt-2 text-sm">
                 Subscription: <strong class="text-white font-mono text-base">${total.toFixed(6)} TON</strong> / ${data.duration_days} days
             </p>
-            <div class="mt-5 p-4 rounded-xl bg-slate-900/60 border border-slate-800 text-xs text-slate-400 space-y-2 text-left font-mono">
-                <div class="flex justify-between"><span>Base price:</span> <span class="text-slate-200">${data.subscription_price} TON</span></div>
-                <div class="flex justify-between"><span>Platform fee (1%):</span> <span class="text-slate-200">${platformFee.toFixed(6)} TON</span></div>
-                <div class="flex justify-between"><span>Network fee:</span> <span class="text-slate-200">${NETWORK_FEE_TON.toFixed(6)} TON</span></div>
-                <div class="pt-2 border-t border-slate-800 flex justify-between font-bold text-sm text-white"><span>Total:</span> <span class="text-blue-400">${total.toFixed(6)} TON</span></div>
-            </div>
         </div>
         <button id="btn-pay" class="btn-primary w-full text-white font-semibold py-3.5 rounded-xl">
             Pay with TON
         </button>
     `;
     
-    document.getElementById('btn-pay').onclick = () => {
-        hapticFeedback('medium');
-        initiatePayment(data.id, data.subscription_price);
-    };
-    
+    document.getElementById('btn-pay').onclick = () => initiatePayment(data.id, data.subscription_price);
     if (window.lucide) lucide.createIcons();
 }
 
-// ================== PAYMENT (TON CONNECT ONLY - NO MANUAL INPUT) ==================
+// Payment
 async function initiatePayment(channelId, price) {
     try {
         const initRes = await apiFetch('/api/subscriptions/initiate', {
@@ -314,11 +210,10 @@ async function initiatePayment(channelId, price) {
             if (!wallet) throw new Error('Wallet connection cancelled');
         }
 
-        // Send to owner wallet (99%) - platform fee handled separately
         const transaction = {
             validUntil: Math.floor(Date.now() / 1000) + 360,
             messages: [{
-                address: initRes.wallet, // Owner's wallet
+                address: initRes.wallet,
                 amount: initRes.amountNano,
             }],
         };
@@ -335,35 +230,23 @@ async function initiatePayment(channelId, price) {
         });
 
         if (confirmRes.success) {
-            hapticFeedback('notificationOccurred', 'success');
             alert('Subscription successful!');
             switchPage('subscriptions');
             loadSubscriptions();
         } else {
-            hapticFeedback('notificationOccurred', 'error');
             alert('Payment confirmation failed: ' + confirmRes.error);
         }
     } catch (e) {
         console.error('Payment error:', e);
-        hapticFeedback('notificationOccurred', 'error');
         alert('Payment error: ' + e.message);
     }
 }
 
-// ================== SUBSCRIPTIONS (WITH LOADING STATES) ==================
+// Subscriptions
 async function loadSubscriptions() {
-    const list = document.getElementById('subscriptions-list');
-    
-    // Show loading skeleton
-    list.innerHTML = `
-        <div class="animate-pulse space-y-3">
-            <div class="h-24 bg-slate-800 rounded-xl"></div>
-            <div class="h-24 bg-slate-800 rounded-xl"></div>
-        </div>
-    `;
-    
     try {
         const subs = await apiFetch('/api/subscriptions/my');
+        const list = document.getElementById('subscriptions-list');
 
         if (!subs || !subs.length) {
             list.innerHTML = `<div class="glass-card p-10 text-center text-slate-400">No subscriptions yet.</div>`;
@@ -372,49 +255,26 @@ async function loadSubscriptions() {
 
         list.innerHTML = subs.map(s => {
             const channel = s.channel || {};
-            const daysLeft = Math.ceil((new Date(s.end_date) - Date.now()) / (1000 * 60 * 60 * 24));
-            const isExpired = daysLeft < 0;
-            const isExpiring = daysLeft >= 0 && daysLeft <= 7;
-
             return `
-                <div class="glass-card p-4 hover:shadow-lg transition">
-                    <div class="flex justify-between items-start">
-                        <div>
-                            <h3 class="font-semibold text-white">${escapeHtml(channel.channel_name || 'Unknown')}</h3>
-                            <p class="text-slate-400 text-sm mt-1">Expires: ${new Date(s.end_date).toLocaleDateString()}</p>
-                        </div>
-                        <span class="badge ${isExpired ? 'bg-red-500/10 text-red-400 border border-red-500/30' : isExpiring ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'}">
-                            ${isExpired ? 'Expired' : isExpiring ? `⚠️ ${daysLeft}d` : 'Active'}
-                        </span>
-                    </div>
-                    <div class="flex gap-2 mt-3">
-                        <button onclick="openRating('${s.channel_id}')" class="btn-secondary px-3 py-1.5 rounded-xl text-xs text-slate-300">Rate</button>
-                        <button onclick="openReport('${s.channel_id}')" class="btn-secondary px-3 py-1.5 rounded-xl text-xs text-slate-300">Report</button>
-                        ${isExpired ? `<button onclick="loadPurchasePage('${s.channel_id}'); switchPage('purchase')" class="btn-primary px-3 py-1.5 rounded-xl text-xs text-white">Renew</button>` : ''}
-                    </div>
+                <div class="glass-card p-4">
+                    <h3 class="font-semibold text-white">${channel.channel_name || 'Unknown'}</h3>
+                    <p class="text-slate-400 text-sm">Expires: ${new Date(s.end_date).toLocaleDateString()}</p>
+                    <span class="badge ${s.status === 'active' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}">
+                        ${s.status}
+                    </span>
                 </div>
             `;
         }).join('');
     } catch (e) {
         console.error('Error loading subscriptions:', e);
-        list.innerHTML = `<p class="text-red-400 text-center py-6">Failed to load subscriptions</p>`;
     }
 }
 
-// ================== OWNER DASHBOARD (WITH ANALYTICS & TEMPLATE GENERATOR) ==================
+// Owner Dashboard
 async function loadOwnerDashboard() {
-    const container = document.getElementById('channels-list');
-    
-    // Show loading skeleton
-    container.innerHTML = `
-        <div class="animate-pulse space-y-3">
-            <div class="h-32 bg-slate-800 rounded-xl"></div>
-            <div class="h-32 bg-slate-800 rounded-xl"></div>
-        </div>
-    `;
-    
     try {
         const channels = await apiFetch('/api/channels/my');
+        const container = document.getElementById('channels-list');
 
         if (!channels || !channels.length) {
             container.innerHTML = '<div class="text-center text-slate-400 py-6">No channels yet.</div>';
@@ -422,36 +282,19 @@ async function loadOwnerDashboard() {
         }
 
         container.innerHTML = channels.map(ch => `
-            <div class="glass-card p-4 hover:shadow-lg transition">
+            <div class="glass-card p-4">
                 <div class="flex justify-between items-start">
-                    <div class="flex-1">
-                        <h3 class="font-semibold text-white">${escapeHtml(ch.channel_name)}</h3>
-                        <p class="text-slate-400 text-sm mt-1">${ch.subscription_price} TON / ${ch.duration_days} days</p>
-                        
-                        <!-- Analytics -->
-                        <div class="grid grid-cols-3 gap-2 mt-3">
-                            <div class="bg-slate-900/60 p-2 rounded-lg text-center">
-                                <p class="text-xs text-slate-400">Total</p>
-                                <p class="text-lg font-bold text-white">${ch.total_subscribers || 0}</p>
-                            </div>
-                            <div class="bg-slate-900/60 p-2 rounded-lg text-center">
-                                <p class="text-xs text-slate-400">Active</p>
-                                <p class="text-lg font-bold text-emerald-400">${ch.active_subscribers || 0}</p>
-                            </div>
-                            <div class="bg-slate-900/60 p-2 rounded-lg text-center">
-                                <p class="text-xs text-slate-400">Rating</p>
-                                <p class="text-lg font-bold text-amber-400">${ch.avg_rating || '0.0'}⭐</p>
-                            </div>
-                        </div>
+                    <div>
+                        <h3 class="font-semibold text-white">${ch.channel_name}</h3>
+                        <p class="text-slate-400 text-sm">${ch.subscription_price} TON / ${ch.duration_days} days</p>
                     </div>
-                    <label class="flex items-center gap-2 text-xs ml-4">
+                    <label class="flex items-center gap-2 text-xs">
                         Active: <input type="checkbox" ${ch.is_active ? 'checked' : ''} onchange="toggleChannel('${ch.id}', this.checked)" class="accent-blue-500">
                     </label>
                 </div>
-                <div class="flex gap-4 mt-4 pt-3 border-t border-slate-800/80">
+                <div class="flex gap-4 mt-3">
                     <button onclick="openEditModal('${ch.id}')" class="text-blue-400 text-xs">Edit</button>
                     <button onclick="copyDeepLink('${ch.id}')" class="text-blue-400 text-xs">Copy Link</button>
-                    <button onclick="generateTemplate('${ch.id}')" class="text-emerald-400 text-xs">📋 Copy Template</button>
                 </div>
             </div>
         `).join('');
@@ -459,51 +302,18 @@ async function loadOwnerDashboard() {
         loadWithdrawalSection();
     } catch (e) {
         console.error('Error loading owner dashboard:', e);
-        container.innerHTML = `<p class="text-red-400 text-center py-6">Failed to load channels</p>`;
     }
 }
 
-// ================== MESSAGE TEMPLATE GENERATOR ==================
-async function generateTemplate(channelId) {
-    hapticFeedback('selectionChanged');
-    
-    const channels = await apiFetch(`/api/channels/${channelId}`, { method: 'GET' });
-    if (!channels || channels.error) {
-        alert('Channel not found');
-        return;
-    }
-    
-    const ch = channels;
-    const deepLink = `https://t.me/MySubsHub_bot?start=${ch.id}`;
-    
-    const template = `📢 *${ch.channel_name}*\n\n` +
-                     `💰 Subscription: ${ch.subscription_price} TON\n` +
-                     `📅 Duration: ${ch.duration_days} days\n` +
-                     `⭐ Rating: ${ch.avg_rating || 'New'} (${ch.total_reviews || 0} reviews)\n\n` +
-                     `🔗 Subscribe: ${deepLink}\n\n` +
-                     `#TON #Subscription #MiniApp`;
-    
-    navigator.clipboard.writeText(template).then(() => {
-        hapticFeedback('notificationOccurred', 'success');
-        alert('Template copied to clipboard!');
-    }).catch(() => {
-        prompt('Copy this template:', template);
-    });
-}
-
-window.generateTemplate = generateTemplate;
-
-// ================== CHANNEL EDIT ==================
+// Channel Edit
 let editingChannelId = null;
 
 async function openEditModal(channelId) {
-    hapticFeedback('light');
     editingChannelId = channelId;
     const data = await apiFetch(`/api/channels/${channelId}`, { method: 'GET' });
     if (data && !data.error) {
         document.getElementById('edit-price').value = data.subscription_price;
         document.getElementById('edit-duration').value = data.duration_days;
-        document.getElementById('edit-renewal').checked = data.auto_renewal_reminders;
     }
     document.getElementById('edit-modal').classList.remove('hidden');
 }
@@ -513,7 +323,6 @@ window.openEditModal = openEditModal;
 const modalCancelBtn = document.getElementById('modal-cancel');
 if (modalCancelBtn) {
     modalCancelBtn.onclick = () => {
-        hapticFeedback('light');
         document.getElementById('edit-modal').classList.add('hidden');
         editingChannelId = null;
     };
@@ -522,14 +331,12 @@ if (modalCancelBtn) {
 const modalSaveBtn = document.getElementById('modal-save');
 if (modalSaveBtn) {
     modalSaveBtn.onclick = async () => {
-        hapticFeedback('medium');
         const price = parseFloat(document.getElementById('edit-price').value);
         const duration = parseInt(document.getElementById('edit-duration').value);
-        const renewal = document.getElementById('edit-renewal').checked;
         if (editingChannelId) {
             await apiFetch(`/api/channels/${editingChannelId}`, {
                 method: 'PUT',
-                body: JSON.stringify({ subscription_price: price, duration_days: duration, auto_renewal_reminders: renewal }),
+                body: JSON.stringify({ subscription_price: price, duration_days: duration }),
             });
         }
         document.getElementById('edit-modal').classList.add('hidden');
@@ -537,17 +344,14 @@ if (modalSaveBtn) {
     };
 }
 
-// ================== ADD CHANNEL ==================
+// Add Channel
 function openAddChannelModal() {
-    hapticFeedback('light');
     document.getElementById('add-channel-modal').classList.remove('hidden');
 }
 function closeAddChannelModal() {
-    hapticFeedback('light');
     document.getElementById('add-channel-modal').classList.add('hidden');
 }
 async function submitAddChannel() {
-    hapticFeedback('medium');
     const channel_name = document.getElementById('add-channel-name').value.trim();
     const channel_invite_link = document.getElementById('add-channel-link').value.trim();
     if (!channel_name || !channel_invite_link) return alert('Missing fields');
@@ -565,17 +369,12 @@ window.closeAddChannelModal = closeAddChannelModal;
 window.submitAddChannel = submitAddChannel;
 
 function copyDeepLink(channelId) {
-    hapticFeedback('selectionChanged');
     const link = `https://t.me/MySubsHub_bot?start=${channelId}`;
-    navigator.clipboard.writeText(link).then(() => {
-        hapticFeedback('notificationOccurred', 'success');
-        alert('Link copied!');
-    });
+    navigator.clipboard.writeText(link).then(() => alert('Link copied!'));
 }
 window.copyDeepLink = copyDeepLink;
 
 async function toggleChannel(channelId, isActive) {
-    hapticFeedback('light');
     await apiFetch(`/api/channels/${channelId}`, {
         method: 'PUT',
         body: JSON.stringify({ is_active: isActive }),
@@ -583,68 +382,18 @@ async function toggleChannel(channelId, isActive) {
 }
 window.toggleChannel = toggleChannel;
 
-// ================== WALLET CONNECTION (TON CONNECT ONLY) ==================
+// Withdrawals
 async function loadWithdrawalSection() {
     const data = await apiFetch('/api/withdrawals/my');
     const section = document.getElementById('withdrawal-section');
-    
-    const userWallet = currentUser?.wallet_address || '';
-    
     section.innerHTML = `
         <h3 class="text-lg font-semibold text-white mb-2">Earnings</h3>
         <p class="text-slate-400">Pending: <strong class="text-white">${(data.pendingEarnings || 0).toFixed(6)} TON</strong></p>
-        
-        <div class="mt-4">
-            <p class="text-xs text-slate-400 mb-2">Your Wallet:</p>
-            <p class="text-sm font-mono text-slate-300 break-all">${userWallet || 'Not set'}</p>
-            <button id="btn-connect-wallet" class="btn-primary mt-2 text-white px-4 py-2 rounded-xl text-xs">
-                ${userWallet ? 'Change Wallet' : 'Connect Wallet'}
-            </button>
-        </div>
-        
-        <button onclick="requestWithdrawal()" class="btn-primary mt-4 text-white px-4 py-2 rounded-xl text-sm">Request Withdrawal</button>
-        
-        <div class="mt-4 space-y-2">
-            ${(data.withdrawals || []).map(w => `
-                <p class="text-sm text-slate-400">${w.amount} TON - <span class="text-amber-400">${w.status}</span></p>
-            `).join('')}
-        </div>
+        <button onclick="requestWithdrawal()" class="btn-primary mt-3 text-white px-4 py-2 rounded-xl text-sm">Request Withdrawal</button>
     `;
-    
-    document.getElementById('btn-connect-wallet').onclick = async () => {
-        hapticFeedback('medium');
-        try {
-            if (!tonConnectUI) throw new Error('TON Connect not initialized');
-            
-            const connected = await tonConnectUI.connectWallet();
-            if (!connected?.account) throw new Error('Wallet connection cancelled');
-            
-            const walletAddress = connected.account.address;
-            
-            const res = await apiFetch('/api/auth/wallet', {
-                method: 'POST',
-                body: JSON.stringify({ wallet_address: walletAddress }),
-            });
-            
-            if (res.success) {
-                hapticFeedback('notificationOccurred', 'success');
-                currentUser.wallet_address = walletAddress;
-                loadWithdrawalSection();
-                alert('Wallet connected!');
-            } else {
-                hapticFeedback('notificationOccurred', 'error');
-                alert(res.error || 'Failed to connect wallet');
-            }
-        } catch (e) {
-            console.error('Wallet connect error:', e);
-            hapticFeedback('notificationOccurred', 'error');
-            alert('Wallet connection failed: ' + e.message);
-        }
-    };
 }
 
 async function requestWithdrawal() {
-    hapticFeedback('medium');
     const amount = prompt('Enter amount in TON:');
     if (!amount) return;
     const res = await apiFetch('/api/withdrawals/request', { 
@@ -652,148 +401,168 @@ async function requestWithdrawal() {
         body: JSON.stringify({ amount: parseFloat(amount) }) 
     });
     if (res.success) {
-        hapticFeedback('notificationOccurred', 'success');
         alert('Withdrawal requested');
         loadOwnerDashboard();
     } else {
-        hapticFeedback('notificationOccurred', 'error');
         alert('Error: ' + (res.error || ''));
     }
 }
 window.requestWithdrawal = requestWithdrawal;
 
-// ================== RATING & REPORTING ==================
-let ratingChannelId = null, reportChannelId = null, selectedRating = 0;
-
-function openRating(channelId) {
-    hapticFeedback('light');
-    ratingChannelId = channelId;
-    document.getElementById('rating-modal').classList.remove('hidden');
-    const container = document.getElementById('star-rating');
-    container.innerHTML = '';
-    for (let i = 1; i <= 5; i++) {
-        const star = document.createElement('span');
-        star.textContent = i <= selectedRating ? '★' : '☆';
-        star.className = 'cursor-pointer text-amber-400 text-3xl';
-        star.onclick = () => { 
-            selectedRating = i; 
-            hapticFeedback('selectionChanged');
-            openRating(channelId); 
-        };
-        container.appendChild(star);
-    }
-}
-function closeRating() {
-    hapticFeedback('light');
-    document.getElementById('rating-modal').classList.add('hidden');
-    ratingChannelId = null; selectedRating = 0;
-}
-async function submitRating() {
-    hapticFeedback('medium');
-    if (!selectedRating) return alert('Select a rating');
-    const comment = document.getElementById('rating-comment').value;
-    await apiFetch('/api/reviews', { method: 'POST', body: JSON.stringify({ channel_id: ratingChannelId, rating: selectedRating, comment }) });
-    closeRating();
-    hapticFeedback('notificationOccurred', 'success');
-    alert('Review submitted!');
-}
-
-window.openRating = openRating;
-window.closeRating = closeRating;
-window.submitRating = submitRating;
-
-function openReport(channelId) {
-    hapticFeedback('light');
-    reportChannelId = channelId;
-    document.getElementById('report-modal').classList.remove('hidden');
-}
-function closeReport() {
-    hapticFeedback('light');
-    document.getElementById('report-modal').classList.add('hidden');
-    reportChannelId = null;
-}
-async function submitReport() {
-    hapticFeedback('medium');
-    const reason = document.getElementById('report-reason').value;
-    const description = document.getElementById('report-description').value;
-    await apiFetch('/api/reports', { method: 'POST', body: JSON.stringify({ channel_id: reportChannelId, reason, description }) });
-    closeReport();
-    hapticFeedback('notificationOccurred', 'success');
-    alert('Report submitted!');
-}
-
-window.openReport = openReport;
-window.closeReport = closeReport;
-window.submitReport = submitReport;
-
-// ================== ADMIN DASHBOARD ==================
+// Admin Dashboard - FIXED VERSION WITH FULL REPORT DETAILS
 async function loadAdminDashboard() {
-    const reports = await apiFetch('/api/admin/reports');
-    const withdrawals = await apiFetch('/api/admin/withdrawals');
-    
-    const reportsContainer = document.getElementById('admin-reports');
-    const withdrawalsContainer = document.getElementById('admin-withdrawals');
-    
-    if (!Array.isArray(reports) || reports.length === 0) {
-        reportsContainer.innerHTML = '<p class="text-slate-400">No reports.</p>';
-    } else {
-        reportsContainer.innerHTML = reports.map(r => `
-            <div class="glass-card p-4">
-                <h3 class="font-semibold text-white">${escapeHtml(r.channel?.channel_name || 'Unknown')}</h3>
-                <p class="text-slate-400 text-sm">${escapeHtml(r.reason)} - ${escapeHtml(r.description)}</p>
-                <div class="flex gap-2 mt-3">
-                    <button onclick="reviewReport('${r.id}', 'ban')" class="bg-red-600/20 text-red-400 px-3 py-1.5 rounded-xl text-sm">Ban</button>
-                    <button onclick="reviewReport('${r.id}', 'dismiss')" class="btn-secondary px-3 py-1.5 rounded-xl text-sm text-slate-300">Dismiss</button>
+    try {
+        const reports = await apiFetch('/api/admin/reports');
+        const withdrawals = await apiFetch('/api/admin/withdrawals');
+        
+        const reportsContainer = document.getElementById('admin-reports');
+        const withdrawalsContainer = document.getElementById('admin-withdrawals');
+        
+        // Display reports with full details
+        if (!Array.isArray(reports) || reports.length === 0) {
+            reportsContainer.innerHTML = '<p class="text-slate-400 text-center py-6">No reports.</p>';
+        } else {
+            reportsContainer.innerHTML = reports.map(r => {
+                const reporter = r.reporter || {};
+                const channel = r.channel || {};
+                const channelOwner = r.channel_owner || {};
+                
+                return `
+                    <div class="glass-card p-4 border-l-4 ${r.status === 'pending' ? 'border-amber-500' : r.status === 'banned' ? 'border-red-500' : 'border-green-500'}">
+                        <!-- Status Badge -->
+                        <div class="flex justify-between items-start mb-3">
+                            <span class="text-xs font-bold uppercase px-2 py-1 rounded ${
+                                r.status === 'pending' ? 'bg-amber-500/20 text-amber-400' :
+                                r.status === 'banned' ? 'bg-red-500/20 text-red-400' :
+                                'bg-green-500/20 text-green-400'
+                            }">
+                                ${r.status || 'pending'}
+                            </span>
+                            <span class="text-xs text-slate-500">${new Date(r.created_at).toLocaleDateString()}</span>
+                        </div>
+                        
+                        <!-- Report Details -->
+                        <div class="space-y-3">
+                            <!-- Reporter Info -->
+                            <div class="bg-slate-800/50 rounded-lg p-3">
+                                <p class="text-xs text-slate-400 mb-1">📢 Reported by:</p>
+                                <p class="text-sm font-semibold text-white">
+                                    ${reporter.first_name || 'Unknown'} 
+                                    ${reporter.username ? `(@${reporter.username})` : ''}
+                                </p>
+                                <p class="text-xs text-slate-500">ID: ${reporter.telegram_id || 'N/A'}</p>
+                            </div>
+                            
+                            <!-- Channel Info -->
+                            <div class="bg-slate-800/50 rounded-lg p-3">
+                                <p class="text-xs text-slate-400 mb-1">📺 Channel:</p>
+                                <p class="text-sm font-semibold text-white">${channel.channel_name || 'Unknown Channel'}</p>
+                                <p class="text-xs text-slate-500">ID: ${r.reported_channel_id || 'N/A'}</p>
+                            </div>
+                            
+                            <!-- Channel Owner Info -->
+                            <div class="bg-slate-800/50 rounded-lg p-3">
+                                <p class="text-xs text-slate-400 mb-1">👤 Channel Owner:</p>
+                                <p class="text-sm font-semibold text-white">
+                                    ${channelOwner.first_name || 'Unknown'} 
+                                    ${channelOwner.username ? `(@${channelOwner.username})` : ''}
+                                </p>
+                                <p class="text-xs text-slate-500">ID: ${channelOwner.telegram_id || 'N/A'}</p>
+                            </div>
+                            
+                            <!-- Reason & Description -->
+                            <div class="bg-slate-800/50 rounded-lg p-3">
+                                <p class="text-xs text-slate-400 mb-1">⚠️ Reason:</p>
+                                <p class="text-sm font-semibold text-red-400 uppercase">${r.reason || 'No reason'}</p>
+                                ${r.description ? `<p class="text-sm text-slate-300 mt-2">${r.description}</p>` : ''}
+                            </div>
+                        </div>
+                        
+                        <!-- Action Buttons -->
+                        ${r.status === 'pending' ? `
+                            <div class="flex gap-2 mt-4 pt-3 border-t border-slate-700">
+                                <button onclick="reviewReport('${r.id}', 'ban')" class="flex-1 bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-500/30 px-3 py-2 rounded-xl text-sm font-semibold transition">
+                                    🚫 Ban Channel
+                                </button>
+                                <button onclick="reviewReport('${r.id}', 'dismiss')" class="flex-1 bg-green-600/20 hover:bg-green-600/30 text-green-400 border border-green-500/30 px-3 py-2 rounded-xl text-sm font-semibold transition">
+                                    ✅ Dismiss
+                                </button>
+                            </div>
+                        ` : `
+                            <div class="mt-4 pt-3 border-t border-slate-700">
+                                <p class="text-xs text-slate-500 text-center">
+                                    ${r.status === 'banned' ? '🚫 Channel has been banned' : '✅ Report has been dismissed'}
+                                    ${r.reviewed_at ? ` on ${new Date(r.reviewed_at).toLocaleDateString()}` : ''}
+                                </p>
+                            </div>
+                        `}
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        // Display withdrawals
+        if (!Array.isArray(withdrawals) || withdrawals.length === 0) {
+            withdrawalsContainer.innerHTML = '<p class="text-slate-400 text-center py-6">No pending withdrawals.</p>';
+        } else {
+            withdrawalsContainer.innerHTML = withdrawals.map(w => `
+                <div class="glass-card p-4">
+                    <h3 class="font-semibold text-white">${w.owner?.first_name || 'Unknown'}</h3>
+                    <p class="text-slate-400 text-sm">${w.amount} TON</p>
+                    <button onclick="approveWithdrawal('${w.id}')" class="btn-primary mt-3 w-full text-white px-3 py-1.5 rounded-xl text-sm">Approve</button>
                 </div>
-            </div>
-        `).join('');
-    }
-    
-    if (!Array.isArray(withdrawals) || withdrawals.length === 0) {
-        withdrawalsContainer.innerHTML = '<p class="text-slate-400">No pending withdrawals.</p>';
-    } else {
-        withdrawalsContainer.innerHTML = withdrawals.map(w => `
-            <div class="glass-card p-4">
-                <h3 class="font-semibold text-white">${escapeHtml(w.owner?.first_name || 'Unknown')}</h3>
-                <p class="text-slate-400 text-sm">${w.amount} TON</p>
-                <button onclick="approveWithdrawal('${w.id}')" class="btn-primary mt-3 w-full text-white px-3 py-1.5 rounded-xl text-sm">Approve</button>
-            </div>
-        `).join('');
+            `).join('');
+        }
+    } catch (e) {
+        console.error('Error loading admin dashboard:', e);
     }
 }
 
 async function reviewReport(reportId, action) {
-    hapticFeedback('medium');
-    await apiFetch(`/api/admin/reports/${reportId}/review`, { method: 'POST', body: JSON.stringify({ action }) });
-    loadAdminDashboard();
+    const confirmMsg = action === 'ban' 
+        ? 'Are you sure you want to BAN this channel? This will deactivate it immediately.'
+        : 'Are you sure you want to DISMISS this report?';
+    
+    if (!confirm(confirmMsg)) return;
+    
+    try {
+        const res = await apiFetch(`/api/admin/reports/${reportId}/review`, { 
+            method: 'POST', 
+            body: JSON.stringify({ action }) 
+        });
+        
+        if (res.success) {
+            alert(`Report ${action === 'ban' ? 'banned' : 'dismissed'} successfully!`);
+            loadAdminDashboard(); // Reload to show updated status
+        } else {
+            alert('Error: ' + (res.error || 'Unknown error'));
+        }
+    } catch (e) {
+        console.error('Error reviewing report:', e);
+        alert('Error: ' + e.message);
+    }
 }
 window.reviewReport = reviewReport;
 
 async function approveWithdrawal(id) {
-    hapticFeedback('medium');
     const res = await apiFetch(`/api/admin/withdrawals/${id}/approve`, { method: 'POST' });
     if (res.success) {
-        hapticFeedback('notificationOccurred', 'success');
         alert('Approved!');
         loadAdminDashboard();
     } else {
-        hapticFeedback('notificationOccurred', 'error');
         alert('Error: ' + (res.error || ''));
     }
 }
 window.approveWithdrawal = approveWithdrawal;
 
-// ================== LANGUAGE ==================
+// Language
 function openLanguageModal() {
-    hapticFeedback('light');
     document.getElementById('language-modal').classList.remove('hidden');
 }
 function closeLanguageModal() {
-    hapticFeedback('light');
     document.getElementById('language-modal').classList.add('hidden');
 }
 function selectLanguage(lang) {
-    hapticFeedback('selectionChanged');
     setLanguage(lang);
     closeLanguageModal();
 }
@@ -801,14 +570,5 @@ function selectLanguage(lang) {
 window.openLanguageModal = openLanguageModal;
 window.closeLanguageModal = closeLanguageModal;
 window.selectLanguage = selectLanguage;
-
-// ================== OFFLINE DETECTION ==================
-window.addEventListener('offline', () => {
-    showErrorBanner('You are offline. Some features may not work.');
-});
-
-window.addEventListener('online', () => {
-    location.reload();
-});
 
 window.onload = init;
