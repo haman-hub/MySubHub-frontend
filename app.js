@@ -580,12 +580,18 @@ if (modalSaveBtn) {
 
 // Add Channel
 function openAddChannelModal() {
-    // Reset form
-    document.getElementById('add-channel-name').value = '';
-    document.getElementById('add-channel-link').value = '';
-    document.getElementById('add-channel-price').value = '0.1';
-    document.getElementById('add-channel-duration').value = '30';
-    document.getElementById('add-channel-active').checked = false;
+    // Reset form (with null checks for backward compatibility)
+    const nameInput = document.getElementById('add-channel-name');
+    const linkInput = document.getElementById('add-channel-link');
+    const priceInput = document.getElementById('add-channel-price');
+    const durationInput = document.getElementById('add-channel-duration');
+    const activeInput = document.getElementById('add-channel-active');
+
+    if (nameInput) nameInput.value = '';
+    if (linkInput) linkInput.value = '';
+    if (priceInput) priceInput.value = '0.1';
+    if (durationInput) durationInput.value = '30';
+    if (activeInput) activeInput.checked = false;
     
     document.getElementById('add-channel-modal').classList.remove('hidden');
 }
@@ -593,11 +599,17 @@ function closeAddChannelModal() {
     document.getElementById('add-channel-modal').classList.add('hidden');
 }
 async function submitAddChannel() {
-    const channel_name = document.getElementById('add-channel-name').value.trim();
-    const channel_invite_link = document.getElementById('add-channel-link').value.trim();
-    const subscription_price = parseFloat(document.getElementById('add-channel-price').value);
-    const duration_days = parseInt(document.getElementById('add-channel-duration').value);
-    const is_active = document.getElementById('add-channel-active').checked;
+    const nameInput = document.getElementById('add-channel-name');
+    const linkInput = document.getElementById('add-channel-link');
+    const priceInput = document.getElementById('add-channel-price');
+    const durationInput = document.getElementById('add-channel-duration');
+    const activeInput = document.getElementById('add-channel-active');
+
+    const channel_name = nameInput ? nameInput.value.trim() : '';
+    const channel_invite_link = linkInput ? linkInput.value.trim() : '';
+    const subscription_price = priceInput ? parseFloat(priceInput.value) : 0.1;
+    const duration_days = durationInput ? parseInt(durationInput.value) : 30;
+    const is_active = activeInput ? activeInput.checked : false;
     
     if (!channel_name || !channel_invite_link) {
         alert('Please fill in channel name and invite link');
