@@ -102,6 +102,69 @@ function switchPage(pageId) {
         target.classList.remove('hidden-page');
     }
 
+    // Update navigation button active states
+    const navButtonMap = {
+        'subscriptions': 'nav-subscriptions',
+        'owner': 'nav-owner',
+        'admin': 'nav-admin'
+    };
+
+    // Remove active state from all nav buttons
+    Object.values(navButtonMap).forEach(id => {
+        const btn = document.getElementById(id);
+        if (btn) {
+            btn.classList.remove('active', 'text-ton-400', 'text-emerald-400', 'text-amber-400');
+            btn.classList.add('text-slate-400');
+            const iconBox = btn.querySelector('.tab-icon-box');
+            if (iconBox) {
+                iconBox.className = 'tab-icon-box w-10 h-8 flex items-center justify-center rounded-xl bg-transparent text-slate-400 border border-transparent transition-all duration-200';
+            }
+            const indicator = btn.querySelector('.tab-indicator');
+            if (indicator) {
+                indicator.classList.remove('scale-x-100', 'opacity-100');
+                indicator.classList.add('scale-x-0', 'opacity-0');
+            }
+        }
+    });
+
+    // Add active state to current nav button
+    const activeBtnId = navButtonMap[pageId];
+    if (activeBtnId) {
+        const activeBtn = document.getElementById(activeBtnId);
+        if (activeBtn) {
+            activeBtn.classList.add('active');
+            activeBtn.classList.remove('text-slate-400');
+            
+            // Set color based on page
+            let colorClass = 'text-ton-400';
+            let bgBox = 'bg-ton-500/20';
+            let borderBox = 'border-ton-500/30';
+            
+            if (pageId === 'owner') {
+                colorClass = 'text-emerald-400';
+                bgBox = 'bg-emerald-500/20';
+                borderBox = 'border-emerald-500/30';
+            } else if (pageId === 'admin') {
+                colorClass = 'text-amber-400';
+                bgBox = 'bg-amber-500/20';
+                borderBox = 'border-amber-500/30';
+            }
+            
+            activeBtn.classList.add(colorClass);
+            
+            const iconBox = activeBtn.querySelector('.tab-icon-box');
+            if (iconBox) {
+                iconBox.className = `tab-icon-box w-10 h-8 flex items-center justify-center rounded-xl ${bgBox} ${colorClass} border ${borderBox} transition-all duration-200`;
+            }
+            
+            const indicator = activeBtn.querySelector('.tab-indicator');
+            if (indicator) {
+                indicator.classList.remove('scale-x-0', 'opacity-0');
+                indicator.classList.add('scale-x-100', 'opacity-100');
+            }
+        }
+    }
+
     if (pageId === 'subscriptions') loadSubscriptions();
     else if (pageId === 'owner') loadOwnerDashboard();
     else if (pageId === 'admin') loadAdminDashboard();
