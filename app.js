@@ -318,13 +318,24 @@ async function loadSubscriptions() {
 
         list.innerHTML = subs.map(s => {
             const channel = s.channel || {};
+            const daysLeft = Math.ceil((new Date(s.end_date) - Date.now()) / (1000 * 60 * 60 * 24));
+            const isExpired = daysLeft < 0;
+            const isExpiring = daysLeft >= 0 && daysLeft <= 7;
+
             return `
                 <div class="glass-card p-4">
-                    <h3 class="font-semibold text-white">${channel.channel_name || 'Unknown'}</h3>
-                    <p class="text-slate-400 text-sm">Expires: ${new Date(s.end_date).toLocaleDateString()}</p>
-                    <span class="badge ${s.status === 'active' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}">
-                        ${s.status}
-                    </span>
+                    <div class="flex justify-between items-start mb-2">
+                        <h3 class="font-semibold text-white">${channel.channel_name || 'Unknown'}</h3>
+                        <span class="badge ${isExpired ? 'bg-red-500/10 text-red-400 border border-red-500/30' : isExpiring ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'}">
+                            ${isExpired ? 'Expired' : isExpiring ? `⚠️ ${daysLeft}d` : 'Active'}
+                        </span>
+                    </div>
+                    <p class="text-slate-400 text-sm mb-3">Expires: ${new Date(s.end_date).toLocaleDateString()}</p>
+                    <div class="flex gap-2">
+                        <button onclick="openRating('${s.channel_id}')" class="btn-secondary px-3 py-1.5 rounded-xl text-xs text-slate-300">⭐ Rate</button>
+                        <button onclick="openReport('${s.channel_id}')" class="btn-secondary px-3 py-1.5 rounded-xl text-xs text-slate-300">🚩 Report</button>
+                        ${isExpired ? `<button onclick="renewSubscription('${s.channel_id}')" class="btn-primary px-3 py-1.5 rounded-xl text-xs text-white">🔄 Renew</button>` : ''}
+                    </div>
                 </div>
             `;
         }).join('');
@@ -332,6 +343,13 @@ async function loadSubscriptions() {
         console.error('Error loading subscriptions:', e);
     }
 }
+
+// Renew subscription
+async function renewSubscription(channelId) {
+    loadPurchasePage(channelId);
+    switchPage('purchase');
+}
+window.renewSubscription = renewSubscription;
 
 // Owner Dashboard
 async function loadOwnerDashboard() {
@@ -633,5 +651,147 @@ function selectLanguage(lang) {
 window.openLanguageModal = openLanguageModal;
 window.closeLanguageModal = closeLanguageModal;
 window.selectLanguage = selectLanguage;
+
+// Rating and Report functions
+let ratingChannelId = null;
+let reportChannelId = null;
+let selectedRating = 0;
+
+function openRating(channelId) {
+    ratingChannelId = channelId;
+    selectedRating = 0;
+    
+    const modal = document.getElementById('rating-modal');
+    if (!modal) {
+        alert('Rating modal not found');
+        return;
+    }
+    
+    const starsContainer = document.getElementById('star-rating');
+    if (starsContainer) {
+        starsContainer.innerHTML = '';
+        for (let i = 1; i <= 5; i++) {
+            const star = document.createElement('span');
+            star.textContent = '☆';
+            star.className = 'cursor-pointer text-3xl text-yellow-500';
+            star.onclick = () => selectRating(i);
+            starsContainer.appendChild(star);
+        }
+    }
+    
+    modal.classList.remove('hidden');
+}
+window.openRating = openRating;
+
+function selectRating(rating) {
+    selectedRating = rating;
+    const stars = document.querySelectorAll('#star-rating span');
+    stars.forEach((star, index) => {
+        star.textContent = index < rating ? '★' : '☆';
+    });
+}
+window.selectRating = selectRating;
+
+async function submitRating() {
+    if (selectedRating === 0) {
+        alert('Please select a rating');
+        return;
+    }
+    
+    const comment = document.getElementById('rating-comment')?.value || '';
+    
+    try {
+        const res = await apiFetch('/api/reviews', {
+            method: 'POST',
+            body: JSON.stringify({
+                channel_id: ratingChannelId,
+                rating: selectedRating,
+                comment: comment
+            })
+        });
+        
+        if (res.success) {
+            alert('Rating submitted successfully!');
+            closeRating();
+        } else {
+            alert('Error: ' + (res.error || 'Unknown error'));
+        }
+    } catch (e) {
+        console.error('Error submitting rating:', e);
+        alert('Error: ' + e.message);
+    }
+}
+window.submitRating = submitRating;
+
+function closeRating() {
+    const modal = document.getElementById('rating-modal');
+    if (modal) {
+        modal.classList.add('hidden');
+    }
+    ratingChannelId = null;
+    selectedRating = 0;
+}
+window.closeRating = closeRating;
+
+function openReport(channelId) {
+    reportChannelId = channelId;
+    
+    const modal = document.getElementById('report-modal');
+    if (!modal) {
+        alert('Report modal not found');
+        return;
+    }
+    
+    // Reset form
+    const reasonSelect = document.getElementById('report-reason');
+    if (reasonSelect) reasonSelect.value = 'scam';
+    
+    const descriptionInput = document.getElementById('report-description');
+    if (descriptionInput) descriptionInput.value = '';
+    
+    modal.classList.remove('hidden');
+}
+window.openReport = openReport;
+
+async function submitReport() {
+    const reason = document.getElementById('report-reason')?.value || 'scam';
+    const description = document.getElementById('report-description')?.value || '';
+    
+    if (!description.trim()) {
+        alert('Please provide a description');
+        return;
+    }
+    
+    try {
+        const res = await apiFetch('/api/reports', {
+            method: 'POST',
+            body: JSON.stringify({
+                channel_id: reportChannelId,
+                reason: reason,
+                description: description
+            })
+        });
+        
+        if (res.success) {
+            alert('Report submitted successfully!');
+            closeReport();
+        } else {
+            alert('Error: ' + (res.error || 'Unknown error'));
+        }
+    } catch (e) {
+        console.error('Error submitting report:', e);
+        alert('Error: ' + e.message);
+    }
+}
+window.submitReport = submitReport;
+
+function closeReport() {
+    const modal = document.getElementById('report-modal');
+    if (modal) {
+        modal.classList.add('hidden');
+    }
+    reportChannelId = null;
+}
+window.closeReport = closeReport;
 
 window.onload = init;
