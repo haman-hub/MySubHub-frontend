@@ -528,6 +528,7 @@ async function loadOwnerDashboard() {
                 <div class="flex gap-4 mt-3">
                     <button onclick="openEditModal('${ch.id}')" class="text-blue-400 text-xs">Edit</button>
                     <button onclick="copyDeepLink('${ch.id}')" class="text-blue-400 text-xs">Copy Link</button>
+                    <button onclick="forwardChannel('${ch.id}')" class="text-green-400 text-xs">📤 Forward</button>
                 </div>
             </div>
         `).join('');
@@ -579,6 +580,13 @@ if (modalSaveBtn) {
 
 // Add Channel
 function openAddChannelModal() {
+    // Reset form
+    document.getElementById('add-channel-name').value = '';
+    document.getElementById('add-channel-link').value = '';
+    document.getElementById('add-channel-price').value = '0.1';
+    document.getElementById('add-channel-duration').value = '30';
+    document.getElementById('add-channel-active').checked = false;
+    
     document.getElementById('add-channel-modal').classList.remove('hidden');
 }
 function closeAddChannelModal() {
@@ -587,14 +595,39 @@ function closeAddChannelModal() {
 async function submitAddChannel() {
     const channel_name = document.getElementById('add-channel-name').value.trim();
     const channel_invite_link = document.getElementById('add-channel-link').value.trim();
-    if (!channel_name || !channel_invite_link) return alert('Missing fields');
+    const subscription_price = parseFloat(document.getElementById('add-channel-price').value);
+    const duration_days = parseInt(document.getElementById('add-channel-duration').value);
+    const is_active = document.getElementById('add-channel-active').checked;
+    
+    if (!channel_name || !channel_invite_link) {
+        alert('Please fill in channel name and invite link');
+        return;
+    }
+    
+    if (subscription_price <= 0) {
+        alert('Subscription price must be greater than 0');
+        return;
+    }
+    
+    if (duration_days <= 0) {
+        alert('Duration must be greater than 0');
+        return;
+    }
+    
     const res = await apiFetch('/api/channels/register', {
         method: 'POST',
-        body: JSON.stringify({ channel_name, channel_invite_link }),
+        body: JSON.stringify({ 
+            channel_name, 
+            channel_invite_link,
+            subscription_price,
+            duration_days,
+            is_active
+        }),
     });
     if (res.error) return alert(res.error);
     closeAddChannelModal();
     loadOwnerDashboard();
+    alert('Channel added successfully!');
 }
 
 window.openAddChannelModal = openAddChannelModal;
@@ -606,6 +639,131 @@ function copyDeepLink(channelId) {
     navigator.clipboard.writeText(link).then(() => alert('Link copied!'));
 }
 window.copyDeepLink = copyDeepLink;
+
+// Forward Channel - Enhanced with rating and preview
+async function forwardChannel(channelId) {
+    try {
+        // Fetch channel details with rating
+        const channel = await apiFetch(`/api/channels/${channelId}`, { method: 'GET' });
+        
+        if (!channel || channel.error) {
+            alert('Channel not found');
+            return;
+        }
+        
+        const deepLink = `https://t.me/MySubsHub_bot?start=${channelId}`;
+        const rating = channel.avg_rating || 0;
+        const reviewCount = channel.total_reviews || 0;
+        
+        // Generate stars display
+        const stars = '⭐'.repeat(Math.round(rating)) + '☆'.repeat(5 - Math.round(rating));
+        
+        // Create engaging message template
+        let messageTemplate = `🚀 🌟 ${channel.channel_name} 🌟 🚀\n\n`;
+        messageTemplate += `💎 Premium Content You Don't Want to Miss!\n\n`;
+        messageTemplate += `${stars} ${rating.toFixed(1)}/5 (${reviewCount} reviews)\n\n`;
+        messageTemplate += `💰 Subscription: ${channel.subscription_price} TON\n`;
+        messageTemplate += `📅 Duration: ${channel.duration_days} days\n\n`;
+        messageTemplate += `✨ What you'll get:\n`;
+        messageTemplate += `• Exclusive content\n`;
+        messageTemplate += `• Premium access\n`;
+        messageTemplate += `• Community benefits\n\n`;
+        messageTemplate += `🔗 Subscribe Now:\n${deepLink}\n\n`;
+        messageTemplate += `#Premium #TON #Subscription`;
+        
+        // Show modal with preview
+        showForwardModal(channel, messageTemplate, deepLink);
+        
+    } catch (e) {
+        console.error('Error forwarding channel:', e);
+        alert('Error loading channel details');
+    }
+}
+window.forwardChannel = forwardChannel;
+
+function showForwardModal(channel, messageTemplate, deepLink) {
+    const modal = document.getElementById('forward-modal');
+    if (!modal) {
+        console.error('Forward modal not found');
+        return;
+    }
+    
+    // Update preview
+    updateForwardPreview(messageTemplate, channel);
+    
+    // Set initial message
+    document.getElementById('forward-message').value = messageTemplate;
+    
+    // Add input listener for live preview
+    document.getElementById('forward-message').oninput = (e) => {
+        updateForwardPreview(e.target.value, channel);
+    };
+    
+    modal.classList.remove('hidden');
+}
+
+function updateForwardPreview(message, channel) {
+    const preview = document.getElementById('forward-preview');
+    if (!preview) return;
+    
+    // Convert markdown-like formatting to HTML
+    let html = message
+        .replace(/\n/g, '<br>')
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+        .replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" class="text-blue-400 underline" target="_blank">$1</a>');
+    
+    preview.innerHTML = `
+        <div class="bg-slate-800 rounded-xl p-4 border border-slate-700">
+            <div class="flex items-center gap-2 mb-3">
+                <div class="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold">
+                    ${channel.channel_name.charAt(0).toUpperCase()}
+                </div>
+                <div>
+                    <div class="font-semibold text-white">${channel.channel_name}</div>
+                    <div class="text-xs text-slate-400">via MySubHub</div>
+                </div>
+            </div>
+            <div class="text-sm text-slate-300 leading-relaxed">${html}</div>
+        </div>
+    `;
+}
+
+async function copyForwardMessage() {
+    const message = document.getElementById('forward-message').value;
+    try {
+        await navigator.clipboard.writeText(message);
+        alert('Message copied to clipboard!');
+    } catch (e) {
+        alert('Failed to copy message');
+    }
+}
+window.copyForwardMessage = copyForwardMessage;
+
+async function shareForwardMessage() {
+    const message = document.getElementById('forward-message').value;
+    const channelName = document.getElementById('forward-preview').querySelector('.font-semibold').textContent;
+    
+    // Try to use Telegram share API
+    const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(message.split('\n').pop())}&text=${encodeURIComponent(message)}`;
+    
+    try {
+        window.open(shareUrl, '_blank');
+        closeForwardModal();
+    } catch (e) {
+        // Fallback to copy
+        await copyForwardMessage();
+    }
+}
+window.shareForwardMessage = shareForwardMessage;
+
+function closeForwardModal() {
+    const modal = document.getElementById('forward-modal');
+    if (modal) {
+        modal.classList.add('hidden');
+    }
+}
+window.closeForwardModal = closeForwardModal;
 
 async function toggleChannel(channelId, isActive) {
     await apiFetch(`/api/channels/${channelId}`, {
@@ -810,9 +968,21 @@ let ratingChannelId = null;
 let reportChannelId = null;
 let selectedRating = 0;
 
-function openRating(channelId) {
+async function openRating(channelId) {
     ratingChannelId = channelId;
     selectedRating = 0;
+    
+    // Check if user already rated this channel
+    try {
+        const checkRes = await apiFetch(`/api/reviews/check/${channelId}`, { method: 'GET' });
+        
+        if (checkRes && checkRes.alreadyRated) {
+            alert('You have already rated this channel. You can only rate each channel once.');
+            return;
+        }
+    } catch (e) {
+        console.error('Error checking rating status:', e);
+    }
     
     const modal = document.getElementById('rating-modal');
     if (!modal) {
@@ -886,8 +1056,20 @@ function closeRating() {
 }
 window.closeRating = closeRating;
 
-function openReport(channelId) {
+async function openReport(channelId) {
     reportChannelId = channelId;
+    
+    // Check if user already reported this channel
+    try {
+        const checkRes = await apiFetch(`/api/reports/check/${channelId}`, { method: 'GET' });
+        
+        if (checkRes && checkRes.alreadyReported) {
+            alert('You have already reported this channel. You can only report each channel once.');
+            return;
+        }
+    } catch (e) {
+        console.error('Error checking report status:', e);
+    }
     
     const modal = document.getElementById('report-modal');
     if (!modal) {
