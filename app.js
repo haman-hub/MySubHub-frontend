@@ -1,5 +1,157 @@
+// ================== CUSTOM MODAL SYSTEM ==================
+// Replace native alert/confirm/prompt with custom modals
+
+function showCustomModal(title, message, type = 'alert', callback = null) {
+    // Remove existing modal if any
+    const existingModal = document.getElementById('custom-modal');
+    if (existingModal) existingModal.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'custom-modal';
+    modal.className = 'fixed inset-0 z-[9999] flex items-center justify-center p-4';
+    
+    let buttonsHTML = '';
+    
+    if (type === 'alert') {
+        buttonsHTML = `
+            <button onclick="closeCustomModal()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-xl transition">
+                OK
+            </button>
+        `;
+    } else if (type === 'confirm') {
+        buttonsHTML = `
+            <button onclick="closeCustomModal(false)" class="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-semibold py-2.5 rounded-xl transition">
+                Cancel
+            </button>
+            <button onclick="closeCustomModal(true)" class="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold py-2.5 rounded-xl transition">
+                Confirm
+            </button>
+        `;
+    } else if (type === 'prompt') {
+        buttonsHTML = `
+            <button onclick="closeCustomModal(null)" class="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-semibold py-2.5 rounded-xl transition">
+                Cancel
+            </button>
+            <button onclick="submitCustomPrompt()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-xl transition">
+                OK
+            </button>
+        `;
+    }
+
+    let inputHTML = '';
+    if (type === 'prompt') {
+        inputHTML = `
+            <input type="text" id="custom-prompt-input" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-blue-500 mt-3" placeholder="Enter value..." />
+        `;
+    }
+
+    modal.innerHTML = `
+        <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" onclick="closeCustomModal()"></div>
+        <div class="relative bg-slate-900 border border-slate-700 rounded-2xl p-6 max-w-md w-full shadow-2xl">
+            <h3 class="text-xl font-bold text-white mb-3">${title}</h3>
+            <p class="text-slate-300 mb-4">${message}</p>
+            ${inputHTML}
+            <div class="flex gap-3 mt-5">
+                ${buttonsHTML}
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    // Store callback
+    if (callback) {
+        modal.dataset.callback = callback.toString();
+    }
+
+    // Focus input if prompt
+    if (type === 'prompt') {
+        setTimeout(() => {
+            const input = document.getElementById('custom-prompt-input');
+            if (input) input.focus();
+        }, 100);
+    }
+}
+
+function closeCustomModal(result = null) {
+    const modal = document.getElementById('custom-modal');
+    if (!modal) return;
+
+    const callbackStr = modal.dataset.callback;
+    modal.remove();
+
+    if (callbackStr && result !== undefined) {
+        try {
+            const callback = eval('(' + callbackStr + ')');
+            if (typeof callback === 'function') {
+                callback(result);
+            }
+        } catch (e) {
+            console.error('Callback error:', e);
+        }
+    }
+}
+
+function submitCustomPrompt() {
+    const input = document.getElementById('custom-prompt-input');
+    const value = input ? input.value : '';
+    closeCustomModal(value);
+}
+
+// Override native functions
+window.alert = function(message) {
+    showCustomModal('MySubHub', message, 'alert');
+};
+
+window.confirm = function(message) {
+    return new Promise((resolve) => {
+        showCustomModal('MySubHub', message, 'confirm', (result) => {
+            resolve(result);
+        });
+    });
+};
+
+window.prompt = function(message, defaultValue = '') {
+    return new Promise((resolve) => {
+        showCustomModal('MySubHub', message, 'prompt', (result) => {
+            resolve(result);
+        });
+        setTimeout(() => {
+            const input = document.getElementById('custom-prompt-input');
+            if (input && defaultValue) {
+                input.value = defaultValue;
+            }
+        }, 100);
+    });
+};
+
+// Async versions for better control
+async function showAlert(message) {
+    return new Promise((resolve) => {
+        showCustomModal('MySubHub', message, 'alert', () => resolve());
+    });
+}
+
+async function showConfirm(message) {
+    return new Promise((resolve) => {
+        showCustomModal('MySubHub', message, 'confirm', (result) => resolve(result));
+    });
+}
+
+async function showPrompt(message, defaultValue = '') {
+    return new Promise((resolve) => {
+        showCustomModal('MySubHub', message, 'prompt', (result) => resolve(result));
+        setTimeout(() => {
+            const input = document.getElementById('custom-prompt-input');
+            if (input && defaultValue) {
+                input.value = defaultValue;
+            }
+        }, 100);
+    });
+}
+
 window.onerror = function(message) {
-    alert('JS Error: ' + message);
+    showAlert('Error: ' + message);
 };
 
 // app.js (FIXED VERSION — all queries via backend API)
@@ -475,7 +627,7 @@ async function loadWithdrawalSection() {
 }
 
 async function requestWithdrawal() {
-    const amount = prompt('Enter amount in TON:');
+    const amount = await showPrompt('Enter amount in TON:');
     if (!amount) return;
     const res = await apiFetch('/api/withdrawals/request', { 
         method: 'POST', 
@@ -604,7 +756,8 @@ async function reviewReport(reportId, action) {
         ? 'Are you sure you want to BAN this channel? This will deactivate it immediately.'
         : 'Are you sure you want to DISMISS this report?';
     
-    if (!confirm(confirmMsg)) return;
+    const confirmed = await showConfirm(confirmMsg);
+    if (!confirmed) return;
     
     try {
         const res = await apiFetch(`/api/admin/reports/${reportId}/review`, { 
