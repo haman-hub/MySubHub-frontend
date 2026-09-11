@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MySubHub - Subscriber Guide</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            min-height: 100vh;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+        
+        .header h1 {
+            color: #667eea;
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            color: #666;
+            font-size: 16px;
+        }
+        
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 15px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .section h2 {
+            color: #667eea;
+            font-size: 20px;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .step {
+            margin-bottom: 20px;
+            padding-left: 20px;
+            position: relative;
+        }
+        
+        .step::before {
+            content: attr(data-step);
+            position: absolute;
+            left: -10px;
+            top: 0;
+            background: #667eea;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        
+        .step h3 {
+            color: #333;
+            font-size: 16px;
+            margin-bottom: 8px;
+            margin-left: 10px;
+        }
+        
+        .step p {
+            color: #666;
+            font-size: 14px;
+            margin-left: 10px;
+        }
+        
+        .tip {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 8px;
+        }
+        
+        .tip strong {
+            color: #856404;
+        }
+        
+        .warning {
+            background: #f8d7da;
+            border-left: 4px solid #dc3545;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 8px;
+        }
+        
+        .warning strong {
+            color: #721c24;
+        }
+        
+        .success {
+            background: #d4edda;
+            border-left: 4px solid #28a745;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 8px;
+        }
+        
+        .success strong {
+            color: #155724;
+        }
+        
+        .faq {
+            margin-top: 30px;
+        }
+        
+        .faq-item {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+        
+        .faq-item h3 {
+            color: #667eea;
+            font-size: 16px;
+            margin-bottom: 10px;
+        }
+        
+        .faq-item p {
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .back-button {
+            display: block;
+            width: 100%;
+            padding: 15px;
+            background: #667eea;
+            color: white;
+            text-align: center;
+            text-decoration: none;
+            border-radius: 10px;
+            font-weight: bold;
+            margin-top: 30px;
+            transition: background 0.3s;
+        }
+        
+        .back-button:hover {
+            background: #5568d3;
+        }
+        
+        .icon {
+            font-size: 24px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>👤 Subscriber Guide</h1>
+            <p>Learn how to subscribe to premium channels and groups</p>
+        </div>
+        
+        <div class="section">
+            <h2><span class="icon">🔍</span> Finding Channels</h2>
+            <div class="step" data-step="1">
+                <h3>Get an Invite Link</h3>
+                <p>Receive an invite link from a channel owner or friend. The link looks like: <code>https://t.me/YourBot?start=channel-id</code></p>
+            </div>
+            <div class="step" data-step="2">
+                <h3>Click the Link</h3>
+                <p>Tap the invite link to open the MySubHub webapp. You'll see the channel details including price and duration.</p>
+            </div>
+            <div class="step" data-step="3">
+                <h3>Review Channel Info</h3>
+                <p>Check the channel name, rating, reviews, subscription price, and duration before subscribing.</p>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2><span class="icon">💳</span> Subscribing to a Channel</h2>
+            <div class="step" data-step="1">
+                <h3>Connect Your Wallet</h3>
+                <p>Click "Pay with TON" and connect your TON wallet (Tonkeeper, Tonhub, or other TON Connect compatible wallets).</p>
+            </div>
+            <div class="step" data-step="2">
+                <h3>Confirm Payment</h3>
+                <p>Review the payment details including the subscription price, platform fee (1%), and network fee. Confirm the transaction in your wallet.</p>
+            </div>
+            <div class="step" data-step="3">
+                <h3>Wait for Confirmation</h3>
+                <p>After payment, wait for the transaction to be confirmed on the blockchain (usually 10-30 seconds).</p>
+            </div>
+            <div class="step" data-step="4">
+                <h3>Access the Channel</h3>
+                <p>Once confirmed, you'll be automatically added to the channel/group. You can now access all premium content!</p>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2><span class="icon">📋</span> Managing Your Subscriptions</h2>
+            <div class="step" data-step="1">
+                <h3>View Active Subscriptions</h3>
+                <p>Open the dashboard and go to "My Subscriptions" tab to see all your active subscriptions.</p>
+            </div>
+            <div class="step" data-step="2">
+                <h3>Check Expiration Dates</h3>
+                <p>Each subscription shows the expiration date. You'll receive reminders before expiration.</p>
+            </div>
+            <div class="step" data-step="3">
+                <h3>Renew Subscriptions</h3>
+                <p>Click "Renew" on expired subscriptions to extend your access. The payment process is the same as initial subscription.</p>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2><span class="icon">⭐</span> Rating and Reporting</h2>
+            <div class="step" data-step="1">
+                <h3>Rate Channels</h3>
+                <p>After subscribing, you can rate the channel from 1 to 5 stars. Your rating helps other users make informed decisions.</p>
+            </div>
+            <div class="step" data-step="2">
+                <h3>Report Issues</h3>
+                <p>If you encounter scams, inappropriate content, or other issues, use the "Report" button to notify the platform admins.</p>
+            </div>
+        </div>
+        
+        <div class="tip">
+            <strong>💡 Pro Tip:</strong> Always check the channel rating and reviews before subscribing. Channels with higher ratings are more reliable.
+        </div>
+        
+        <div class="warning">
+            <strong>⚠️ Important:</strong> Subscriptions are non-refundable. Make sure you understand the channel content and price before subscribing.
+        </div>
+        
+        <div class="faq">
+            <h2 style="color: #667eea; margin-bottom: 20px;">❓ Frequently Asked Questions</h2>
+            
+            <div class="faq-item">
+                <h3>How long does it take to get access?</h3>
+                <p>After payment confirmation, you'll be added to the channel within 10-30 seconds. If it takes longer, check your subscription status in the dashboard.</p>
+            </div>
+            
+            <div class="faq-item">
+                <h3>What happens when my subscription expires?</h3>
+                <p>You'll be automatically removed from the channel. You can renew anytime by clicking the "Renew" button in your subscriptions list.</p>
+            </div>
+            
+            <div class="faq-item">
+                <h3>Can I get a refund?</h3>
+                <p>Subscriptions are non-refundable. Please review the channel details carefully before subscribing.</p>
+            </div>
+            
+            <div class="faq-item">
+                <h3>What if I don't get access after payment?</h3>
+                <p>Wait up to 1 minute for the transaction to confirm. If you still don't have access, contact support through the bot with your transaction hash.</p>
+            </div>
+            
+            <div class="faq-item">
+                <h3>Can I subscribe to multiple channels?</h3>
+                <p>Yes! You can subscribe to as many channels as you want. Each subscription is managed independently.</p>
+            </div>
+            
+            <div class="faq-item">
+                <h3>What wallets are supported?</h3>
+                <p>Any TON Connect compatible wallet including Tonkeeper, Tonhub, OpenMask, and others.</p>
+            </div>
+        </div>
+        
+        <div class="success">
+            <strong>✅ Need Help?</strong> If you have any questions or issues, use the /help command in the bot or contact support.
+        </div>
+        
+        <a href="javascript:window.history.back()" class="back-button">← Back to Dashboard</a>
+    </div>
+    
+    <script>
+        // Initialize Telegram WebApp
+        const tg = window.Telegram.WebApp;
+        tg.ready();
+        tg.expand();
+        
+        // Apply Telegram theme
+        if (tg.themeParams) {
+            document.body.style.background = tg.themeParams.bg_color || 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+        }
+    </script>
+</body>
+</html>
