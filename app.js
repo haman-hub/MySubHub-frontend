@@ -736,32 +736,20 @@ async function forwardChannel(channelId) {
         
         console.log('✅ Generated message template');
         
-        // Copy to clipboard
-        try {
-            await navigator.clipboard.writeText(messageTemplate);
-            showAlert('✅ Message copied to clipboard! Share it with your friends.');
-            console.log('✅ Copied to clipboard');
-        } catch (e) {
-            console.warn('⚠️ Clipboard API failed, using fallback');
-            // Fallback for browsers that don't support clipboard API
-            const textArea = document.createElement('textarea');
-            textArea.value = messageTemplate;
-            textArea.style.position = 'fixed';
-            textArea.style.left = '-999999px';
-            document.body.appendChild(textArea);
-            textArea.select();
-            try {
-                document.execCommand('copy');
-                showAlert('✅ Message copied to clipboard! Share it with your friends.');
-                console.log('✅ Copied via fallback');
-            } catch (err) {
-                console.error('❌ Fallback also failed');
-                showAlert('📋 Please copy manually:\n\n' + messageTemplate);
-            }
-            document.body.removeChild(textArea);
+        // Open Telegram's native share dialog
+        const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(deepLink)}&text=${encodeURIComponent(messageTemplate)}`;
+        
+        // Use Telegram WebApp API to open share dialog
+        if (TG.openTelegramLink) {
+            TG.openTelegramLink(shareUrl);
+            console.log('✅ Opened Telegram share dialog');
+        } else {
+            // Fallback: open in new window/tab
+            window.open(shareUrl, '_blank');
+            console.log('✅ Opened share link in new tab');
         }
         
-        TG.HapticFeedback.notificationOccurred('success');
+        TG.HapticFeedback.impactOccurred('medium');
         
     } catch (e) {
         console.error('❌ Error forwarding channel:', e);
