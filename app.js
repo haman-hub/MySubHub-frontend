@@ -715,10 +715,17 @@ async function forwardChannel(channelId) {
         console.log('✅ Found channel:', channel.channel_name);
         
         const deepLink = `https://t.me/MySubsHub_bot?start=${channelId}`;
+        const rating = parseFloat(channel.avg_rating) || 0;
+        const reviewCount = channel.total_reviews || 0;
         
-        // Create engaging message template (without review section)
+        // Generate stars display (auto-generated from database, cannot be edited)
+        const stars = '⭐'.repeat(Math.round(rating)) + '☆'.repeat(5 - Math.round(rating));
+        
+        // Create engaging message template
+        // Note: Rating and review count are auto-generated from database
         let messageTemplate = `🚀 🌟 ${channel.channel_name} 🌟 🚀\n\n`;
         messageTemplate += `💎 Premium Content You Don't Want to Miss!\n\n`;
+        messageTemplate += `${stars} ${rating.toFixed(1)}/5 (${reviewCount} reviews)\n\n`;
         messageTemplate += `💰 Subscription: ${channel.subscription_price} TON\n`;
         messageTemplate += `📅 Duration: ${channel.duration_days} days\n\n`;
         messageTemplate += `✨ What you'll get:\n`;
@@ -972,6 +979,10 @@ async function loadPurchasePage(channelId) {
     const isVerified = data.is_verified;
     const isGroup = data.channel_type === 'group';
 
+    const rating = parseFloat(data.avg_rating) || 0;
+    const reviewCount = data.total_reviews || 0;
+    const stars = '⭐'.repeat(Math.round(rating)) + '☆'.repeat(5 - Math.round(rating));
+    
     card.innerHTML = `
         <div class="text-center mb-6">
             <div class="flex items-center justify-center gap-2 mb-2">
@@ -979,9 +990,22 @@ async function loadPurchasePage(channelId) {
                 ${isVerified ? '<span class="verified-badge-large">✓</span>' : ''}
             </div>
             <p class="text-slate-400 text-sm">${isGroup ? '👥 Group' : '📺 Channel'}</p>
-            <p class="text-slate-400 mt-2 text-sm">
-                Subscription: <strong class="text-white font-mono text-base">${total.toFixed(6)} TON</strong> / ${data.duration_days} days
-            </p>
+            
+            ${reviewCount > 0 ? `
+                <div class="mt-3 mb-4">
+                    <div class="flex items-center justify-center gap-2">
+                        <span class="text-lg">${stars}</span>
+                        <span class="text-white font-semibold">${rating.toFixed(1)}</span>
+                        <span class="text-slate-400 text-sm">(${reviewCount} reviews)</span>
+                    </div>
+                </div>
+            ` : ''}
+            
+            <div class="bg-slate-800/50 rounded-xl p-4 mt-4">
+                <p class="text-slate-400 text-sm">
+                    Subscription: <strong class="text-white font-mono text-base">${total.toFixed(6)} TON</strong> / ${data.duration_days} days
+                </p>
+            </div>
         </div>
         <button id="btn-pay" class="btn-primary w-full text-white font-semibold py-3.5 rounded-xl">Pay with TON</button>
     `;
