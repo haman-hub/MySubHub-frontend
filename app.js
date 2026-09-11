@@ -715,16 +715,10 @@ async function forwardChannel(channelId) {
         console.log('✅ Found channel:', channel.channel_name);
         
         const deepLink = `https://t.me/MySubsHub_bot?start=${channelId}`;
-        const rating = parseFloat(channel.avg_rating) || 0;
-        const reviewCount = channel.total_reviews || 0;
         
-        // Generate stars display
-        const stars = '⭐'.repeat(Math.round(rating)) + '☆'.repeat(5 - Math.round(rating));
-        
-        // Create engaging message template
+        // Create engaging message template (without review section)
         let messageTemplate = `🚀 🌟 ${channel.channel_name} 🌟 🚀\n\n`;
         messageTemplate += `💎 Premium Content You Don't Want to Miss!\n\n`;
-        messageTemplate += `${stars} ${rating.toFixed(1)}/5 (${reviewCount} reviews)\n\n`;
         messageTemplate += `💰 Subscription: ${channel.subscription_price} TON\n`;
         messageTemplate += `📅 Duration: ${channel.duration_days} days\n\n`;
         messageTemplate += `✨ What you'll get:\n`;
