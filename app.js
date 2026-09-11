@@ -300,6 +300,13 @@ function completeTutorial() {
     TG.HapticFeedback.notificationOccurred('success');
 }
 
+// Expose tutorial functions to global scope
+window.startTutorial = startTutorial;
+window.nextTutorialStep = nextTutorialStep;
+window.prevTutorialStep = prevTutorialStep;
+window.skipTutorial = skipTutorial;
+window.completeTutorial = completeTutorial;
+
 // ================== PAGINATION ==================
 function createPaginationControls(containerId, state, onPageChange) {
     const container = document.getElementById(containerId);
@@ -352,6 +359,10 @@ async function loadPreviousPage(section) {
     
     state.loading = false;
 }
+
+// Expose pagination functions to global scope
+window.loadNextPage = loadNextPage;
+window.loadPreviousPage = loadPreviousPage;
 
 // ================== CUSTOM MODAL SYSTEM ==================
 function showCustomModal(title, message, type = 'alert', callback = null) {
@@ -419,6 +430,10 @@ function submitCustomPrompt() {
     const input = document.getElementById('custom-prompt-input');
     closeCustomModal(input ? input.value : '');
 }
+
+// Expose modal functions to global scope
+window.closeCustomModal = closeCustomModal;
+window.submitCustomPrompt = submitCustomPrompt;
 
 window.alert = function(message) { showCustomModal('MySubHub', message, 'alert'); };
 window.confirm = function(message) { return new Promise((resolve) => { showCustomModal('MySubHub', message, 'confirm', (result) => resolve(result)); }); };
