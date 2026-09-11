@@ -210,13 +210,21 @@ function showTutorialStep() {
     const existing = document.getElementById('tutorial-overlay');
     if (existing) existing.remove();
     
-    // Create tutorial overlay
+    // Remove any existing highlights
+    document.querySelectorAll('.tutorial-highlight').forEach(el => {
+        el.classList.remove('tutorial-highlight');
+    });
+    
+    // Create tutorial overlay with spotlight effect
     const overlay = document.createElement('div');
     overlay.id = 'tutorial-overlay';
     overlay.className = 'tutorial-overlay';
     
+    // Position modal at bottom for better visibility
+    const modalPosition = step.target ? 'bottom' : 'center';
+    
     overlay.innerHTML = `
-        <div class="tutorial-modal">
+        <div class="tutorial-modal tutorial-modal-${modalPosition}">
             <div class="tutorial-header">
                 <h3>${step.title}</h3>
                 <span class="tutorial-progress">${currentTutorialStep + 1}/${tutorialSteps.length}</span>
@@ -239,7 +247,14 @@ function showTutorialStep() {
         const target = document.querySelector(step.target);
         if (target) {
             target.classList.add('tutorial-highlight');
-            setTimeout(() => target.classList.remove('tutorial-highlight'), 3000);
+            
+            // Scroll target into view
+            target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            
+            // Remove highlight after moving to next step
+            setTimeout(() => {
+                target.classList.remove('tutorial-highlight');
+            }, 5000);
         }
     }
     
@@ -248,7 +263,7 @@ function showTutorialStep() {
         setTimeout(() => {
             const clickTarget = document.querySelector(step.clickTarget);
             if (clickTarget) clickTarget.click();
-        }, 1000);
+        }, 1500);
     }
     
     TG.HapticFeedback.impactOccurred('light');
@@ -655,6 +670,65 @@ async function renewSubscription(channelId) {
     switchPage('purchase');
 }
 window.renewSubscription = renewSubscription;
+
+// ================== FORWARD CHANNEL ==================
+async function forwardChannel(channelId) {
+    try {
+        // Fetch channel details with rating
+        const channel = await apiFetch(`/api/channels/${channelId}`, { method: 'GET' });
+        
+        if (!channel || channel.error) {
+            showAlert('Channel not found');
+            return;
+        }
+        
+        const deepLink = `https://t.me/MySubsHub_bot?start=${channelId}`;
+        const rating = channel.avg_rating || 0;
+        const reviewCount = channel.total_reviews || 0;
+        
+        // Generate stars display
+        const stars = '⭐'.repeat(Math.round(rating)) + '☆'.repeat(5 - Math.round(rating));
+        
+        // Create engaging message template
+        let messageTemplate = `🚀 🌟 ${channel.channel_name} 🌟 🚀\n\n`;
+        messageTemplate += `💎 Premium Content You Don't Want to Miss!\n\n`;
+        messageTemplate += `${stars} ${rating.toFixed(1)}/5 (${reviewCount} reviews)\n\n`;
+        messageTemplate += `💰 Subscription: ${channel.subscription_price} TON\n`;
+        messageTemplate += `📅 Duration: ${channel.duration_days} days\n\n`;
+        messageTemplate += `✨ What you'll get:\n`;
+        messageTemplate += `• Exclusive content\n`;
+        messageTemplate += `• Premium access\n`;
+        messageTemplate += `• Community benefits\n\n`;
+        messageTemplate += `🔗 Subscribe Now:\n${deepLink}\n\n`;
+        messageTemplate += `#Premium #TON #Subscription`;
+        
+        // Copy to clipboard
+        try {
+            await navigator.clipboard.writeText(messageTemplate);
+            showAlert('Message copied to clipboard! Share it with your friends.');
+        } catch (e) {
+            // Fallback for browsers that don't support clipboard API
+            const textArea = document.createElement('textarea');
+            textArea.value = messageTemplate;
+            document.body.appendChild(textArea);
+            textArea.select();
+            try {
+                document.execCommand('copy');
+                showAlert('Message copied to clipboard! Share it with your friends.');
+            } catch (err) {
+                showAlert('Please copy manually:\n\n' + messageTemplate);
+            }
+            document.body.removeChild(textArea);
+        }
+        
+        TG.HapticFeedback.notificationOccurred('success');
+        
+    } catch (e) {
+        console.error('Error forwarding channel:', e);
+        showAlert('Error loading channel details');
+    }
+}
+window.forwardChannel = forwardChannel;
 
 // ================== OWNER DASHBOARD (with pagination, skeleton, groups support) ==================
 async function loadOwnerDashboard(append = false) {
