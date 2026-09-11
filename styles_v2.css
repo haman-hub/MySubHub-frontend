@@ -81,12 +81,30 @@
     inset: 0;
     z-index: 10000;
     display: flex;
-    align-items: center;
+    align-items: flex-end;
     justify-content: center;
     padding: 1rem;
-    background: rgba(0, 0, 0, 0.8);
-    backdrop-filter: blur(8px);
+    padding-bottom: 5rem;
+    background: rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(2px);
     animation: fadeIn 0.3s ease-out;
+    pointer-events: none;
+}
+
+.tutorial-overlay .tutorial-modal {
+    pointer-events: auto;
+    max-width: 28rem;
+    width: 100%;
+    margin-bottom: 2rem;
+}
+
+.tutorial-modal-center {
+    align-self: center;
+    margin-bottom: 0;
+}
+
+.tutorial-modal-bottom {
+    align-self: flex-end;
 }
 
 .tutorial-modal {
@@ -166,14 +184,22 @@
 }
 
 .tutorial-highlight {
-    animation: highlight-pulse 2s ease-in-out;
-    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.3), 0 0 20px rgba(59, 130, 246, 0.2);
+    animation: highlight-pulse 2s ease-in-out infinite;
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.5), 0 0 30px rgba(59, 130, 246, 0.4);
     border-radius: 0.75rem;
+    position: relative;
+    z-index: 9999;
 }
 
 @keyframes highlight-pulse {
-    0%, 100% { box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.3); }
-    50% { box-shadow: 0 0 0 8px rgba(59, 130, 246, 0.5), 0 0 30px rgba(59, 130, 246, 0.3); }
+    0%, 100% { 
+        box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.5), 0 0 30px rgba(59, 130, 246, 0.4);
+        transform: scale(1);
+    }
+    50% { 
+        box-shadow: 0 0 0 8px rgba(59, 130, 246, 0.7), 0 0 50px rgba(59, 130, 246, 0.5);
+        transform: scale(1.02);
+    }
 }
 
 /* ================== VERIFIED BADGES ================== */
