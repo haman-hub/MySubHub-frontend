@@ -655,6 +655,7 @@ async function loadSubscriptions(append = false) {
             const isExpired = daysLeft < 0;
             const isExpiring = daysLeft >= 0 && daysLeft <= 7;
             const isVerified = channel.is_verified;
+            const inviteLink = channel.channel_invite_link || '';
 
             const card = document.createElement('div');
             card.className = 'glass-card p-4 mb-3';
@@ -669,7 +670,8 @@ async function loadSubscriptions(append = false) {
                     </span>
                 </div>
                 <p class="text-slate-400 text-sm mb-3">Expires: ${new Date(s.end_date).toLocaleDateString()}</p>
-                <div class="flex gap-2">
+                <div class="flex gap-2 flex-wrap">
+                    ${!isExpired && inviteLink ? `<button onclick="joinChannel('${inviteLink}')" class="btn-primary px-3 py-1.5 rounded-xl text-xs text-white">📺 Open Channel</button>` : ''}
                     <button onclick="openRating('${s.channel_id}')" class="btn-secondary px-3 py-1.5 rounded-xl text-xs">⭐ Rate</button>
                     <button onclick="openReport('${s.channel_id}')" class="btn-secondary px-3 py-1.5 rounded-xl text-xs">🚩 Report</button>
                     ${isExpired ? `<button onclick="renewSubscription('${s.channel_id}')" class="btn-primary px-3 py-1.5 rounded-xl text-xs text-white">🔄 Renew</button>` : ''}
@@ -704,6 +706,29 @@ async function renewSubscription(channelId) {
     switchPage('purchase');
 }
 window.renewSubscription = renewSubscription;
+
+// Join Channel - Opens the channel/group in Telegram
+function joinChannel(inviteLink) {
+    if (!inviteLink) {
+        showAlert('Invite link not available');
+        return;
+    }
+    
+    console.log('🔵 Opening channel:', inviteLink);
+    
+    // Use Telegram WebApp API to open the link
+    if (TG.openTelegramLink) {
+        TG.openTelegramLink(inviteLink);
+        console.log('✅ Opened channel via Telegram WebApp');
+    } else {
+        // Fallback: open in new tab
+        window.open(inviteLink, '_blank');
+        console.log('✅ Opened channel in new tab');
+    }
+    
+    TG.HapticFeedback.impactOccurred('light');
+}
+window.joinChannel = joinChannel;
 
 // ================== FORWARD CHANNEL ==================
 async function forwardChannel(channelId) {
