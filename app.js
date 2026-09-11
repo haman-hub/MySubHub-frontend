@@ -558,6 +558,14 @@ async function init() {
             switchPage('owner');
         } else if (startParam === 'admin' && isAdmin) {
             switchPage('admin');
+        } else if (startParam === 'help-subscriber') {
+            // Redirect to subscriber help page
+            window.location.href = 'help-subscriber.html';
+            return;
+        } else if (startParam === 'help-owner') {
+            // Redirect to owner help page
+            window.location.href = 'help-owner.html';
+            return;
         } else {
             switchPage('subscriptions');
         }
