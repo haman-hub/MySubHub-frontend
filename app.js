@@ -1226,5 +1226,125 @@ window.closeLanguageModal = closeLanguageModal;
 window.selectLanguage = selectLanguage;
 window.toggleTheme = toggleTheme;
 
+// ================== REFERRAL SYSTEM ==================
+async function loadReferralDashboard() {
+    const container = document.getElementById('referral-dashboard');
+    if (!container) return;
+    
+    showSkeleton('referral-dashboard', 'card', 1);
+    
+    try {
+        const stats = await apiFetch('/api/referrals/stats', { method: 'GET' });
+        
+        if (stats.error) {
+            container.innerHTML = `<p class="text-red-400 text-center py-6">${stats.error}</p>`;
+            return;
+        }
+        
+        const referralLink = stats.referralLink || '';
+        const totalReferrals = stats.totalReferrals || 0;
+        const totalCreditsEarned = stats.totalCreditsEarned || 0;
+        const currentBalance = stats.currentBalance || 0;
+        const totalUsed = stats.totalUsed || 0;
+        
+        container.innerHTML = `
+            <div class="glass-card p-6 mb-4">
+                <h3 class="text-xl font-bold text-white mb-4">🎁 Your Referral Program</h3>
+                
+                <div class="grid grid-cols-2 gap-4 mb-6">
+                    <div class="bg-slate-800/50 rounded-xl p-4">
+                        <p class="text-slate-400 text-xs mb-1">Current Balance</p>
+                        <p class="text-2xl font-bold text-emerald-400">${currentBalance.toFixed(4)} TON</p>
+                    </div>
+                    <div class="bg-slate-800/50 rounded-xl p-4">
+                        <p class="text-slate-400 text-xs mb-1">Total Referrals</p>
+                        <p class="text-2xl font-bold text-blue-400">${totalReferrals}</p>
+                    </div>
+                    <div class="bg-slate-800/50 rounded-xl p-4">
+                        <p class="text-slate-400 text-xs mb-1">Total Earned</p>
+                        <p class="text-lg font-bold text-white">${totalCreditsEarned.toFixed(4)} TON</p>
+                    </div>
+                    <div class="bg-slate-800/50 rounded-xl p-4">
+                        <p class="text-slate-400 text-xs mb-1">Total Used</p>
+                        <p class="text-lg font-bold text-white">${totalUsed.toFixed(4)} TON</p>
+                    </div>
+                </div>
+                
+                <div class="bg-gradient-to-r from-blue-600/20 to-purple-600/20 border border-blue-500/30 rounded-xl p-4 mb-4">
+                    <p class="text-sm text-slate-300 mb-2">🔗 Your Referral Link</p>
+                    <div class="flex gap-2">
+                        <input type="text" id="referral-link" value="${referralLink}" 
+                            class="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white" readonly>
+                        <button onclick="copyReferralLink()" class="btn-primary px-4 py-2 rounded-lg text-sm">
+                            📋 Copy
+                        </button>
+                    </div>
+                    <p class="text-xs text-slate-400 mt-2">
+                        Earn 5% credits on every subscription made through your link!
+                    </p>
+                </div>
+                
+                <button onclick="shareReferralLink()" class="btn-primary w-full py-3 rounded-xl text-sm font-semibold">
+                    📤 Share Referral Link
+                </button>
+            </div>
+            
+            <div class="glass-card p-6">
+                <h4 class="text-lg font-bold text-white mb-4">📊 Recent Referrals</h4>
+                ${stats.referrals && stats.referrals.length > 0 ? `
+                    <div class="space-y-2">
+                        ${stats.referrals.slice(0, 5).map(ref => `
+                            <div class="bg-slate-800/50 rounded-lg p-3 flex justify-between items-center">
+                                <div>
+                                    <p class="text-sm text-white">User #${ref.referred_id}</p>
+                                    <p class="text-xs text-slate-400">${new Date(ref.created_at).toLocaleDateString()}</p>
+                                </div>
+                                <div class="text-right">
+                                    <p class="text-sm font-bold text-emerald-400">+${parseFloat(ref.credits_earned).toFixed(4)} TON</p>
+                                    <p class="text-xs text-slate-400">${ref.subscription_amount.toFixed(4)} TON sub</p>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                ` : `
+                    <p class="text-slate-400 text-center py-4">No referrals yet. Share your link to start earning!</p>
+                `}
+            </div>
+        `;
+    } catch (e) {
+        console.error('Error loading referral dashboard:', e);
+        container.innerHTML = '<p class="text-red-400 text-center py-6">Failed to load referral data</p>';
+    }
+}
+window.loadReferralDashboard = loadReferralDashboard;
+
+function copyReferralLink() {
+    const input = document.getElementById('referral-link');
+    if (input) {
+        input.select();
+        document.execCommand('copy');
+        showAlert('✅ Referral link copied!');
+        TG.HapticFeedback.notificationOccurred('success');
+    }
+}
+window.copyReferralLink = copyReferralLink;
+
+async function shareReferralLink() {
+    const input = document.getElementById('referral-link');
+    if (!input) return;
+    
+    const link = input.value;
+    const message = `🎁 Join MySubHub and subscribe to premium Telegram channels!\n\nUse my referral link to get started:\n${link}\n\nWhen you subscribe, I'll earn 5% credits and you'll get access to amazing content! 🚀`;
+    
+    try {
+        await navigator.clipboard.writeText(message);
+        showAlert('✅ Referral message copied! Share it with your friends.');
+        TG.HapticFeedback.notificationOccurred('success');
+    } catch (e) {
+        showAlert('📋 Copy this message:\n\n' + message);
+    }
+}
+window.shareReferralLink = shareReferralLink;
+
 // ================== START ==================
 window.onload = init;
