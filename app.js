@@ -477,22 +477,20 @@ async function loadSubscriptions() {
             const isExpired = daysLeft < 0;
             const isExpiring = daysLeft >= 0 && daysLeft <= 7;
 
-            return `
-                <div class="glass-card p-4">
-                    <div class="flex justify-between items-start mb-2">
-                        <h3 class="font-semibold text-white">${channel.channel_name || 'Unknown'}</h3>
-                        <span class="badge ${isExpired ? 'bg-red-500/10 text-red-400 border border-red-500/30' : isExpiring ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'}">
-                            ${isExpired ? 'Expired' : isExpiring ? `⚠️ ${daysLeft}d` : 'Active'}
-                        </span>
-                    </div>
-                    <p class="text-slate-400 text-sm mb-3">Expires: ${new Date(s.end_date).toLocaleDateString()}</p>
-                    <div class="flex gap-2">
-                        <button onclick="openRating('${s.channel_id}')" class="btn-secondary px-3 py-1.5 rounded-xl text-xs text-slate-300">⭐ Rate</button>
-                        <button onclick="openReport('${s.channel_id}')" class="btn-secondary px-3 py-1.5 rounded-xl text-xs text-slate-300">🚩 Report</button>
-                        ${isExpired ? `<button onclick="renewSubscription('${s.channel_id}')" class="btn-primary px-3 py-1.5 rounded-xl text-xs text-white">🔄 Renew</button>` : ''}
-                    </div>
-                </div>
-            `;
+            return '<div class="glass-card p-4 mb-3">' +
+                '<div class="flex justify-between items-start mb-2">' +
+                    '<h3 class="font-semibold text-white">' + (channel.channel_name || 'Unknown') + '</h3>' +
+                    '<span class="badge ' + (isExpired ? 'bg-red-500/10 text-red-400 border border-red-500/30' : isExpiring ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30') + '">' +
+                        (isExpired ? 'Expired' : isExpiring ? '⚠️ ' + daysLeft + 'd' : 'Active') +
+                    '</span>' +
+                '</div>' +
+                '<p class="text-slate-400 text-sm mb-3">Expires: ' + new Date(s.end_date).toLocaleDateString() + '</p>' +
+                '<div class="flex gap-2">' +
+                    '<button onclick="openRating(\'' + s.channel_id + '\')" class="btn-secondary px-3 py-1.5 rounded-xl text-xs text-slate-300">⭐ Rate</button>' +
+                    '<button onclick="openReport(\'' + s.channel_id + '\')" class="btn-secondary px-3 py-1.5 rounded-xl text-xs text-slate-300">🚩 Report</button>' +
+                    (isExpired ? '<button onclick="renewSubscription(\'' + s.channel_id + '\')" class="btn-primary px-3 py-1.5 rounded-xl text-xs text-white">🔄 Renew</button>' : '') +
+                '</div>' +
+            '</div>';
         }).join('');
     } catch (e) {
         console.error('Error loading subscriptions:', e);
@@ -517,24 +515,25 @@ async function loadOwnerDashboard() {
             return;
         }
 
-        container.innerHTML = channels.map(ch => `
-            <div class="glass-card p-4">
-                <div class="flex justify-between items-start">
-                    <div>
-                        <h3 class="font-semibold text-white">${ch.channel_name}</h3>
-                        <p class="text-slate-400 text-sm">${ch.subscription_price} TON / ${ch.duration_days} days</p>
-                    </div>
-                    <label class="flex items-center gap-2 text-xs">
-                        Active: <input type="checkbox" ${ch.is_active ? 'checked' : ''} onchange="toggleChannel('${ch.id}', this.checked)" class="accent-blue-500">
-                    </label>
-                </div>
-                <div class="flex gap-4 mt-3">
-                    <button onclick="openEditModal('${ch.id}')" class="text-blue-400 text-xs">Edit</button>
-                    <button onclick="copyDeepLink('${ch.id}')" class="text-blue-400 text-xs">Copy Link</button>
-                    <button onclick="forwardChannel('${ch.id}')" class="text-green-400 text-xs">📤 Forward</button>
-                </div>
-            </div>
-        `).join('');
+        container.innerHTML = channels.map(ch => {
+            return '<div class="glass-card p-4 mb-3">' +
+                '<div class="flex justify-between items-start mb-2">' +
+                    '<div class="flex-1">' +
+                        '<h3 class="font-semibold text-white text-base">' + ch.channel_name + '</h3>' +
+                        '<p class="text-slate-400 text-xs mt-1">' + ch.subscription_price + ' TON / ' + ch.duration_days + ' days</p>' +
+                    '</div>' +
+                    '<label class="flex items-center gap-2 text-xs ml-3">' +
+                        '<span class="text-slate-300">Active</span>' +
+                        '<input type="checkbox" ' + (ch.is_active ? 'checked' : '') + ' onchange="toggleChannel(\'' + ch.id + '\', this.checked)" class="w-4 h-4 accent-blue-500 cursor-pointer">' +
+                    '</label>' +
+                '</div>' +
+                '<div class="flex gap-3 pt-2 border-t border-slate-700/50">' +
+                    '<button onclick="openEditModal(\'' + ch.id + '\')" class="text-blue-400 hover:text-blue-300 text-xs transition">Edit</button>' +
+                    '<button onclick="copyDeepLink(\'' + ch.id + '\')" class="text-blue-400 hover:text-blue-300 text-xs transition">Copy Link</button>' +
+                    '<button onclick="forwardChannel(\'' + ch.id + '\')" class="text-green-400 hover:text-green-300 text-xs transition">📤 Forward</button>' +
+                '</div>' +
+            '</div>';
+        }).join('');
 
         loadWithdrawalSection();
     } catch (e) {
@@ -796,11 +795,9 @@ window.toggleChannel = toggleChannel;
 async function loadWithdrawalSection() {
     const data = await apiFetch('/api/withdrawals/my');
     const section = document.getElementById('withdrawal-section');
-    section.innerHTML = `
-        <h3 class="text-lg font-semibold text-white mb-2">Earnings</h3>
-        <p class="text-slate-400">Pending: <strong class="text-white">${(data.pendingEarnings || 0).toFixed(6)} TON</strong></p>
-        <button onclick="requestWithdrawal()" class="btn-primary mt-3 text-white px-4 py-2 rounded-xl text-sm">Request Withdrawal</button>
-    `;
+    section.innerHTML = '<h3 class="text-lg font-semibold text-white mb-2">Earnings</h3>' +
+        '<p class="text-slate-400">Pending: <strong class="text-white">' + (data.pendingEarnings || 0).toFixed(6) + ' TON</strong></p>' +
+        '<button onclick="requestWithdrawal()" class="btn-primary mt-3 text-white px-4 py-2 rounded-xl text-sm">Request Withdrawal</button>';
 }
 
 async function requestWithdrawal() {
