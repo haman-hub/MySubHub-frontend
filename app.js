@@ -68,7 +68,10 @@ function showCustomModal(title, message, type = 'alert', callback = null) {
     if (type === 'prompt') {
         setTimeout(() => {
             const input = document.getElementById('custom-prompt-input');
-            if (input) input.focus();
+            if (input) {
+                input.focus();
+                if (defaultValue) input.value = defaultValue;
+            }
         }, 100);
     }
 }
@@ -546,10 +549,13 @@ async function openEditModal(channelId) {
     editingChannelId = channelId;
     const data = await apiFetch(`/api/channels/${channelId}`, { method: 'GET' });
     if (data && !data.error) {
-        document.getElementById('edit-price').value = data.subscription_price;
-        document.getElementById('edit-duration').value = data.duration_days;
+        const priceInput = document.getElementById('edit-price');
+        const durationInput = document.getElementById('edit-duration');
+        if (priceInput) priceInput.value = data.subscription_price;
+        if (durationInput) durationInput.value = data.duration_days;
     }
-    document.getElementById('edit-modal').classList.remove('hidden');
+    const editModal = document.getElementById('edit-modal');
+    if (editModal) editModal.classList.remove('hidden');
 }
 
 window.openEditModal = openEditModal;
@@ -586,7 +592,7 @@ function openAddChannelModal() {
     const priceInput = document.getElementById('add-channel-price');
     const durationInput = document.getElementById('add-channel-duration');
     const activeInput = document.getElementById('add-channel-active');
-
+    
     if (nameInput) nameInput.value = '';
     if (linkInput) linkInput.value = '';
     if (priceInput) priceInput.value = '0.1';
@@ -604,7 +610,7 @@ async function submitAddChannel() {
     const priceInput = document.getElementById('add-channel-price');
     const durationInput = document.getElementById('add-channel-duration');
     const activeInput = document.getElementById('add-channel-active');
-
+    
     const channel_name = nameInput ? nameInput.value.trim() : '';
     const channel_invite_link = linkInput ? linkInput.value.trim() : '';
     const subscription_price = priceInput ? parseFloat(priceInput.value) : 0.1;
@@ -704,7 +710,8 @@ function showForwardModal(channel, messageTemplate, deepLink) {
     updateForwardPreview(messageTemplate, channel);
     
     // Set initial message
-    document.getElementById('forward-message').value = messageTemplate;
+    const messageInput = document.getElementById('forward-message');
+    if (messageInput) messageInput.value = messageTemplate;
     
     // Add input listener for live preview
     document.getElementById('forward-message').oninput = (e) => {
