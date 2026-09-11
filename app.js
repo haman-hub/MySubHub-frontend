@@ -563,8 +563,19 @@ async function init() {
         }
         
         // Start tutorial for new users
+        console.log('🔵 Tutorial check:', { tutorialCompleted, currentUser: !!currentUser });
         if (!tutorialCompleted && currentUser) {
-            setTimeout(() => startTutorial(), 1000);
+            console.log('✅ Starting tutorial...');
+            setTimeout(() => {
+                console.log('🚀 Tutorial timeout fired, calling startTutorial()');
+                startTutorial();
+            }, 1000);
+        } else {
+            console.log('⚠️ Tutorial will not start:', { 
+                tutorialCompleted, 
+                hasUser: !!currentUser,
+                reason: tutorialCompleted ? 'Already completed' : !currentUser ? 'No user' : 'Unknown'
+            });
         }
         
         // Add swipe gestures to main container
@@ -688,17 +699,23 @@ window.renewSubscription = renewSubscription;
 
 // ================== FORWARD CHANNEL ==================
 async function forwardChannel(channelId) {
+    console.log('🔵 Forward channel called with ID:', channelId);
+    
     try {
-        // Fetch channel details with rating
+        // Get channel data directly from the API
         const channel = await apiFetch(`/api/channels/${channelId}`, { method: 'GET' });
+        console.log('🔵 Channel data:', channel);
         
         if (!channel || channel.error) {
-            showAlert('Channel not found');
+            console.error('❌ Channel not found or error:', channel);
+            showAlert('❌ Channel not found');
             return;
         }
         
+        console.log('✅ Found channel:', channel.channel_name);
+        
         const deepLink = `https://t.me/MySubsHub_bot?start=${channelId}`;
-        const rating = channel.avg_rating || 0;
+        const rating = parseFloat(channel.avg_rating) || 0;
         const reviewCount = channel.total_reviews || 0;
         
         // Generate stars display
@@ -717,21 +734,29 @@ async function forwardChannel(channelId) {
         messageTemplate += `🔗 Subscribe Now:\n${deepLink}\n\n`;
         messageTemplate += `#Premium #TON #Subscription`;
         
+        console.log('✅ Generated message template');
+        
         // Copy to clipboard
         try {
             await navigator.clipboard.writeText(messageTemplate);
-            showAlert('Message copied to clipboard! Share it with your friends.');
+            showAlert('✅ Message copied to clipboard! Share it with your friends.');
+            console.log('✅ Copied to clipboard');
         } catch (e) {
+            console.warn('⚠️ Clipboard API failed, using fallback');
             // Fallback for browsers that don't support clipboard API
             const textArea = document.createElement('textarea');
             textArea.value = messageTemplate;
+            textArea.style.position = 'fixed';
+            textArea.style.left = '-999999px';
             document.body.appendChild(textArea);
             textArea.select();
             try {
                 document.execCommand('copy');
-                showAlert('Message copied to clipboard! Share it with your friends.');
+                showAlert('✅ Message copied to clipboard! Share it with your friends.');
+                console.log('✅ Copied via fallback');
             } catch (err) {
-                showAlert('Please copy manually:\n\n' + messageTemplate);
+                console.error('❌ Fallback also failed');
+                showAlert('📋 Please copy manually:\n\n' + messageTemplate);
             }
             document.body.removeChild(textArea);
         }
@@ -739,8 +764,8 @@ async function forwardChannel(channelId) {
         TG.HapticFeedback.notificationOccurred('success');
         
     } catch (e) {
-        console.error('Error forwarding channel:', e);
-        showAlert('Error loading channel details');
+        console.error('❌ Error forwarding channel:', e);
+        showAlert('❌ Error: ' + e.message);
     }
 }
 window.forwardChannel = forwardChannel;
