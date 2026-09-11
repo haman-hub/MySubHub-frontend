@@ -1,610 +1,123 @@
-
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>TON Subscriptions</title>
-  <meta name="description" content="Telegram Mini App and web dashboard for managing paid channel subscriptions on the TON blockchain.">
-  <meta property="og:title" content="TON Subscriptions">
-  <meta property="og:description" content="Telegram Mini App and web dashboard for managing paid channel subscriptions on the TON blockchain.">
-  <link rel="stylesheet" href="styles_v2.css">
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      darkMode: 'class',
-      theme: {
-        extend: {
-          colors: {
-            ton: {
-              50: '#f0f7ff',
-              100: '#e0effe',
-              200: '#bae0fd',
-              300: '#7cc7fb',
-              400: '#38aaf6',
-              500: '#0088cc',
-              600: '#0070ab',
-              700: '#005a8b',
-              800: '#044c74',
-              900: '#0a3f61',
-              950: '#072840',
-            }
-          },
-          fontFamily: {
-            sans: ['"Plus Jakarta Sans"', 'Inter', 'system-ui', 'sans-serif'],
-            mono: ['"JetBrains Mono"', 'monospace']
-          },
-          animation: {
-            'pulse-subtle': 'pulseSubtle 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-            'float': 'float 6s ease-in-out infinite',
-          },
-          keyframes: {
-            pulseSubtle: {
-              '0%, 100%': { opacity: 1 },
-              '50%': { opacity: 0.7 },
-            },
-            float: {
-              '0%, 100%': { transform: 'translateY(0px)' },
-              '50%': { transform: 'translateY(-6px)' },
-            }
-          }
-        }
-      }
-    }
-  </script>
-
-  <!-- Telegram WebApp SDK -->
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <!-- TON Connect UI -->
-  <script src="https://cdn.jsdelivr.net/npm/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
-  <!-- REMOVED: Supabase SDK — no longer needed, all queries go through backend API -->
-  <!-- Lucide icons -->
-  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
-
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-
-  <style>
-    * {
-      font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
-      box-sizing: border-box;
-      -webkit-tap-highlight-color: transparent;
-    }
-    .font-mono {
-      font-family: 'JetBrains Mono', monospace;
-    }
-
-    body {
-      background-color: #040711;
-      background-image:
-        radial-gradient(ellipse 80% 50% at 50% -20%, rgba(0, 136, 204, 0.22), transparent 70%),
-        radial-gradient(ellipse 60% 40% at 100% 10%, rgba(56, 170, 246, 0.12), transparent 60%),
-        radial-gradient(ellipse 50% 50% at 0% 100%, rgba(16, 185, 129, 0.08), transparent 60%),
-        radial-gradient(ellipse 60% 30% at 50% 100%, rgba(0, 136, 204, 0.1), transparent 70%);
-      background-attachment: fixed;
-      min-height: 100vh;
-      margin: 0;
-      color: #f1f5f9;
-      padding-bottom: env(safe-area-inset-bottom, 24px);
-    }
-
-    .ambient-glow {
-      position: fixed;
-      width: 320px;
-      height: 320px;
-      border-radius: 50%;
-      filter: blur(90px);
-      pointer-events: none;
-      z-index: 0;
-      opacity: 0.45;
-    }
-    .ambient-glow-1 {
-      top: -60px;
-      left: 10%;
-      background: rgba(0, 136, 204, 0.25);
-    }
-    .ambient-glow-2 {
-      bottom: 80px;
-      right: 5%;
-      background: rgba(16, 185, 129, 0.15);
-    }
-
-    .glass-card {
-      background: rgba(11, 16, 28, 0.72);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 1.25rem;
-      box-shadow: 0 12px 36px -8px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.03) inset;
-      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-    }
-    .glass-card:hover {
-      border-color: rgba(0, 136, 204, 0.35);
-      box-shadow: 0 16px 48px -10px rgba(0, 136, 204, 0.18), 0 0 0 1px rgba(0, 136, 204, 0.15) inset;
-      transform: translateY(-1px);
-    }
-
-    .glass-topbar {
-      background: rgba(6, 10, 20, 0.88);
-      backdrop-filter: blur(24px);
-      -webkit-backdrop-filter: blur(24px);
-      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-    }
-
-    .glass-tabbar {
-      background: rgba(6, 10, 20, 0.94);
-      backdrop-filter: blur(28px);
-      -webkit-backdrop-filter: blur(28px);
-      border-top: 1px solid rgba(255, 255, 255, 0.08);
-      box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.02) inset;
-    }
-
-    .btn-primary {
-      background: linear-gradient(135deg, #0098ea 0%, #0077b5 100%);
-      box-shadow: 0 4px 18px 0 rgba(0, 152, 234, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2);
-      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-      cursor: pointer;
-    }
-    .btn-primary:hover {
-      background: linear-gradient(135deg, #1cb0ff 0%, #0088cc 100%);
-      box-shadow: 0 6px 24px 0 rgba(0, 152, 234, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.3);
-      transform: translateY(-1px);
-    }
-    .btn-primary:active {
-      transform: scale(0.98);
-      box-shadow: 0 2px 10px 0 rgba(0, 152, 234, 0.3);
-    }
-
-    .btn-secondary {
-      background: rgba(20, 28, 48, 0.8);
-      border: 1px solid rgba(255, 255, 255, 0.09);
-      transition: all 0.2s ease;
-      cursor: pointer;
-    }
-    .btn-secondary:hover {
-      background: rgba(28, 39, 66, 0.95);
-      border-color: rgba(255, 255, 255, 0.2);
-      color: #ffffff;
-    }
-    .btn-secondary:active {
-      transform: scale(0.98);
-    }
-
-    .input-dark {
-      background: rgba(5, 9, 18, 0.85);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      transition: all 0.2s ease;
-    }
-    .input-dark:focus {
-      border-color: #0098ea;
-      box-shadow: 0 0 0 3px rgba(0, 152, 234, 0.25);
-      outline: none;
-    }
-
-    .gradient-text {
-      background: linear-gradient(135deg, #38aaf6 0%, #60a5fa 50%, #a855f7 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-    }
-
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      padding: 0.25rem 0.65rem;
-      border-radius: 9999px;
-      font-size: 0.7rem;
-      font-weight: 700;
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
-    }
-
-    .status-dot {
-      display: inline-block;
-      width: 7px;
-      height: 7px;
-      border-radius: 9999px;
-    }
-
-    .hidden-page { display: none !important; }
-
-    .tab-btn {
-      position: relative;
-      cursor: pointer;
-      user-select: none;
-      -webkit-user-select: none;
-      touch-action: manipulation;
-    }
-    .tab-btn:active {
-      transform: scale(0.95);
-    }
-
-    .modal-backdrop {
-      animation: fadeIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-    }
-    .modal-content {
-      animation: scaleUp 0.26s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-    }
-    @keyframes fadeIn {
-      from { opacity: 0; }
-      to { opacity: 1; }
-    }
-    @keyframes scaleUp {
-      from { opacity: 0; transform: scale(0.94) translateY(12px); }
-      to { opacity: 1; transform: scale(1) translateY(0); }
-    }
-
-    ::-webkit-scrollbar {
-      width: 5px;
-      height: 5px;
-    }
-    ::-webkit-scrollbar-track {
-      background: rgba(0, 0, 0, 0.2);
-    }
-    ::-webkit-scrollbar-thumb {
-      background: rgba(255, 255, 255, 0.12);
-      border-radius: 9999px;
-    }
-    ::-webkit-scrollbar-thumb:hover {
-      background: rgba(255, 255, 255, 0.25);
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MySubHub - Premium Channel Subscriptions</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="styles_v2.css">
 </head>
-<body class="antialiased selection:bg-blue-500/30 selection:text-blue-200">
-
-  <div class="ambient-glow ambient-glow-1"></div>
-  <div class="ambient-glow ambient-glow-2"></div>
-
-  <!-- Top Header Bar -->
-  <header class="sticky top-0 z-40 glass-topbar px-4 py-3">
-    <div class="flex items-center justify-between max-w-2xl mx-auto">
-      <div class="flex items-center gap-2.5 cursor-pointer select-none" onclick="switchPage('subscriptions')">
-        <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-ton-600 to-ton-400 p-0.5 shadow-lg shadow-ton-500/30 ring-1 ring-white/20 flex-shrink-0">
-          <div class="w-full h-full bg-slate-950/40 rounded-[14px] flex items-center justify-center backdrop-blur-sm">
-            <svg class="w-5 h-5 text-white drop-shadow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
-            </svg>
-          </div>
+<body class="bg-slate-900 text-white">
+    <!-- Navigation Bar -->
+    <nav id="nav-bar" class="fixed bottom-0 left-0 right-0 bg-slate-800 border-t border-slate-700 z-50">
+        <div class="flex justify-around items-center py-2">
+            <button id="nav-subscriptions" onclick="switchPage('subscriptions')" class="tab-btn flex flex-col items-center gap-1 px-4 py-2">
+                <div class="tab-icon-box">📋</div>
+                <span class="text-xs">Subscriptions</span>
+            </button>
+            <button id="nav-channels" onclick="switchPage('channels')" class="tab-btn flex flex-col items-center gap-1 px-4 py-2">
+                <div class="tab-icon-box">📺</div>
+                <span class="text-xs">My Channels</span>
+            </button>
+            <button id="nav-referrals" onclick="switchPage('referrals')" class="tab-btn flex flex-col items-center gap-1 px-4 py-2">
+                <div class="tab-icon-box">🎁</div>
+                <span class="text-xs">Referrals</span>
+            </button>
+            <button id="nav-admin" onclick="switchPage('admin')" class="tab-btn flex flex-col items-center gap-1 px-4 py-2 hidden">
+                <div class="tab-icon-box">⚙️</div>
+                <span class="text-xs">Admin</span>
+            </button>
         </div>
-        <div>
-          <div class="flex items-center gap-1.5">
-            <h1 class="text-base font-extrabold text-white tracking-tight leading-none">
-              <span>TON</span><span class="gradient-text ml-0.5">Subs</span>
-            </h1>
-            <span class="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-ton-500/15 text-ton-300 border border-ton-500/25 tracking-wider uppercase">Hub</span>
-          </div>
-          <div class="flex items-center gap-1.5 mt-1">
-            <span class="status-dot bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)] animate-pulse"></span>
-            <!-- FIXED: Network label is now dynamic, set by JavaScript after backend responds -->
-            <span class="text-[10px] font-semibold text-slate-400 tracking-tight" data-i18n="footer.ton_network">TON Network</span>
-          </div>
-        </div>
-      </div>
+    </nav>
 
-      <div class="flex items-center gap-2">
-        <div id="ton-connect-button" class="flex-shrink-0 scale-90 sm:scale-100 origin-right"></div>
-        <button id="btn-language" onclick="openLanguageModal()" class="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-900/90 border border-slate-800 hover:border-slate-700 hover:bg-slate-800 active:scale-95 transition-all text-slate-300 hover:text-white shadow-sm flex-shrink-0" title="Change Language">
-          <svg class="w-4 h-4 text-ton-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="10"></circle>
-            <line x1="2" y1="12" x2="22" y2="12"></line>
-            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
-          </svg>
-        </button>
-        <button id="theme-toggle" onclick="toggleTheme()" title="Toggle theme">☀️</button>
-      </div>
-    </div>
-  </header>
-
-  <main class="container mx-auto px-4 pt-5 pb-28 max-w-2xl min-h-[calc(100vh-140px)] relative z-10">
-
-    <!-- Purchase Page -->
-    <section id="page-purchase" class="hidden-page" style="display:none;">
-      <div id="purchase-card" class="glass-card p-6 sm:p-8 max-w-md mx-auto relative overflow-hidden"></div>
-    </section>
-
-    <!-- Subscriptions Page -->
-    <section id="page-subscriptions" class="hidden-page" style="display:none;">
-      <div class="glass-card p-5 mb-5 relative overflow-hidden border border-slate-800/90">
-        <div class="flex items-center justify-between">
-          <div>
-            <span class="text-[11px] font-bold text-ton-400 uppercase tracking-wider block mb-1">Telegram Mini App</span>
-            <h2 class="text-xl font-extrabold text-white tracking-tight" data-i18n="nav.subscriptions">My Subscriptions</h2>
-          </div>
-          <div class="w-10 h-10 rounded-xl bg-ton-500/10 border border-ton-500/20 flex items-center justify-center text-ton-400 shadow-inner flex-shrink-0">
-            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/>
-              <path d="m22 12.5-8.58 3.91a2 2 0 0 1-1.66 0L2 12.5"/>
-              <path d="m22 17.5-8.58 3.91a2 2 0 0 1-1.66 0L2 17.5"/>
-            </svg>
-          </div>
-        </div>
-
-        <div class="grid grid-cols-3 gap-2 mt-4 pt-4 border-t border-slate-800/80">
-          <div class="bg-slate-900/60 p-2.5 sm:p-3 rounded-xl border border-slate-800/60 text-center flex flex-col justify-between">
-            <span class="text-[10px] sm:text-[11px] font-semibold text-slate-400 uppercase tracking-wider block leading-tight break-words" data-i18n="subscriptions.status.active">Active</span>
-            <p id="stat-active" class="text-xl font-bold text-white font-mono mt-1">0</p>
-          </div>
-          <div class="bg-slate-900/60 p-2.5 sm:p-3 rounded-xl border border-slate-800/60 text-center flex flex-col justify-between">
-            <span class="text-[10px] sm:text-[11px] font-semibold text-slate-400 uppercase tracking-wider block leading-tight break-words" data-i18n="subscriptions.expires">Expiring</span>
-            <p id="stat-expiring" class="text-xl font-bold text-amber-400 font-mono mt-1">0</p>
-          </div>
-          <div class="bg-slate-900/60 p-2.5 sm:p-3 rounded-xl border border-slate-800/60 text-center flex flex-col justify-between">
-            <span class="text-[10px] sm:text-[11px] font-semibold text-slate-400 uppercase tracking-wider block leading-tight break-words">Spent</span>
-            <p id="stat-spent" class="text-xl font-bold text-ton-300 font-mono mt-1">0.00</p>
-          </div>
-        </div>
-      </div>
-
-      <div id="subscriptions-list" class="space-y-3"></div>
-    </section>
-
-    <!-- Owner Dashboard -->
-    <section id="page-owner" class="hidden-page" style="display:none;">
-      <div class="glass-card p-5 mb-5 relative overflow-hidden border border-slate-800/90">
-        <div class="flex items-center justify-between">
-          <div>
-            <span class="text-[11px] font-bold text-emerald-400 uppercase tracking-wider block mb-1">Channel Creator Studio</span>
-            <h2 class="text-xl font-extrabold text-white tracking-tight" data-i18n="owner.your_channels">Your Channels</h2>
-          </div>
-          <button onclick="openAddChannelModal()" class="btn-primary text-white px-3.5 py-2 rounded-xl text-xs font-bold tracking-wide flex items-center gap-1.5 shadow-md">
-            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <line x1="12" y1="5" x2="12" y2="19"></line>
-              <line x1="5" y1="12" x2="19" y2="12"></line>
-            </svg>
-            <span data-i18n="owner.add_channel">Add Channel</span>
-          </button>
-        </div>
-      </div>
-
-      <div id="channels-list" class="space-y-3 mb-5"></div>
-      <div id="wallet-section" class="glass-card p-5 mb-5 border border-slate-800/90" style="display: none;"></div>
-<div id="withdrawal-section" class="glass-card p-5 border border-slate-800/90" style="display: none;"></div>
-
-    </section>
-
-    <!-- Admin Dashboard -->
-    <section id="page-admin" class="hidden-page" style="display:none;">
-      <div class="space-y-5">
-        <div class="glass-card p-5 border border-slate-800/90">
-          <div class="flex items-center gap-2 mb-3">
-            <div class="w-8 h-8 rounded-lg bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 flex-shrink-0">
-              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-                <line x1="12" y1="9" x2="12" y2="13"/>
-                <line x1="12" y1="17" x2="12.01" y2="17"/>
-              </svg>
+    <!-- Main Content -->
+    <main class="pb-20">
+        <!-- Subscriptions Page -->
+        <section id="page-subscriptions" class="hidden-page">
+            <div class="container mx-auto px-4 py-6">
+                <h2 class="text-2xl font-bold mb-4">My Subscriptions</h2>
+                <div id="subscriptions-list"></div>
             </div>
-            <h2 class="text-lg font-bold text-white" data-i18n="admin.reports">Reported Channels</h2>
-          </div>
-          <div id="admin-reports" class="space-y-3 mt-4"></div>
-        </div>
+        </section>
 
-        <div class="glass-card p-5 border border-slate-800/90">
-          <div class="flex items-center gap-2 mb-3">
-            <div class="w-8 h-8 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 flex-shrink-0">
-              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="10"></circle>
-                <polyline points="8 12 12 16 16 12"></polyline>
-                <line x1="12" y1="8" x2="12" y2="16"></line>
-              </svg>
+        <!-- Channels Page -->
+        <section id="page-channels" class="hidden-page">
+            <div class="container mx-auto px-4 py-6">
+                <h2 class="text-2xl font-bold mb-4">My Channels</h2>
+                <div id="channels-list"></div>
             </div>
-            <h2 class="text-lg font-bold text-white" data-i18n="admin.withdrawals">Pending Withdrawals</h2>
-          </div>
-          <div id="admin-withdrawals" class="space-y-3 mt-4"></div>
-        </div>
-      </div>
-    </section>
+        </section>
 
-  </main>
-
-  <!-- Bottom Navigation Bar -->
-  <nav id="nav-bar" class="fixed bottom-0 inset-x-0 z-40 glass-tabbar px-3 py-2 flex items-center justify-center hidden">
-    <div class="w-full max-w-md mx-auto flex items-center justify-around gap-1">
-      <button id="nav-subscriptions" onclick="switchPage('subscriptions')" class="tab-btn flex-1 flex flex-col items-center justify-center py-1.5 px-2 rounded-2xl text-ton-400 group transition-all duration-200">
-        <div class="tab-icon-box w-10 h-8 flex items-center justify-center rounded-xl bg-ton-500/20 text-ton-400 border border-ton-500/30 transition-all duration-200">
-          <svg class="w-5 h-5 transition-transform duration-200 group-hover:scale-110" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/>
-            <path d="m22 12.5-8.58 3.91a2 2 0 0 1-1.66 0L2 12.5"/>
-            <path d="m22 17.5-8.58 3.91a2 2 0 0 1-1.66 0L2 17.5"/>
-          </svg>
-        </div>
-        <span class="text-[11px] font-bold tracking-tight mt-1 leading-tight truncate max-w-full" data-i18n="nav.subscriptions">My Subs</span>
-        <div class="tab-indicator w-5 h-0.5 rounded-full bg-ton-400 mt-1 transition-all duration-200 opacity-100 scale-x-100"></div>
-      </button>
-
-      <button id="nav-owner" onclick="switchPage('owner')" class="tab-btn flex-1 flex flex-col items-center justify-center py-1.5 px-2 rounded-2xl text-slate-400 group transition-all duration-200" style="display:none;">
-        <div class="tab-icon-box w-10 h-8 flex items-center justify-center rounded-xl bg-transparent text-slate-400 border border-transparent transition-all duration-200">
-          <svg class="w-5 h-5 transition-transform duration-200 group-hover:scale-110" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/>
-            <path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"/>
-            <circle cx="12" cy="12" r="2"/>
-            <path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"/>
-            <path d="M19.1 4.9C23 8.8 23 15.1 19.1 19"/>
-          </svg>
-        </div>
-        <span class="text-[11px] font-bold tracking-tight mt-1 leading-tight truncate max-w-full" data-i18n="nav.owner">My Channels</span>
-        <div class="tab-indicator w-5 h-0.5 rounded-full bg-emerald-400 mt-1 transition-all duration-200 opacity-0 scale-x-0"></div>
-      </button>
-
-      <button id="nav-admin" onclick="switchPage('admin')" class="tab-btn flex-1 flex flex-col items-center justify-center py-1.5 px-2 rounded-2xl text-slate-400 group transition-all duration-200" style="display:none;">
-        <div class="tab-icon-box w-10 h-8 flex items-center justify-center rounded-xl bg-transparent text-slate-400 border border-transparent transition-all duration-200">
-          <svg class="w-5 h-5 transition-transform duration-200 group-hover:scale-110" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/>
-          </svg>
-        </div>
-        <span class="text-[11px] font-bold tracking-tight mt-1 leading-tight truncate max-w-full" data-i18n="nav.admin">Admin</span>
-        <div class="tab-indicator w-5 h-0.5 rounded-full bg-amber-400 mt-1 transition-all duration-200 opacity-0 scale-x-0"></div>
-      </button>
-    </div>
-  </nav>
-
-  <!-- Edit Channel Modal -->
-<div id="edit-modal" class="fixed inset-0 z-50 hidden">
-    <div class="absolute inset-0 bg-black/70 backdrop-blur-sm"></div>
-    <div class="relative h-full flex items-center justify-center p-4">
-        <div class="bg-slate-900 border border-slate-700 rounded-2xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="text-xl font-bold text-white">Edit Channel</h3>
-                <button onclick="document.getElementById('edit-modal').classList.add('hidden')" class="text-slate-400 hover:text-white text-2xl">&times;</button>
+        <!-- Referrals Page -->
+        <section id="page-referrals" class="hidden-page">
+            <div class="container mx-auto px-4 py-6">
+                <h2 class="text-2xl font-bold mb-4">Referral Program</h2>
+                <div id="referral-dashboard"></div>
             </div>
-            
-            <div class="space-y-4">
-                <div>
-                    <label class="block text-sm font-semibold text-slate-300 mb-2">Price (TON)</label>
-                    <input type="number" id="edit-price" step="0.01" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500" />
-                </div>
-                
-                <div>
-                    <label class="block text-sm font-semibold text-slate-300 mb-2">Duration (Days)</label>
-                    <input type="number" id="edit-duration" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500" />
-                </div>
-                
-                <!-- Auto-Post Integration -->
-                <div class="border-t border-slate-700 pt-4">
-                    <h4 class="text-sm font-bold text-slate-300 mb-3">📢 Auto-Post Settings</h4>
-                    
-                    <div class="flex items-center gap-3 mb-3">
-                        <input type="checkbox" id="edit-auto-post" class="w-5 h-5 rounded bg-slate-800 border-slate-700 text-blue-500 focus:ring-blue-500" />
-                        <label for="edit-auto-post" class="text-sm text-slate-300">Auto-post when user subscribes</label>
-                    </div>
-                    
-                    <div>
-                        <label class="block text-xs text-slate-400 mb-2">Post Template (use {user}, {channel}, {date})</label>
-                        <textarea id="edit-post-template" rows="4" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-blue-500 resize-none" placeholder="Welcome {user} to {channel}! 🎉"></textarea>
-                    </div>
-                </div>
+        </section>
+
+        <!-- Admin Page -->
+        <section id="page-admin" class="hidden-page">
+            <div class="container mx-auto px-4 py-6">
+                <h2 class="text-2xl font-bold mb-4">Admin Dashboard</h2>
+                <div id="admin-dashboard"></div>
             </div>
-            
-            <div class="flex gap-3 mt-6">
-                <button id="modal-cancel" class="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-semibold py-3 rounded-xl transition">Cancel</button>
-                <button id="modal-save" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl transition">Save</button>
+        </section>
+
+        <!-- Purchase Page -->
+        <section id="page-purchase" class="hidden-page">
+            <div class="container mx-auto px-4 py-6">
+                <div id="purchase-card"></div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Modals -->
+    <!-- Rating Modal -->
+    <div id="rating-modal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
+        <div class="bg-slate-800 rounded-xl p-6 max-w-md w-full mx-4">
+            <h3 class="text-xl font-bold mb-4">Rate Channel</h3>
+            <div id="star-rating" class="flex justify-center gap-2 mb-4">
+                <span class="text-3xl cursor-pointer" onclick="selectRating(1)">☆</span>
+                <span class="text-3xl cursor-pointer" onclick="selectRating(2)">☆</span>
+                <span class="text-3xl cursor-pointer" onclick="selectRating(3)">☆</span>
+                <span class="text-3xl cursor-pointer" onclick="selectRating(4)">☆</span>
+                <span class="text-3xl cursor-pointer" onclick="selectRating(5)">☆</span>
+            </div>
+            <textarea id="rating-comment" placeholder="Add a comment (optional)" class="w-full bg-slate-700 rounded-lg p-3 mb-4"></textarea>
+            <div class="flex gap-2">
+                <button onclick="closeRating()" class="flex-1 btn-secondary py-2 rounded-lg">Cancel</button>
+                <button onclick="submitRating()" class="flex-1 btn-primary py-2 rounded-lg">Submit</button>
             </div>
         </div>
     </div>
-</div>
 
-  <!-- Add Channel Modal -->
-<div id="add-channel-modal" class="fixed inset-0 z-50 hidden">
-    <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" onclick="closeAddChannelModal()"></div>
-    <div class="relative h-full flex items-center justify-center p-4">
-        <div class="bg-slate-900 border border-slate-700 rounded-2xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="text-xl font-bold text-white">📺 Add Channel/Group</h3>
-                <button onclick="closeAddChannelModal()" class="text-slate-400 hover:text-white text-2xl">&times;</button>
-            </div>
-            
-            <div class="space-y-4">
-                <!-- Type Selection -->
-                <div>
-                    <label class="block text-sm font-semibold text-slate-300 mb-2">Type</label>
-                    <select id="add-channel-type" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500">
-                        <option value="channel">📺 Channel</option>
-                        <option value="group">👥 Group</option>
-                    </select>
-                </div>
-                
-                <div>
-                    <label class="block text-sm font-semibold text-slate-300 mb-2">Name</label>
-                    <input type="text" id="add-channel-name" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500" placeholder="e.g., Crypto VIP Signals" />
-                </div>
-                
-                <div>
-                    <label class="block text-sm font-semibold text-slate-300 mb-2">Invite Link</label>
-                    <input type="text" id="add-channel-link" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500" placeholder="https://t.me/+..." />
-                </div>
-                
-                <div>
-                    <label class="block text-sm font-semibold text-slate-300 mb-2">Subscription Price (TON)</label>
-                    <input type="number" id="add-channel-price" step="0.01" min="0.01" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500" placeholder="0.1" value="0.1" />
-                </div>
-                
-                <div>
-                    <label class="block text-sm font-semibold text-slate-300 mb-2">Duration (Days)</label>
-                    <input type="number" id="add-channel-duration" min="1" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500" placeholder="30" value="30" />
-                </div>
-                
-                <div class="flex items-center gap-3">
-                    <input type="checkbox" id="add-channel-active" class="w-5 h-5 rounded bg-slate-800 border-slate-700 text-blue-500 focus:ring-blue-500" />
-                    <label for="add-channel-active" class="text-sm font-semibold text-slate-300">Activate immediately</label>
-                </div>
-            </div>
-            
-            <div class="flex gap-3 mt-6">
-                <button onclick="closeAddChannelModal()" class="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-semibold py-3 rounded-xl transition">Cancel</button>
-                <button onclick="submitAddChannel()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl transition">Add</button>
+    <!-- Report Modal -->
+    <div id="report-modal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
+        <div class="bg-slate-800 rounded-xl p-6 max-w-md w-full mx-4">
+            <h3 class="text-xl font-bold mb-4">Report Channel</h3>
+            <select id="report-reason" class="w-full bg-slate-700 rounded-lg p-3 mb-4">
+                <option value="scam">Scam</option>
+                <option value="inappropriate">Inappropriate Content</option>
+                <option value="spam">Spam</option>
+                <option value="other">Other</option>
+            </select>
+            <textarea id="report-description" placeholder="Describe the issue" class="w-full bg-slate-700 rounded-lg p-3 mb-4"></textarea>
+            <div class="flex gap-2">
+                <button onclick="closeReport()" class="flex-1 btn-secondary py-2 rounded-lg">Cancel</button>
+                <button onclick="submitReport()" class="flex-1 btn-primary py-2 rounded-lg">Submit</button>
             </div>
         </div>
     </div>
-</div>
 
-  <!-- Rating Modal -->
-  <div id="rating-modal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md hidden flex items-center justify-center p-4 modal-backdrop">
-    <div class="glass-card p-6 w-full max-w-sm modal-content border border-slate-700/60">
-      <h3 class="text-base font-bold text-white mb-2" data-i18n="rating.title">Rate this Channel</h3>
-      <p class="text-xs text-slate-400 mb-4">Share your feedback to help other subscribers.</p>
-      <div id="star-rating" class="flex items-center justify-center gap-2 py-3 bg-slate-900/70 rounded-xl border border-slate-800/80 mb-4"></div>
-      <textarea id="rating-comment" placeholder="Write a review (optional)..." class="w-full input-dark rounded-xl p-3 text-white text-xs mb-4 resize-none" rows="3"></textarea>
-      <div class="flex items-center justify-end gap-2.5">
-        <button onclick="closeRating()" class="btn-secondary px-4 py-2 text-slate-300 text-xs font-semibold rounded-xl">Cancel</button>
-        <button onclick="submitRating()" class="btn-primary text-white px-4 py-2 text-xs font-bold rounded-xl">Submit Rating</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Report Modal -->
-  <div id="report-modal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md hidden flex items-center justify-center p-4 modal-backdrop">
-    <div class="glass-card p-6 w-full max-w-sm modal-content border border-slate-700/60">
-      <h3 class="text-base font-bold text-white mb-1" data-i18n="report.title">Report Channel</h3>
-      <p class="text-xs text-slate-400 mb-4">Select the issue and provide details for moderator review.</p>
-      <div class="space-y-3 mb-4">
-        <div>
-          <label class="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Reason</label>
-          <select id="report-reason" class="w-full input-dark rounded-xl p-2.5 text-white text-xs cursor-pointer">
-            <option value="scam">Scam / Fraud</option>
-            <option value="inappropriate">Inappropriate Content</option>
-            <option value="insult">Harassment / Insult</option>
-            <option value="racism">Hate Speech / Racism</option>
-            <option value="other">Other</option>
-          </select>
-        </div>
-        <div>
-          <label class="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Details</label>
-          <textarea id="report-description" placeholder="Provide extra context..." class="w-full input-dark rounded-xl p-2.5 text-white text-xs resize-none" rows="3"></textarea>
-        </div>
-      </div>
-      <div class="flex items-center justify-end gap-2.5">
-        <button onclick="closeReport()" class="btn-secondary px-4 py-2 text-slate-300 text-xs font-semibold rounded-xl">Cancel</button>
-        <button onclick="submitReport()" class="bg-rose-600 hover:bg-rose-500 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-lg shadow-rose-600/25 transition cursor-pointer">Submit Report</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Language Selector Modal -->
-  <div id="language-modal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md hidden flex items-center justify-center p-4 modal-backdrop">
-    <div class="glass-card p-6 w-full max-w-sm modal-content border border-slate-700/60">
-      <div class="flex items-center justify-between mb-4">
-        <h3 class="text-base font-bold text-white flex items-center gap-2">Language / زبان</h3>
-      </div>
-      <div class="grid grid-cols-2 gap-2">
-        <button onclick="selectLanguage('en')" class="btn-secondary px-3 py-2.5 rounded-xl text-xs font-medium text-slate-200 hover:text-white flex items-center justify-center">English</button>
-        <button onclick="selectLanguage('fa')" class="btn-secondary px-3 py-2.5 rounded-xl text-xs font-medium text-slate-200 hover:text-white flex items-center justify-center">فارسی</button>
-        <button onclick="selectLanguage('hi')" class="btn-secondary px-3 py-2.5 rounded-xl text-xs font-medium text-slate-200 hover:text-white flex items-center justify-center">हिन्दी</button>
-        <button onclick="selectLanguage('ru')" class="btn-secondary px-3 py-2.5 rounded-xl text-xs font-medium text-slate-200 hover:text-white flex items-center justify-center">Русский</button>
-        <button onclick="selectLanguage('ar')" class="btn-secondary px-3 py-2.5 rounded-xl text-xs font-medium text-slate-200 hover:text-white flex items-center justify-center">العربية</button>
-        <button onclick="selectLanguage('zh')" class="btn-secondary px-3 py-2.5 rounded-xl text-xs font-medium text-slate-200 hover:text-white flex items-center justify-center">中文</button>
-        <button onclick="selectLanguage('id')" class="btn-secondary px-3 py-2.5 rounded-xl text-xs font-medium text-slate-200 hover:text-white flex items-center justify-center">Bahasa Indonesia</button>
-        <button onclick="selectLanguage('pt-BR')" class="btn-secondary px-3 py-2.5 rounded-xl text-xs font-medium text-slate-200 hover:text-white flex items-center justify-center">Português (BR)</button>
-        <button onclick="selectLanguage('tr')" class="btn-secondary px-3 py-2.5 rounded-xl text-xs font-medium text-slate-200 hover:text-white flex items-center justify-center col-span-2">Türkçe</button>
-      </div>
-      <button onclick="closeLanguageModal()" class="btn-secondary w-full mt-4 px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-300">Cancel</button>
-    </div>
-  </div>
-
-  <script src="translations.js"></script>
-  <script src="app.js"></script>
-  <script>
-    if (window.lucide) { lucide.createIcons(); }
-  </script>
-
+    <script src="app_v2.js"></script>
+    <script>
+        // Initialize app
+        window.onload = function() {
+            init();
+            switchPage('subscriptions');
+        };
+    </script>
 </body>
 </html>
