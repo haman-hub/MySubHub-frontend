@@ -1,168 +1,38 @@
-// ================== CUSTOM MODAL SYSTEM ==================
-// Replace native alert/confirm/prompt with custom modals
-
-function showCustomModal(title, message, type = 'alert', callback = null) {
-    // Remove existing modal if any
-    const existingModal = document.getElementById('custom-modal');
-    if (existingModal) existingModal.remove();
-
-    const modal = document.createElement('div');
-    modal.id = 'custom-modal';
-    modal.className = 'fixed inset-0 z-[9999] flex items-center justify-center p-4';
-    
-    let buttonsHTML = '';
-    
-    if (type === 'alert') {
-        buttonsHTML = `
-            <button onclick="closeCustomModal()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-xl transition">
-                OK
-            </button>
-        `;
-    } else if (type === 'confirm') {
-        buttonsHTML = `
-            <button onclick="closeCustomModal(false)" class="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-semibold py-2.5 rounded-xl transition">
-                Cancel
-            </button>
-            <button onclick="closeCustomModal(true)" class="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold py-2.5 rounded-xl transition">
-                Confirm
-            </button>
-        `;
-    } else if (type === 'prompt') {
-        buttonsHTML = `
-            <button onclick="closeCustomModal(null)" class="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-semibold py-2.5 rounded-xl transition">
-                Cancel
-            </button>
-            <button onclick="submitCustomPrompt()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-xl transition">
-                OK
-            </button>
-        `;
-    }
-
-    let inputHTML = '';
-    if (type === 'prompt') {
-        inputHTML = `
-            <input type="text" id="custom-prompt-input" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-blue-500 mt-3" placeholder="Enter value..." />
-        `;
-    }
-
-    modal.innerHTML = `
-        <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" onclick="closeCustomModal()"></div>
-        <div class="relative bg-slate-900 border border-slate-700 rounded-2xl p-6 max-w-md w-full shadow-2xl">
-            <h3 class="text-xl font-bold text-white mb-3">${title}</h3>
-            <p class="text-slate-300 mb-4">${message}</p>
-            ${inputHTML}
-            <div class="flex gap-3 mt-5">
-                ${buttonsHTML}
-            </div>
-        </div>
-    `;
-
-    document.body.appendChild(modal);
-
-    // Store callback
-    if (callback) {
-        modal.dataset.callback = callback.toString();
-    }
-
-    // Focus input if prompt
-    if (type === 'prompt') {
-        setTimeout(() => {
-            const input = document.getElementById('custom-prompt-input');
-            if (input) {
-                input.focus();
-                if (defaultValue) input.value = defaultValue;
-            }
-        }, 100);
-    }
-}
-
-function closeCustomModal(result = null) {
-    const modal = document.getElementById('custom-modal');
-    if (!modal) return;
-
-    const callbackStr = modal.dataset.callback;
-    modal.remove();
-
-    if (callbackStr && result !== undefined) {
-        try {
-            const callback = eval('(' + callbackStr + ')');
-            if (typeof callback === 'function') {
-                callback(result);
-            }
-        } catch (e) {
-            console.error('Callback error:', e);
-        }
-    }
-}
-
-function submitCustomPrompt() {
-    const input = document.getElementById('custom-prompt-input');
-    const value = input ? input.value : '';
-    closeCustomModal(value);
-}
-
-// Override native functions
-window.alert = function(message) {
-    showCustomModal('MySubHub', message, 'alert');
-};
-
-window.confirm = function(message) {
-    return new Promise((resolve) => {
-        showCustomModal('MySubHub', message, 'confirm', (result) => {
-            resolve(result);
-        });
-    });
-};
-
-window.prompt = function(message, defaultValue = '') {
-    return new Promise((resolve) => {
-        showCustomModal('MySubHub', message, 'prompt', (result) => {
-            resolve(result);
-        });
-        setTimeout(() => {
-            const input = document.getElementById('custom-prompt-input');
-            if (input && defaultValue) {
-                input.value = defaultValue;
-            }
-        }, 100);
-    });
-};
-
-// Async versions for better control
-async function showAlert(message) {
-    return new Promise((resolve) => {
-        showCustomModal('MySubHub', message, 'alert', () => resolve());
-    });
-}
-
-async function showConfirm(message) {
-    return new Promise((resolve) => {
-        showCustomModal('MySubHub', message, 'confirm', (result) => resolve(result));
-    });
-}
-
-async function showPrompt(message, defaultValue = '') {
-    return new Promise((resolve) => {
-        showCustomModal('MySubHub', message, 'prompt', (result) => resolve(result));
-        setTimeout(() => {
-            const input = document.getElementById('custom-prompt-input');
-            if (input && defaultValue) {
-                input.value = defaultValue;
-            }
-        }, 100);
-    });
-}
+// ================== MySubHub v2 - Enhanced Frontend ==================
+// Features: Pagination, Tutorial, Skeleton Loading, Gestures, Dark/Light Mode,
+//           Verified Badges, Channel Posts, Groups Support
 
 window.onerror = function(message) {
     showAlert('Error: ' + message);
+    return true;
 };
 
-// app.js (FIXED VERSION — all queries via backend API)
+// ================== CONFIGURATION ==================
+const API_BASE = 'https://mslxnegbtstpdwauugmq.supabase.co/functions/v1/mainbot';
+const ITEMS_PER_PAGE = 10;
+
+// ================== STATE MANAGEMENT ==================
+let currentUser = null;
+let isAdmin = false;
+let currentPage = 'subscriptions';
+let currentTheme = 'dark';
+let tutorialCompleted = false;
+let tonConnectUI = null;
+let currentNetwork = 'testnet';
+
+// Pagination state
+let paginationState = {
+    subscriptions: { page: 1, hasMore: true, loading: false },
+    channels: { page: 1, hasMore: true, loading: false },
+    reports: { page: 1, hasMore: true, loading: false }
+};
+
+// ================== TELEGRAM WEBAPP INIT ==================
 const TG = window.Telegram?.WebApp || {
-    ready: () => {},
-    expand: () => {},
-    initData: '',
-    initDataUnsafe: {}
+    ready: () => {}, expand: () => {},
+    initData: '', initDataUnsafe: {}, themeParams: null,
+    BackButton: { show: () => {}, hide: () => {}, onClick: () => {} },
+    HapticFeedback: { impactOccurred: () => {}, selectionChanged: () => {}, notificationOccurred: () => {} }
 };
 
 try {
@@ -172,61 +42,396 @@ try {
     console.warn('Telegram WebApp init:', e);
 }
 
-// Backend API URL
-const API_BASE = 'https://mslxnegbtstpdwauugmq.supabase.co/functions/v1/mainbot';
-
-let tonConnectUI = null;
-let currentNetwork = 'testnet';
-
-async function initTonConnect() {
-    try {
-        if (window.TON_CONNECT_UI) {
-            tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-                manifestUrl: 'https://haman-hub.github.io/MySubHub-frontend/manifest.json',
-                buttonRootId: 'ton-connect-button',
-                network: 'testnet'
-            });
-            console.log('TON Connect initialized');
-        }
-    } catch (e) {
-        console.error('TON Connect init error:', e);
+// ================== THEME MANAGEMENT (Dark/Light Mode) ==================
+function applyTheme(theme) {
+    currentTheme = theme;
+    
+    if (theme === 'system') {
+        theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+    
+    document.documentElement.setAttribute('data-theme', theme);
+    document.body.className = theme === 'dark' ? 'theme-dark' : 'theme-light';
+    
+    // Update theme toggle button
+    const themeBtn = document.getElementById('theme-toggle');
+    if (themeBtn) {
+        themeBtn.innerHTML = theme === 'dark' ? '☀️' : '🌙';
+    }
+    
+    // Save preference
+    if (currentUser) {
+        apiFetch('/api/user/preferences', {
+            method: 'POST',
+            body: JSON.stringify({ theme })
+        }).catch(() => {});
     }
 }
 
-let currentUser = null;
-let isAdmin = false;
-let currentPage = 'subscriptions';
+function toggleTheme() {
+    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    applyTheme(newTheme);
+    TG.HapticFeedback.selectionChanged();
+}
 
-// API Helper
+// Listen for system theme changes
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+    if (currentTheme === 'system') {
+        applyTheme('system');
+    }
+});
+
+// ================== SKELETON LOADING ==================
+function showSkeleton(containerId, type = 'card', count = 3) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    
+    let skeletonHTML = '';
+    
+    if (type === 'card') {
+        for (let i = 0; i < count; i++) {
+            skeletonHTML += `
+                <div class="skeleton-card mb-3">
+                    <div class="skeleton-line skeleton-title"></div>
+                    <div class="skeleton-line skeleton-text"></div>
+                    <div class="skeleton-line skeleton-text short"></div>
+                    <div class="skeleton-buttons">
+                        <div class="skeleton-button"></div>
+                        <div class="skeleton-button"></div>
+                    </div>
+                </div>
+            `;
+        }
+    } else if (type === 'list') {
+        for (let i = 0; i < count; i++) {
+            skeletonHTML += `
+                <div class="skeleton-list-item">
+                    <div class="skeleton-avatar"></div>
+                    <div class="skeleton-content">
+                        <div class="skeleton-line skeleton-title"></div>
+                        <div class="skeleton-line skeleton-text"></div>
+                    </div>
+                </div>
+            `;
+        }
+    }
+    
+    container.innerHTML = skeletonHTML;
+}
+
+// ================== GESTURE SUPPORT ==================
+function addSwipeGestures(element, callbacks) {
+    let startX = 0;
+    let startY = 0;
+    let isDragging = false;
+    
+    element.addEventListener('touchstart', (e) => {
+        startX = e.touches[0].clientX;
+        startY = e.touches[0].clientY;
+        isDragging = true;
+    }, { passive: true });
+    
+    element.addEventListener('touchmove', (e) => {
+        if (!isDragging) return;
+    }, { passive: true });
+    
+    element.addEventListener('touchend', (e) => {
+        if (!isDragging) return;
+        isDragging = false;
+        
+        const endX = e.changedTouches[0].clientX;
+        const endY = e.changedTouches[0].clientY;
+        const diffX = endX - startX;
+        const diffY = endY - startY;
+        
+        // Only trigger if horizontal swipe is dominant
+        if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 50) {
+            if (diffX > 0 && callbacks.onSwipeRight) {
+                callbacks.onSwipeRight();
+            } else if (diffX < 0 && callbacks.onSwipeLeft) {
+                callbacks.onSwipeLeft();
+            }
+            TG.HapticFeedback.impactOccurred('light');
+        }
+    }, { passive: true });
+}
+
+// ================== INTERACTIVE TUTORIAL ==================
+const tutorialSteps = [
+    {
+        title: "Welcome to MySubHub! 🎉",
+        content: "Let me show you around. This app helps you subscribe to premium Telegram channels and groups using TON cryptocurrency.",
+        target: null,
+        action: "next"
+    },
+    {
+        title: "Your Subscriptions 📋",
+        content: "This is where you'll see all your active subscriptions. You can rate, report, or renew them from here.",
+        target: "#page-subscriptions",
+        action: "next"
+    },
+    {
+        title: "My Channels 📺",
+        content: "If you own a channel or group, you can manage it here. Set prices, view earnings, and share your channel.",
+        target: "#nav-owner",
+        action: "click",
+        clickTarget: "#nav-owner"
+    },
+    {
+        title: "Connect Your Wallet 💰",
+        content: "To receive payments, connect your TON wallet. Click here to get started.",
+        target: "#nav-owner",
+        action: "next"
+    },
+    {
+        title: "You're All Set! 🚀",
+        content: "That's it! You can now browse channels, subscribe, and manage your own. Enjoy MySubHub!",
+        target: null,
+        action: "complete"
+    }
+];
+
+let currentTutorialStep = 0;
+
+function startTutorial() {
+    currentTutorialStep = 0;
+    showTutorialStep();
+}
+
+function showTutorialStep() {
+    if (currentTutorialStep >= tutorialSteps.length) {
+        completeTutorial();
+        return;
+    }
+    
+    const step = tutorialSteps[currentTutorialStep];
+    
+    // Remove existing tutorial overlay
+    const existing = document.getElementById('tutorial-overlay');
+    if (existing) existing.remove();
+    
+    // Create tutorial overlay
+    const overlay = document.createElement('div');
+    overlay.id = 'tutorial-overlay';
+    overlay.className = 'tutorial-overlay';
+    
+    overlay.innerHTML = `
+        <div class="tutorial-modal">
+            <div class="tutorial-header">
+                <h3>${step.title}</h3>
+                <span class="tutorial-progress">${currentTutorialStep + 1}/${tutorialSteps.length}</span>
+            </div>
+            <p class="tutorial-content">${step.content}</p>
+            <div class="tutorial-actions">
+                ${currentTutorialStep > 0 ? '<button onclick="prevTutorialStep()" class="tutorial-btn secondary">Back</button>' : ''}
+                <button onclick="skipTutorial()" class="tutorial-btn secondary">Skip</button>
+                <button onclick="nextTutorialStep()" class="tutorial-btn primary">
+                    ${step.action === 'complete' ? 'Finish' : 'Next'}
+                </button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(overlay);
+    
+    // Highlight target if specified
+    if (step.target) {
+        const target = document.querySelector(step.target);
+        if (target) {
+            target.classList.add('tutorial-highlight');
+            setTimeout(() => target.classList.remove('tutorial-highlight'), 3000);
+        }
+    }
+    
+    // Auto-click if needed
+    if (step.action === 'click' && step.clickTarget) {
+        setTimeout(() => {
+            const clickTarget = document.querySelector(step.clickTarget);
+            if (clickTarget) clickTarget.click();
+        }, 1000);
+    }
+    
+    TG.HapticFeedback.impactOccurred('light');
+}
+
+function nextTutorialStep() {
+    currentTutorialStep++;
+    showTutorialStep();
+}
+
+function prevTutorialStep() {
+    if (currentTutorialStep > 0) {
+        currentTutorialStep--;
+        showTutorialStep();
+    }
+}
+
+function skipTutorial() {
+    completeTutorial();
+}
+
+function completeTutorial() {
+    const overlay = document.getElementById('tutorial-overlay');
+    if (overlay) overlay.remove();
+    
+    tutorialCompleted = true;
+    
+    // Save to backend
+    apiFetch('/api/user/preferences', {
+        method: 'POST',
+        body: JSON.stringify({ tutorial_completed: true })
+    }).catch(() => {});
+    
+    TG.HapticFeedback.notificationOccurred('success');
+}
+
+// ================== PAGINATION ==================
+function createPaginationControls(containerId, state, onPageChange) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    
+    const controls = document.createElement('div');
+    controls.className = 'pagination-controls';
+    controls.innerHTML = `
+        <button onclick="loadPreviousPage('${containerId}')" class="pagination-btn" ${state.page === 1 ? 'disabled' : ''}>
+            ← Previous
+        </button>
+        <span class="pagination-info">Page ${state.page}</span>
+        <button onclick="loadNextPage('${containerId}')" class="pagination-btn" ${!state.hasMore ? 'disabled' : ''}>
+            Next →
+        </button>
+    `;
+    
+    container.appendChild(controls);
+}
+
+async function loadNextPage(section) {
+    const state = paginationState[section];
+    if (!state.hasMore || state.loading) return;
+    
+    state.loading = true;
+    state.page++;
+    
+    // Reload data for the new page
+    if (section === 'subscriptions') {
+        await loadSubscriptions(true);
+    } else if (section === 'channels') {
+        await loadOwnerDashboard(true);
+    }
+    
+    state.loading = false;
+}
+
+async function loadPreviousPage(section) {
+    const state = paginationState[section];
+    if (state.page === 1 || state.loading) return;
+    
+    state.loading = true;
+    state.page--;
+    
+    if (section === 'subscriptions') {
+        await loadSubscriptions(true);
+    } else if (section === 'channels') {
+        await loadOwnerDashboard(true);
+    }
+    
+    state.loading = false;
+}
+
+// ================== CUSTOM MODAL SYSTEM ==================
+function showCustomModal(title, message, type = 'alert', callback = null) {
+    const existingModal = document.getElementById('custom-modal');
+    if (existingModal) existingModal.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'custom-modal';
+    modal.className = 'fixed inset-0 z-[9999] flex items-center justify-center p-4';
+    
+    let buttonsHTML = '';
+    if (type === 'alert') {
+        buttonsHTML = `<button onclick="closeCustomModal()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-xl transition">OK</button>`;
+    } else if (type === 'confirm') {
+        buttonsHTML = `
+            <button onclick="closeCustomModal(false)" class="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-semibold py-2.5 rounded-xl transition">Cancel</button>
+            <button onclick="closeCustomModal(true)" class="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold py-2.5 rounded-xl transition">Confirm</button>
+        `;
+    } else if (type === 'prompt') {
+        buttonsHTML = `
+            <button onclick="closeCustomModal(null)" class="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-semibold py-2.5 rounded-xl transition">Cancel</button>
+            <button onclick="submitCustomPrompt()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-xl transition">OK</button>
+        `;
+    }
+
+    let inputHTML = '';
+    if (type === 'prompt') {
+        inputHTML = `<input type="text" id="custom-prompt-input" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-blue-500 mt-3" />`;
+    }
+
+    modal.innerHTML = `
+        <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" onclick="closeCustomModal()"></div>
+        <div class="relative bg-slate-900 border border-slate-700 rounded-2xl p-6 max-w-md w-full shadow-2xl">
+            <h3 class="text-xl font-bold text-white mb-3">${title}</h3>
+            <p class="text-slate-300 mb-4">${message}</p>
+            ${inputHTML}
+            <div class="flex gap-3 mt-5">${buttonsHTML}</div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+    if (callback) modal.dataset.callback = callback.toString();
+    if (type === 'prompt') {
+        setTimeout(() => {
+            const input = document.getElementById('custom-prompt-input');
+            if (input) input.focus();
+        }, 100);
+    }
+}
+
+function closeCustomModal(result = null) {
+    const modal = document.getElementById('custom-modal');
+    if (!modal) return;
+    const callbackStr = modal.dataset.callback;
+    modal.remove();
+    if (callbackStr && result !== undefined) {
+        try {
+            const callback = eval('(' + callbackStr + ')');
+            if (typeof callback === 'function') callback(result);
+        } catch (e) {}
+    }
+}
+
+function submitCustomPrompt() {
+    const input = document.getElementById('custom-prompt-input');
+    closeCustomModal(input ? input.value : '');
+}
+
+window.alert = function(message) { showCustomModal('MySubHub', message, 'alert'); };
+window.confirm = function(message) { return new Promise((resolve) => { showCustomModal('MySubHub', message, 'confirm', (result) => resolve(result)); }); };
+window.prompt = function(message, defaultValue = '') { return new Promise((resolve) => { showCustomModal('MySubHub', message, 'prompt', (result) => resolve(result)); setTimeout(() => { const input = document.getElementById('custom-prompt-input'); if (input && defaultValue) input.value = defaultValue; }, 100); }); };
+
+async function showAlert(message) { return new Promise((resolve) => { showCustomModal('MySubHub', message, 'alert', () => resolve()); }); }
+async function showConfirm(message) { return new Promise((resolve) => { showCustomModal('MySubHub', message, 'confirm', (result) => resolve(result)); }); }
+async function showPrompt(message, defaultValue = '') { return new Promise((resolve) => { showCustomModal('MySubHub', message, 'prompt', (result) => resolve(result)); }); }
+
+// ================== API HELPER ==================
 async function apiFetch(url, options = {}) {
     const initData = TG.initData || '';
-    const headers = {
-        'x-telegram-initdata': initData,
-        'Content-Type': 'application/json',
-        ...options.headers,
-    };
+    const headers = { 'x-telegram-initdata': initData, 'Content-Type': 'application/json', ...options.headers };
 
     if (!initData) {
         if (url === '/api/auth/validate') return { user: null };
         if (url === '/api/subscriptions/my') return [];
         if (url === '/api/channels/my') return [];
-        if (url === '/api/withdrawals/my') return { pendingEarnings: 0, withdrawals: [] };
         return { success: true };
     }
 
     try {
         const res = await fetch(`${API_BASE}${url}`, { ...options, headers });
-
         if (res.status === 401 || res.status === 403) {
             if (url === '/api/auth/validate') return { user: null };
             return { error: 'Unauthorized' };
         }
-
-        if (res.status === 429) {
-            alert('Too many requests. Please wait a moment.');
-            return { error: 'Rate limited' };
-        }
-
+        if (res.status === 429) { showAlert('Too many requests. Please wait.'); return { error: 'Rate limited' }; }
         if (!res.ok) {
             const error = await res.json().catch(() => ({}));
             throw new Error(error.error || `HTTP ${res.status}`);
@@ -238,85 +443,39 @@ async function apiFetch(url, options = {}) {
     }
 }
 
-// Page Navigation
+// ================== PAGE NAVIGATION ==================
 function switchPage(pageId) {
     if (pageId === 'admin' && !isAdmin) pageId = 'subscriptions';
 
     const allPages = ['purchase', 'subscriptions', 'owner', 'admin'];
     allPages.forEach(p => {
         const sec = document.getElementById(`page-${p}`);
-        if (sec) {
-            sec.style.display = 'none';
-            sec.classList.add('hidden-page');
-        }
+        if (sec) { sec.style.display = 'none'; sec.classList.add('hidden-page'); }
     });
 
     const target = document.getElementById(`page-${pageId}`);
-    if (target) {
-        target.style.display = 'block';
-        target.classList.remove('hidden-page');
-    }
+    if (target) { target.style.display = 'block'; target.classList.remove('hidden-page'); }
 
-    // Update navigation button active states
-    const navButtonMap = {
-        'subscriptions': 'nav-subscriptions',
-        'owner': 'nav-owner',
-        'admin': 'nav-admin'
-    };
-
-    // Remove active state from all nav buttons
+    // Update nav buttons
+    const navButtonMap = { 'subscriptions': 'nav-subscriptions', 'owner': 'nav-owner', 'admin': 'nav-admin' };
     Object.values(navButtonMap).forEach(id => {
         const btn = document.getElementById(id);
         if (btn) {
             btn.classList.remove('active', 'text-ton-400', 'text-emerald-400', 'text-amber-400');
             btn.classList.add('text-slate-400');
-            const iconBox = btn.querySelector('.tab-icon-box');
-            if (iconBox) {
-                iconBox.className = 'tab-icon-box w-10 h-8 flex items-center justify-center rounded-xl bg-transparent text-slate-400 border border-transparent transition-all duration-200';
-            }
-            const indicator = btn.querySelector('.tab-indicator');
-            if (indicator) {
-                indicator.classList.remove('scale-x-100', 'opacity-100');
-                indicator.classList.add('scale-x-0', 'opacity-0');
-            }
         }
     });
 
-    // Add active state to current nav button
     const activeBtnId = navButtonMap[pageId];
     if (activeBtnId) {
         const activeBtn = document.getElementById(activeBtnId);
         if (activeBtn) {
             activeBtn.classList.add('active');
             activeBtn.classList.remove('text-slate-400');
-            
-            // Set color based on page
             let colorClass = 'text-ton-400';
-            let bgBox = 'bg-ton-500/20';
-            let borderBox = 'border-ton-500/30';
-            
-            if (pageId === 'owner') {
-                colorClass = 'text-emerald-400';
-                bgBox = 'bg-emerald-500/20';
-                borderBox = 'border-emerald-500/30';
-            } else if (pageId === 'admin') {
-                colorClass = 'text-amber-400';
-                bgBox = 'bg-amber-500/20';
-                borderBox = 'border-amber-500/30';
-            }
-            
+            if (pageId === 'owner') colorClass = 'text-emerald-400';
+            else if (pageId === 'admin') colorClass = 'text-amber-400';
             activeBtn.classList.add(colorClass);
-            
-            const iconBox = activeBtn.querySelector('.tab-icon-box');
-            if (iconBox) {
-                iconBox.className = `tab-icon-box w-10 h-8 flex items-center justify-center rounded-xl ${bgBox} ${colorClass} border ${borderBox} transition-all duration-200`;
-            }
-            
-            const indicator = activeBtn.querySelector('.tab-indicator');
-            if (indicator) {
-                indicator.classList.remove('scale-x-0', 'opacity-0');
-                indicator.classList.add('scale-x-100', 'opacity-100');
-            }
         }
     }
 
@@ -327,15 +486,25 @@ function switchPage(pageId) {
     currentPage = pageId;
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
-
 window.switchPage = switchPage;
 
-// Init
+// ================== INIT ==================
 async function init() {
-    applyTranslations();
     await initTonConnect();
 
     try {
+        // Load user preferences
+        const prefs = await apiFetch('/api/user/preferences', { method: 'GET' });
+        if (prefs && prefs.theme) {
+            applyTheme(prefs.theme);
+        } else {
+            applyTheme('dark');
+        }
+        
+        if (prefs && prefs.tutorial_completed) {
+            tutorialCompleted = true;
+        }
+
         const res = await apiFetch('/api/auth/validate', { method: 'POST' });
         currentUser = res?.user || null;
         isAdmin = res?.is_admin || false;
@@ -344,21 +513,12 @@ async function init() {
         if (navBar) navBar.classList.remove('hidden');
 
         const adminTab = document.getElementById('nav-admin');
-        if (adminTab) {
-            adminTab.style.setProperty('display', isAdmin ? 'flex' : 'none', 'important');
-        }
+        if (adminTab) adminTab.style.setProperty('display', isAdmin ? 'flex' : 'none', 'important');
 
         const ownerTab = document.getElementById('nav-owner');
         if (ownerTab) ownerTab.style.setProperty('display', 'flex', 'important');
 
-        // Update network display
-        const networkLabel = document.querySelector('[data-i18n="footer.ton_network"]');
-        if (networkLabel) {
-            networkLabel.textContent = currentNetwork === 'testnet' ? 'TON Testnet' : 'TON Mainnet';
-        }
-
-        const urlStart = new URLSearchParams(window.location.search).get('startapp') ||
-                         new URLSearchParams(window.location.search).get('start');
+        const urlStart = new URLSearchParams(window.location.search).get('startapp') || new URLSearchParams(window.location.search).get('start');
         const startParam = TG.initDataUnsafe?.start_param || urlStart;
 
         if (startParam && /^[0-9a-fA-F-]{36}$/.test(startParam)) {
@@ -371,54 +531,372 @@ async function init() {
         } else {
             switchPage('subscriptions');
         }
+        
+        // Start tutorial for new users
+        if (!tutorialCompleted && currentUser) {
+            setTimeout(() => startTutorial(), 1000);
+        }
+        
+        // Add swipe gestures to main container
+        const mainContainer = document.querySelector('main');
+        if (mainContainer) {
+            addSwipeGestures(mainContainer, {
+                onSwipeRight: () => {
+                    // Navigate to previous page
+                    if (currentPage === 'owner') switchPage('subscriptions');
+                    else if (currentPage === 'admin') switchPage('owner');
+                },
+                onSwipeLeft: () => {
+                    // Navigate to next page
+                    if (currentPage === 'subscriptions') switchPage('owner');
+                    else if (currentPage === 'owner' && isAdmin) switchPage('admin');
+                }
+            });
+        }
     } catch (error) {
         console.error('Init error:', error);
-        const navBar = document.getElementById('nav-bar');
-        if (navBar) navBar.classList.remove('hidden');
+        applyTheme('dark');
         switchPage('subscriptions');
     }
 }
 
-// Purchase Page
-async function loadPurchasePage(channelId) {
-    const data = await apiFetch(`/api/channels/${channelId}`, { method: 'GET' });
+// ================== TON CONNECT ==================
+async function initTonConnect() {
+    try {
+        if (window.TON_CONNECT_UI) {
+            tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
+                manifestUrl: 'https://haman-hub.github.io/MySubHub-frontend/manifest.json',
+                buttonRootId: 'ton-connect-button',
+                network: 'testnet'
+            });
+        }
+    } catch (e) {
+        console.error('TON Connect init error:', e);
+    }
+}
 
+// ================== SUBSCRIPTIONS (with pagination & skeleton) ==================
+async function loadSubscriptions(append = false) {
+    const list = document.getElementById('subscriptions-list');
+    
+    if (!append) {
+        showSkeleton('subscriptions-list', 'card', 3);
+        paginationState.subscriptions.page = 1;
+    }
+    
+    try {
+        const subs = await apiFetch('/api/subscriptions/my');
+        
+        if (!subs || !subs.length) {
+            list.innerHTML = '<div class="glass-card p-10 text-center text-slate-400">No subscriptions yet.</div>';
+            return;
+        }
+
+        // Paginate on frontend
+        const start = (paginationState.subscriptions.page - 1) * ITEMS_PER_PAGE;
+        const end = start + ITEMS_PER_PAGE;
+        const paginatedSubs = subs.slice(start, end);
+        paginationState.subscriptions.hasMore = end < subs.length;
+
+        if (!append) list.innerHTML = '';
+        
+        paginatedSubs.forEach(s => {
+            const channel = s.channel || {};
+            const daysLeft = Math.ceil((new Date(s.end_date) - Date.now()) / (1000 * 60 * 60 * 24));
+            const isExpired = daysLeft < 0;
+            const isExpiring = daysLeft >= 0 && daysLeft <= 7;
+            const isVerified = channel.is_verified;
+
+            const card = document.createElement('div');
+            card.className = 'glass-card p-4 mb-3';
+            card.innerHTML = `
+                <div class="flex justify-between items-start mb-2">
+                    <div class="flex items-center gap-2">
+                        <h3 class="font-semibold text-white">${channel.channel_name || 'Unknown'}</h3>
+                        ${isVerified ? '<span class="verified-badge" title="Verified Channel">✓</span>' : ''}
+                    </div>
+                    <span class="badge ${isExpired ? 'bg-red-500/10 text-red-400' : isExpiring ? 'bg-amber-500/10 text-amber-400' : 'bg-emerald-500/10 text-emerald-400'}">
+                        ${isExpired ? 'Expired' : isExpiring ? `⚠️ ${daysLeft}d` : 'Active'}
+                    </span>
+                </div>
+                <p class="text-slate-400 text-sm mb-3">Expires: ${new Date(s.end_date).toLocaleDateString()}</p>
+                <div class="flex gap-2">
+                    <button onclick="openRating('${s.channel_id}')" class="btn-secondary px-3 py-1.5 rounded-xl text-xs">⭐ Rate</button>
+                    <button onclick="openReport('${s.channel_id}')" class="btn-secondary px-3 py-1.5 rounded-xl text-xs">🚩 Report</button>
+                    ${isExpired ? `<button onclick="renewSubscription('${s.channel_id}')" class="btn-primary px-3 py-1.5 rounded-xl text-xs text-white">🔄 Renew</button>` : ''}
+                </div>
+            `;
+            
+            // Add swipe gestures to card
+            addSwipeGestures(card, {
+                onSwipeLeft: () => {
+                    if (isExpired) renewSubscription(s.channel_id);
+                }
+            });
+            
+            list.appendChild(card);
+        });
+        
+        // Add pagination controls
+        const existingPagination = list.querySelector('.pagination-controls');
+        if (existingPagination) existingPagination.remove();
+        
+        if (subs.length > ITEMS_PER_PAGE) {
+            createPaginationControls('subscriptions-list', paginationState.subscriptions, loadSubscriptions);
+        }
+    } catch (e) {
+        console.error('Error loading subscriptions:', e);
+        list.innerHTML = '<p class="text-red-400 text-center py-6">Failed to load subscriptions</p>';
+    }
+}
+
+async function renewSubscription(channelId) {
+    loadPurchasePage(channelId);
+    switchPage('purchase');
+}
+window.renewSubscription = renewSubscription;
+
+// ================== OWNER DASHBOARD (with pagination, skeleton, groups support) ==================
+async function loadOwnerDashboard(append = false) {
+    const container = document.getElementById('channels-list');
+    
+    if (!append) {
+        showSkeleton('channels-list', 'card', 3);
+        paginationState.channels.page = 1;
+    }
+    
+    try {
+        const channels = await apiFetch('/api/channels/my');
+
+        if (!channels || !channels.length) {
+            container.innerHTML = '<div class="text-center text-slate-400 py-6">No channels yet.</div>';
+            return;
+        }
+
+        // Paginate
+        const start = (paginationState.channels.page - 1) * ITEMS_PER_PAGE;
+        const end = start + ITEMS_PER_PAGE;
+        const paginatedChannels = channels.slice(start, end);
+        paginationState.channels.hasMore = end < channels.length;
+
+        if (!append) container.innerHTML = '';
+        
+        paginatedChannels.forEach(ch => {
+            const isGroup = ch.channel_type === 'group';
+            const typeIcon = isGroup ? '👥' : '📺';
+            const typeLabel = isGroup ? 'Group' : 'Channel';
+            
+            const card = document.createElement('div');
+            card.className = 'glass-card p-4 mb-3';
+            card.innerHTML = `
+                <div class="flex justify-between items-start mb-2">
+                    <div class="flex-1">
+                        <div class="flex items-center gap-2">
+                            <span class="text-lg">${typeIcon}</span>
+                            <h3 class="font-semibold text-white text-base">${ch.channel_name}</h3>
+                            ${ch.is_verified ? '<span class="verified-badge" title="Verified">✓</span>' : ''}
+                        </div>
+                        <p class="text-slate-400 text-xs mt-1">${ch.subscription_price} TON / ${ch.duration_days} days • ${typeLabel}</p>
+                        <div class="flex gap-3 mt-2 text-xs text-slate-500">
+                            <span>👥 ${ch.total_subscribers || 0} subs</span>
+                            <span>⭐ ${ch.avg_rating || '0.0'}</span>
+                            ${ch.auto_post_enabled ? '<span>📢 Auto-post</span>' : ''}
+                        </div>
+                    </div>
+                    <label class="flex items-center gap-2 text-xs ml-3">
+                        <span class="text-slate-300">Active</span>
+                        <input type="checkbox" ${ch.is_active ? 'checked' : ''} onchange="toggleChannel('${ch.id}', this.checked)" class="w-4 h-4 accent-blue-500 cursor-pointer">
+                    </label>
+                </div>
+                <div class="flex gap-3 pt-2 border-t border-slate-700/50">
+                    <button onclick="openEditModal('${ch.id}')" class="text-blue-400 hover:text-blue-300 text-xs transition">Edit</button>
+                    <button onclick="copyDeepLink('${ch.id}')" class="text-blue-400 hover:text-blue-300 text-xs transition">Copy Link</button>
+                    <button onclick="forwardChannel('${ch.id}')" class="text-green-400 hover:text-green-300 text-xs transition">📤 Forward</button>
+                    ${!ch.is_verified ? `<button onclick="requestVerification('${ch.id}')" class="text-amber-400 hover:text-amber-300 text-xs transition">🏆 Verify</button>` : ''}
+                </div>
+            `;
+            
+            // Add swipe gestures
+            addSwipeGestures(card, {
+                onSwipeLeft: () => toggleChannel(ch.id, !ch.is_active),
+                onSwipeRight: () => openEditModal(ch.id)
+            });
+            
+            container.appendChild(card);
+        });
+        
+        // Add pagination
+        const existingPagination = container.querySelector('.pagination-controls');
+        if (existingPagination) existingPagination.remove();
+        
+        if (channels.length > ITEMS_PER_PAGE) {
+            createPaginationControls('channels-list', paginationState.channels, loadOwnerDashboard);
+        }
+
+        loadWithdrawalSection();
+    } catch (e) {
+        console.error('Error loading owner dashboard:', e);
+        container.innerHTML = '<p class="text-red-400 text-center py-6">Failed to load channels</p>';
+    }
+}
+
+// ================== VERIFICATION REQUEST ==================
+async function requestVerification(channelId) {
+    const evidence = await showPrompt('Please provide evidence for verification (e.g., channel stats, social media links, website):');
+    if (!evidence) return;
+    
+    try {
+        const res = await apiFetch('/api/channels/verify/request', {
+            method: 'POST',
+            body: JSON.stringify({ channel_id: channelId, evidence })
+        });
+        
+        if (res.success) {
+            showAlert('Verification request submitted! Our team will review it soon.');
+        } else {
+            showAlert('Error: ' + (res.error || 'Unknown error'));
+        }
+    } catch (e) {
+        showAlert('Error: ' + e.message);
+    }
+}
+window.requestVerification = requestVerification;
+
+// ================== CHANNEL EDIT (with post integration) ==================
+let editingChannelId = null;
+
+async function openEditModal(channelId) {
+    editingChannelId = channelId;
+    const data = await apiFetch(`/api/channels/${channelId}`, { method: 'GET' });
+    if (data && !data.error) {
+        const priceInput = document.getElementById('edit-price');
+        const durationInput = document.getElementById('edit-duration');
+        const autoPostInput = document.getElementById('edit-auto-post');
+        const postTemplateInput = document.getElementById('edit-post-template');
+        
+        if (priceInput) priceInput.value = data.subscription_price;
+        if (durationInput) durationInput.value = data.duration_days;
+        if (autoPostInput) autoPostInput.checked = data.auto_post_enabled || false;
+        if (postTemplateInput) postTemplateInput.value = data.auto_post_template || '';
+    }
+    const editModal = document.getElementById('edit-modal');
+    if (editModal) editModal.classList.remove('hidden');
+}
+window.openEditModal = openEditModal;
+
+const modalSaveBtn = document.getElementById('modal-save');
+if (modalSaveBtn) {
+    modalSaveBtn.onclick = async () => {
+        const price = parseFloat(document.getElementById('edit-price')?.value || '0');
+        const duration = parseInt(document.getElementById('edit-duration')?.value || '30');
+        const autoPost = document.getElementById('edit-auto-post')?.checked || false;
+        const postTemplate = document.getElementById('edit-post-template')?.value || '';
+        
+        if (editingChannelId) {
+            await apiFetch(`/api/channels/${editingChannelId}`, {
+                method: 'PUT',
+                body: JSON.stringify({ 
+                    subscription_price: price, 
+                    duration_days: duration,
+                    auto_post_enabled: autoPost,
+                    auto_post_template: postTemplate
+                }),
+            });
+        }
+        document.getElementById('edit-modal')?.classList.add('hidden');
+        loadOwnerDashboard();
+    };
+}
+
+// ================== OTHER FUNCTIONS ==================
+function openAddChannelModal() {
+    const modal = document.getElementById('add-channel-modal');
+    if (modal) modal.classList.remove('hidden');
+}
+function closeAddChannelModal() {
+    const modal = document.getElementById('add-channel-modal');
+    if (modal) modal.classList.add('hidden');
+}
+async function submitAddChannel() {
+    const nameInput = document.getElementById('add-channel-name');
+    const linkInput = document.getElementById('add-channel-link');
+    const priceInput = document.getElementById('add-channel-price');
+    const durationInput = document.getElementById('add-channel-duration');
+    const activeInput = document.getElementById('add-channel-active');
+    const typeSelect = document.getElementById('add-channel-type');
+    
+    const channel_name = nameInput ? nameInput.value.trim() : '';
+    const channel_invite_link = linkInput ? linkInput.value.trim() : '';
+    const subscription_price = priceInput ? parseFloat(priceInput.value) : 0.1;
+    const duration_days = durationInput ? parseInt(durationInput.value) : 30;
+    const is_active = activeInput ? activeInput.checked : false;
+    const channel_type = typeSelect ? typeSelect.value : 'channel';
+    
+    if (!channel_name || !channel_invite_link) { showAlert('Please fill in all fields'); return; }
+    
+    const res = await apiFetch('/api/channels/register', {
+        method: 'POST',
+        body: JSON.stringify({ channel_name, channel_invite_link, subscription_price, duration_days, is_active, channel_type }),
+    });
+    if (res.error) return showAlert(res.error);
+    closeAddChannelModal();
+    loadOwnerDashboard();
+    showAlert('Channel added successfully!');
+}
+
+window.openAddChannelModal = openAddChannelModal;
+window.closeAddChannelModal = closeAddChannelModal;
+window.submitAddChannel = submitAddChannel;
+
+function copyDeepLink(channelId) {
+    const link = `https://t.me/MySubsHub_bot?start=${channelId}`;
+    navigator.clipboard.writeText(link).then(() => showAlert('Link copied!'));
+}
+window.copyDeepLink = copyDeepLink;
+
+async function toggleChannel(channelId, isActive) {
+    await apiFetch(`/api/channels/${channelId}`, { method: 'PUT', body: JSON.stringify({ is_active: isActive }) });
+}
+window.toggleChannel = toggleChannel;
+
+// ================== PURCHASE PAGE ==================
+async function loadPurchasePage(channelId) {
     const card = document.getElementById('purchase-card');
+    showSkeleton('purchase-card', 'card', 1);
+    
+    const data = await apiFetch(`/api/channels/${channelId}`, { method: 'GET' });
     if (!data || data.error) {
-        card.innerHTML = `<p class="text-red-400 text-center py-6">Channel not found</p>`;
+        card.innerHTML = '<p class="text-red-400 text-center py-6">Channel not found</p>';
         return;
     }
 
     const NETWORK_FEE_TON = 0.05;
     const platformFee = data.subscription_price * 0.01;
     const total = data.subscription_price + platformFee + NETWORK_FEE_TON;
+    const isVerified = data.is_verified;
+    const isGroup = data.channel_type === 'group';
 
     card.innerHTML = `
         <div class="text-center mb-6">
-            <h2 class="text-2xl font-bold text-white tracking-tight">${data.channel_name}</h2>
+            <div class="flex items-center justify-center gap-2 mb-2">
+                <h2 class="text-2xl font-bold text-white">${data.channel_name}</h2>
+                ${isVerified ? '<span class="verified-badge-large">✓</span>' : ''}
+            </div>
+            <p class="text-slate-400 text-sm">${isGroup ? '👥 Group' : '📺 Channel'}</p>
             <p class="text-slate-400 mt-2 text-sm">
                 Subscription: <strong class="text-white font-mono text-base">${total.toFixed(6)} TON</strong> / ${data.duration_days} days
             </p>
         </div>
-        <button id="btn-pay" class="btn-primary w-full text-white font-semibold py-3.5 rounded-xl">
-            Pay with TON
-        </button>
+        <button id="btn-pay" class="btn-primary w-full text-white font-semibold py-3.5 rounded-xl">Pay with TON</button>
     `;
     
     document.getElementById('btn-pay').onclick = () => initiatePayment(data.id, data.subscription_price);
-    if (window.lucide) lucide.createIcons();
 }
 
-// Payment
 async function initiatePayment(channelId, price) {
     try {
-        const initRes = await apiFetch('/api/subscriptions/initiate', {
-            method: 'POST',
-            body: JSON.stringify({ channel_id: channelId }),
-        });
-
+        const initRes = await apiFetch('/api/subscriptions/initiate', { method: 'POST', body: JSON.stringify({ channel_id: channelId }) });
         if (initRes.error) throw new Error(initRes.error);
-
         if (!tonConnectUI) throw new Error('TON Connect not initialized');
 
         let wallet = tonConnectUI.wallet;
@@ -430,394 +908,47 @@ async function initiatePayment(channelId, price) {
 
         const transaction = {
             validUntil: Math.floor(Date.now() / 1000) + 360,
-            messages: [{
-                address: initRes.wallet,
-                amount: initRes.amountNano,
-            }],
+            messages: [{ address: initRes.wallet, amount: initRes.amountNano }],
         };
 
         const result = await tonConnectUI.sendTransaction(transaction);
-        const boc = result.boc;
-
-        const confirmRes = await apiFetch('/api/subscriptions/confirm', {
-            method: 'POST',
-            body: JSON.stringify({ 
-                channel_id: channelId,
-                boc: boc 
-            }),
-        });
+        const confirmRes = await apiFetch('/api/subscriptions/confirm', { method: 'POST', body: JSON.stringify({ channel_id: channelId, boc: result.boc }) });
 
         if (confirmRes.success) {
-            alert('Subscription successful!');
+            showAlert('Subscription successful!');
             switchPage('subscriptions');
-            loadSubscriptions();
         } else {
-            alert('Payment confirmation failed: ' + confirmRes.error);
+            showAlert('Payment failed: ' + confirmRes.error);
         }
     } catch (e) {
-        console.error('Payment error:', e);
-        alert('Payment error: ' + e.message);
+        showAlert('Payment error: ' + e.message);
     }
 }
 
-// Subscriptions
-async function loadSubscriptions() {
-    try {
-        const subs = await apiFetch('/api/subscriptions/my');
-        const list = document.getElementById('subscriptions-list');
-
-        if (!subs || !subs.length) {
-            list.innerHTML = `<div class="glass-card p-10 text-center text-slate-400">No subscriptions yet.</div>`;
-            return;
-        }
-
-        list.innerHTML = subs.map(s => {
-            const channel = s.channel || {};
-            const daysLeft = Math.ceil((new Date(s.end_date) - Date.now()) / (1000 * 60 * 60 * 24));
-            const isExpired = daysLeft < 0;
-            const isExpiring = daysLeft >= 0 && daysLeft <= 7;
-
-            return '<div class="glass-card p-4 mb-3">' +
-                '<div class="flex justify-between items-start mb-2">' +
-                    '<h3 class="font-semibold text-white">' + (channel.channel_name || 'Unknown') + '</h3>' +
-                    '<span class="badge ' + (isExpired ? 'bg-red-500/10 text-red-400 border border-red-500/30' : isExpiring ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30') + '">' +
-                        (isExpired ? 'Expired' : isExpiring ? '⚠️ ' + daysLeft + 'd' : 'Active') +
-                    '</span>' +
-                '</div>' +
-                '<p class="text-slate-400 text-sm mb-3">Expires: ' + new Date(s.end_date).toLocaleDateString() + '</p>' +
-                '<div class="flex gap-2">' +
-                    '<button onclick="openRating(\'' + s.channel_id + '\')" class="btn-secondary px-3 py-1.5 rounded-xl text-xs text-slate-300">⭐ Rate</button>' +
-                    '<button onclick="openReport(\'' + s.channel_id + '\')" class="btn-secondary px-3 py-1.5 rounded-xl text-xs text-slate-300">🚩 Report</button>' +
-                    (isExpired ? '<button onclick="renewSubscription(\'' + s.channel_id + '\')" class="btn-primary px-3 py-1.5 rounded-xl text-xs text-white">🔄 Renew</button>' : '') +
-                '</div>' +
-            '</div>';
-        }).join('');
-    } catch (e) {
-        console.error('Error loading subscriptions:', e);
-    }
-}
-
-// Renew subscription
-async function renewSubscription(channelId) {
-    loadPurchasePage(channelId);
-    switchPage('purchase');
-}
-window.renewSubscription = renewSubscription;
-
-// Owner Dashboard
-async function loadOwnerDashboard() {
-    try {
-        const channels = await apiFetch('/api/channels/my');
-        const container = document.getElementById('channels-list');
-
-        if (!channels || !channels.length) {
-            container.innerHTML = '<div class="text-center text-slate-400 py-6">No channels yet.</div>';
-            return;
-        }
-
-        container.innerHTML = channels.map(ch => {
-            return '<div class="glass-card p-4 mb-3">' +
-                '<div class="flex justify-between items-start mb-2">' +
-                    '<div class="flex-1">' +
-                        '<h3 class="font-semibold text-white text-base">' + ch.channel_name + '</h3>' +
-                        '<p class="text-slate-400 text-xs mt-1">' + ch.subscription_price + ' TON / ' + ch.duration_days + ' days</p>' +
-                    '</div>' +
-                    '<label class="flex items-center gap-2 text-xs ml-3">' +
-                        '<span class="text-slate-300">Active</span>' +
-                        '<input type="checkbox" ' + (ch.is_active ? 'checked' : '') + ' onchange="toggleChannel(\'' + ch.id + '\', this.checked)" class="w-4 h-4 accent-blue-500 cursor-pointer">' +
-                    '</label>' +
-                '</div>' +
-                '<div class="flex gap-3 pt-2 border-t border-slate-700/50">' +
-                    '<button onclick="openEditModal(\'' + ch.id + '\')" class="text-blue-400 hover:text-blue-300 text-xs transition">Edit</button>' +
-                    '<button onclick="copyDeepLink(\'' + ch.id + '\')" class="text-blue-400 hover:text-blue-300 text-xs transition">Copy Link</button>' +
-                    '<button onclick="forwardChannel(\'' + ch.id + '\')" class="text-green-400 hover:text-green-300 text-xs transition">📤 Forward</button>' +
-                '</div>' +
-            '</div>';
-        }).join('');
-
-        loadWithdrawalSection();
-    } catch (e) {
-        console.error('Error loading owner dashboard:', e);
-    }
-}
-
-// Channel Edit
-let editingChannelId = null;
-
-async function openEditModal(channelId) {
-    editingChannelId = channelId;
-    const data = await apiFetch(`/api/channels/${channelId}`, { method: 'GET' });
-    if (data && !data.error) {
-        const priceInput = document.getElementById('edit-price');
-        const durationInput = document.getElementById('edit-duration');
-        if (priceInput) priceInput.value = data.subscription_price;
-        if (durationInput) durationInput.value = data.duration_days;
-    }
-    const editModal = document.getElementById('edit-modal');
-    if (editModal) editModal.classList.remove('hidden');
-}
-
-window.openEditModal = openEditModal;
-
-const modalCancelBtn = document.getElementById('modal-cancel');
-if (modalCancelBtn) {
-    modalCancelBtn.onclick = () => {
-        document.getElementById('edit-modal').classList.add('hidden');
-        editingChannelId = null;
-    };
-}
-
-const modalSaveBtn = document.getElementById('modal-save');
-if (modalSaveBtn) {
-    modalSaveBtn.onclick = async () => {
-        const price = parseFloat(document.getElementById('edit-price').value);
-        const duration = parseInt(document.getElementById('edit-duration').value);
-        if (editingChannelId) {
-            await apiFetch(`/api/channels/${editingChannelId}`, {
-                method: 'PUT',
-                body: JSON.stringify({ subscription_price: price, duration_days: duration }),
-            });
-        }
-        document.getElementById('edit-modal').classList.add('hidden');
-        loadOwnerDashboard();
-    };
-}
-
-// Add Channel
-function openAddChannelModal() {
-    // Reset form (with null checks for backward compatibility)
-    const nameInput = document.getElementById('add-channel-name');
-    const linkInput = document.getElementById('add-channel-link');
-    const priceInput = document.getElementById('add-channel-price');
-    const durationInput = document.getElementById('add-channel-duration');
-    const activeInput = document.getElementById('add-channel-active');
-    
-    if (nameInput) nameInput.value = '';
-    if (linkInput) linkInput.value = '';
-    if (priceInput) priceInput.value = '0.1';
-    if (durationInput) durationInput.value = '30';
-    if (activeInput) activeInput.checked = false;
-    
-    document.getElementById('add-channel-modal').classList.remove('hidden');
-}
-function closeAddChannelModal() {
-    document.getElementById('add-channel-modal').classList.add('hidden');
-}
-async function submitAddChannel() {
-    const nameInput = document.getElementById('add-channel-name');
-    const linkInput = document.getElementById('add-channel-link');
-    const priceInput = document.getElementById('add-channel-price');
-    const durationInput = document.getElementById('add-channel-duration');
-    const activeInput = document.getElementById('add-channel-active');
-    
-    const channel_name = nameInput ? nameInput.value.trim() : '';
-    const channel_invite_link = linkInput ? linkInput.value.trim() : '';
-    const subscription_price = priceInput ? parseFloat(priceInput.value) : 0.1;
-    const duration_days = durationInput ? parseInt(durationInput.value) : 30;
-    const is_active = activeInput ? activeInput.checked : false;
-    
-    if (!channel_name || !channel_invite_link) {
-        alert('Please fill in channel name and invite link');
-        return;
-    }
-    
-    if (subscription_price <= 0) {
-        alert('Subscription price must be greater than 0');
-        return;
-    }
-    
-    if (duration_days <= 0) {
-        alert('Duration must be greater than 0');
-        return;
-    }
-    
-    const res = await apiFetch('/api/channels/register', {
-        method: 'POST',
-        body: JSON.stringify({ 
-            channel_name, 
-            channel_invite_link,
-            subscription_price,
-            duration_days,
-            is_active
-        }),
-    });
-    if (res.error) return alert(res.error);
-    closeAddChannelModal();
-    loadOwnerDashboard();
-    alert('Channel added successfully!');
-}
-
-window.openAddChannelModal = openAddChannelModal;
-window.closeAddChannelModal = closeAddChannelModal;
-window.submitAddChannel = submitAddChannel;
-
-function copyDeepLink(channelId) {
-    const link = `https://t.me/MySubsHub_bot?start=${channelId}`;
-    navigator.clipboard.writeText(link).then(() => alert('Link copied!'));
-}
-window.copyDeepLink = copyDeepLink;
-
-// Forward Channel - Enhanced with rating and preview
-async function forwardChannel(channelId) {
-    try {
-        // Fetch channel details with rating
-        const channel = await apiFetch(`/api/channels/${channelId}`, { method: 'GET' });
-        
-        if (!channel || channel.error) {
-            alert('Channel not found');
-            return;
-        }
-        
-        const deepLink = `https://t.me/MySubsHub_bot?start=${channelId}`;
-        const rating = channel.avg_rating || 0;
-        const reviewCount = channel.total_reviews || 0;
-        
-        // Generate stars display
-        const stars = '⭐'.repeat(Math.round(rating)) + '☆'.repeat(5 - Math.round(rating));
-        
-        // Create engaging message template
-        let messageTemplate = `🚀 🌟 ${channel.channel_name} 🌟 🚀\n\n`;
-        messageTemplate += `💎 Premium Content You Don't Want to Miss!\n\n`;
-        messageTemplate += `${stars} ${rating.toFixed(1)}/5 (${reviewCount} reviews)\n\n`;
-        messageTemplate += `💰 Subscription: ${channel.subscription_price} TON\n`;
-        messageTemplate += `📅 Duration: ${channel.duration_days} days\n\n`;
-        messageTemplate += `✨ What you'll get:\n`;
-        messageTemplate += `• Exclusive content\n`;
-        messageTemplate += `• Premium access\n`;
-        messageTemplate += `• Community benefits\n\n`;
-        messageTemplate += `🔗 Subscribe Now:\n${deepLink}\n\n`;
-        messageTemplate += `#Premium #TON #Subscription`;
-        
-        // Show modal with preview
-        showForwardModal(channel, messageTemplate, deepLink);
-        
-    } catch (e) {
-        console.error('Error forwarding channel:', e);
-        alert('Error loading channel details');
-    }
-}
-window.forwardChannel = forwardChannel;
-
-function showForwardModal(channel, messageTemplate, deepLink) {
-    const modal = document.getElementById('forward-modal');
-    if (!modal) {
-        console.error('Forward modal not found');
-        return;
-    }
-    
-    // Update preview
-    updateForwardPreview(messageTemplate, channel);
-    
-    // Set initial message
-    const messageInput = document.getElementById('forward-message');
-    if (messageInput) messageInput.value = messageTemplate;
-    
-    // Add input listener for live preview
-    document.getElementById('forward-message').oninput = (e) => {
-        updateForwardPreview(e.target.value, channel);
-    };
-    
-    modal.classList.remove('hidden');
-}
-
-function updateForwardPreview(message, channel) {
-    const preview = document.getElementById('forward-preview');
-    if (!preview) return;
-    
-    // Convert markdown-like formatting to HTML
-    let html = message
-        .replace(/\n/g, '<br>')
-        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-        .replace(/\*(.*?)\*/g, '<em>$1</em>')
-        .replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" class="text-blue-400 underline" target="_blank">$1</a>');
-    
-    preview.innerHTML = `
-        <div class="bg-slate-800 rounded-xl p-4 border border-slate-700">
-            <div class="flex items-center gap-2 mb-3">
-                <div class="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold">
-                    ${channel.channel_name.charAt(0).toUpperCase()}
-                </div>
-                <div>
-                    <div class="font-semibold text-white">${channel.channel_name}</div>
-                    <div class="text-xs text-slate-400">via MySubHub</div>
-                </div>
-            </div>
-            <div class="text-sm text-slate-300 leading-relaxed">${html}</div>
-        </div>
-    `;
-}
-
-async function copyForwardMessage() {
-    const message = document.getElementById('forward-message').value;
-    try {
-        await navigator.clipboard.writeText(message);
-        alert('Message copied to clipboard!');
-    } catch (e) {
-        alert('Failed to copy message');
-    }
-}
-window.copyForwardMessage = copyForwardMessage;
-
-async function shareForwardMessage() {
-    const message = document.getElementById('forward-message').value;
-    const channelName = document.getElementById('forward-preview').querySelector('.font-semibold').textContent;
-    
-    // Try to use Telegram share API
-    const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(message.split('\n').pop())}&text=${encodeURIComponent(message)}`;
-    
-    try {
-        window.open(shareUrl, '_blank');
-        closeForwardModal();
-    } catch (e) {
-        // Fallback to copy
-        await copyForwardMessage();
-    }
-}
-window.shareForwardMessage = shareForwardMessage;
-
-function closeForwardModal() {
-    const modal = document.getElementById('forward-modal');
-    if (modal) {
-        modal.classList.add('hidden');
-    }
-}
-window.closeForwardModal = closeForwardModal;
-
-async function toggleChannel(channelId, isActive) {
-    await apiFetch(`/api/channels/${channelId}`, {
-        method: 'PUT',
-        body: JSON.stringify({ is_active: isActive }),
-    });
-}
-window.toggleChannel = toggleChannel;
-
-// Withdrawals
+// ================== WITHDRAWALS ==================
 async function loadWithdrawalSection() {
     const data = await apiFetch('/api/withdrawals/my');
     const section = document.getElementById('withdrawal-section');
-    section.innerHTML = '<h3 class="text-lg font-semibold text-white mb-2">Earnings</h3>' +
-        '<p class="text-slate-400">Pending: <strong class="text-white">' + (data.pendingEarnings || 0).toFixed(6) + ' TON</strong></p>' +
-        '<button onclick="requestWithdrawal()" class="btn-primary mt-3 text-white px-4 py-2 rounded-xl text-sm">Request Withdrawal</button>';
+    if (section) {
+        section.innerHTML = '<h3 class="text-lg font-semibold text-white mb-2">Earnings</h3>' +
+            '<p class="text-slate-400">Pending: <strong class="text-white">' + (data.pendingEarnings || 0).toFixed(6) + ' TON</strong></p>' +
+            '<button onclick="requestWithdrawal()" class="btn-primary mt-3 text-white px-4 py-2 rounded-xl text-sm">Request Withdrawal</button>';
+    }
 }
 
 async function requestWithdrawal() {
     const amount = await showPrompt('Enter amount in TON:');
     if (!amount) return;
-    const res = await apiFetch('/api/withdrawals/request', { 
-        method: 'POST', 
-        body: JSON.stringify({ amount: parseFloat(amount) }) 
-    });
-    if (res.success) {
-        alert('Withdrawal requested');
-        loadOwnerDashboard();
-    } else {
-        alert('Error: ' + (res.error || ''));
-    }
+    const res = await apiFetch('/api/withdrawals/request', { method: 'POST', body: JSON.stringify({ amount: parseFloat(amount) }) });
+    if (res.success) { showAlert('Withdrawal requested'); loadOwnerDashboard(); }
+    else showAlert('Error: ' + (res.error || ''));
 }
 window.requestWithdrawal = requestWithdrawal;
 
-// Admin Dashboard - FIXED VERSION WITH FULL REPORT DETAILS
+// ================== ADMIN DASHBOARD ==================
 async function loadAdminDashboard() {
+    showSkeleton('admin-reports', 'list', 3);
+    
     try {
         const reports = await apiFetch('/api/admin/reports');
         const withdrawals = await apiFetch('/api/admin/withdrawals');
@@ -825,7 +956,6 @@ async function loadAdminDashboard() {
         const reportsContainer = document.getElementById('admin-reports');
         const withdrawalsContainer = document.getElementById('admin-withdrawals');
         
-        // Display reports with full details
         if (!Array.isArray(reports) || reports.length === 0) {
             reportsContainer.innerHTML = '<p class="text-slate-400 text-center py-6">No reports.</p>';
         } else {
@@ -835,80 +965,37 @@ async function loadAdminDashboard() {
                 const channelOwner = r.channel_owner || {};
                 
                 return `
-                    <div class="glass-card p-4 border-l-4 ${r.status === 'pending' ? 'border-amber-500' : r.status === 'banned' ? 'border-red-500' : 'border-green-500'}">
-                        <!-- Status Badge -->
+                    <div class="glass-card p-4 border-l-4 ${r.status === 'pending' ? 'border-amber-500' : 'border-red-500'}">
                         <div class="flex justify-between items-start mb-3">
-                            <span class="text-xs font-bold uppercase px-2 py-1 rounded ${
-                                r.status === 'pending' ? 'bg-amber-500/20 text-amber-400' :
-                                r.status === 'banned' ? 'bg-red-500/20 text-red-400' :
-                                'bg-green-500/20 text-green-400'
-                            }">
-                                ${r.status || 'pending'}
-                            </span>
+                            <span class="text-xs font-bold uppercase px-2 py-1 rounded ${r.status === 'pending' ? 'bg-amber-500/20 text-amber-400' : 'bg-red-500/20 text-red-400'}">${r.status || 'pending'}</span>
                             <span class="text-xs text-slate-500">${new Date(r.created_at).toLocaleDateString()}</span>
                         </div>
-                        
-                        <!-- Report Details -->
                         <div class="space-y-3">
-                            <!-- Reporter Info -->
                             <div class="bg-slate-800/50 rounded-lg p-3">
                                 <p class="text-xs text-slate-400 mb-1">📢 Reported by:</p>
-                                <p class="text-sm font-semibold text-white">
-                                    ${reporter.first_name || 'Unknown'} 
-                                    ${reporter.username ? `(@${reporter.username})` : ''}
-                                </p>
-                                <p class="text-xs text-slate-500">ID: ${reporter.telegram_id || 'N/A'}</p>
+                                <p class="text-sm font-semibold text-white">${reporter.first_name || 'Unknown'} ${reporter.username ? `(@${reporter.username})` : ''}</p>
                             </div>
-                            
-                            <!-- Channel Info -->
                             <div class="bg-slate-800/50 rounded-lg p-3">
                                 <p class="text-xs text-slate-400 mb-1">📺 Channel:</p>
-                                <p class="text-sm font-semibold text-white">${channel.channel_name || 'Unknown Channel'}</p>
-                                <p class="text-xs text-slate-500">ID: ${r.reported_channel_id || 'N/A'}</p>
+                                <p class="text-sm font-semibold text-white">${channel.channel_name || 'Unknown'}</p>
                             </div>
-                            
-                            <!-- Channel Owner Info -->
-                            <div class="bg-slate-800/50 rounded-lg p-3">
-                                <p class="text-xs text-slate-400 mb-1">👤 Channel Owner:</p>
-                                <p class="text-sm font-semibold text-white">
-                                    ${channelOwner.first_name || 'Unknown'} 
-                                    ${channelOwner.username ? `(@${channelOwner.username})` : ''}
-                                </p>
-                                <p class="text-xs text-slate-500">ID: ${channelOwner.telegram_id || 'N/A'}</p>
-                            </div>
-                            
-                            <!-- Reason & Description -->
                             <div class="bg-slate-800/50 rounded-lg p-3">
                                 <p class="text-xs text-slate-400 mb-1">⚠️ Reason:</p>
                                 <p class="text-sm font-semibold text-red-400 uppercase">${r.reason || 'No reason'}</p>
                                 ${r.description ? `<p class="text-sm text-slate-300 mt-2">${r.description}</p>` : ''}
                             </div>
                         </div>
-                        
-                        <!-- Action Buttons -->
                         ${r.status === 'pending' ? `
                             <div class="flex gap-2 mt-4 pt-3 border-t border-slate-700">
-                                <button onclick="reviewReport('${r.id}', 'ban')" class="flex-1 bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-500/30 px-3 py-2 rounded-xl text-sm font-semibold transition">
-                                    🚫 Ban Channel
-                                </button>
-                                <button onclick="reviewReport('${r.id}', 'dismiss')" class="flex-1 bg-green-600/20 hover:bg-green-600/30 text-green-400 border border-green-500/30 px-3 py-2 rounded-xl text-sm font-semibold transition">
-                                    ✅ Dismiss
-                                </button>
+                                <button onclick="reviewReport('${r.id}', 'ban')" class="flex-1 bg-red-600/20 text-red-400 px-3 py-2 rounded-xl text-sm font-semibold">🚫 Ban</button>
+                                <button onclick="reviewReport('${r.id}', 'dismiss')" class="flex-1 bg-green-600/20 text-green-400 px-3 py-2 rounded-xl text-sm font-semibold">✅ Dismiss</button>
                             </div>
-                        ` : `
-                            <div class="mt-4 pt-3 border-t border-slate-700">
-                                <p class="text-xs text-slate-500 text-center">
-                                    ${r.status === 'banned' ? '🚫 Channel has been banned' : '✅ Report has been dismissed'}
-                                    ${r.reviewed_at ? ` on ${new Date(r.reviewed_at).toLocaleDateString()}` : ''}
-                                </p>
-                            </div>
-                        `}
+                        ` : ''}
                     </div>
                 `;
             }).join('');
         }
         
-        // Display withdrawals
         if (!Array.isArray(withdrawals) || withdrawals.length === 0) {
             withdrawalsContainer.innerHTML = '<p class="text-slate-400 text-center py-6">No pending withdrawals.</p>';
         } else {
@@ -926,223 +1013,65 @@ async function loadAdminDashboard() {
 }
 
 async function reviewReport(reportId, action) {
-    const confirmMsg = action === 'ban' 
-        ? 'Are you sure you want to BAN this channel? This will deactivate it immediately.'
-        : 'Are you sure you want to DISMISS this report?';
-    
-    const confirmed = await showConfirm(confirmMsg);
+    const confirmed = await showConfirm(action === 'ban' ? 'Ban this channel?' : 'Dismiss this report?');
     if (!confirmed) return;
     
     try {
-        const res = await apiFetch(`/api/admin/reports/${reportId}/review`, { 
-            method: 'POST', 
-            body: JSON.stringify({ action }) 
-        });
-        
-        if (res.success) {
-            alert(`Report ${action === 'ban' ? 'banned' : 'dismissed'} successfully!`);
-            loadAdminDashboard(); // Reload to show updated status
-        } else {
-            alert('Error: ' + (res.error || 'Unknown error'));
-        }
+        const res = await apiFetch(`/api/admin/reports/${reportId}/review`, { method: 'POST', body: JSON.stringify({ action }) });
+        if (res.success) { showAlert(`Report ${action === 'ban' ? 'banned' : 'dismissed'}!`); loadAdminDashboard(); }
+        else showAlert('Error: ' + (res.error || ''));
     } catch (e) {
-        console.error('Error reviewing report:', e);
-        alert('Error: ' + e.message);
+        showAlert('Error: ' + e.message);
     }
 }
 window.reviewReport = reviewReport;
 
 async function approveWithdrawal(id) {
     const res = await apiFetch(`/api/admin/withdrawals/${id}/approve`, { method: 'POST' });
-    if (res.success) {
-        alert('Approved!');
-        loadAdminDashboard();
-    } else {
-        alert('Error: ' + (res.error || ''));
-    }
+    if (res.success) { showAlert('Approved!'); loadAdminDashboard(); }
+    else showAlert('Error: ' + (res.error || ''));
 }
 window.approveWithdrawal = approveWithdrawal;
 
-// Language
-function openLanguageModal() {
-    document.getElementById('language-modal').classList.remove('hidden');
-}
-function closeLanguageModal() {
-    document.getElementById('language-modal').classList.add('hidden');
-}
-function selectLanguage(lang) {
-    setLanguage(lang);
-    closeLanguageModal();
-}
-
-window.openLanguageModal = openLanguageModal;
-window.closeLanguageModal = closeLanguageModal;
-window.selectLanguage = selectLanguage;
-
-// Rating and Report functions
-let ratingChannelId = null;
-let reportChannelId = null;
-let selectedRating = 0;
+// ================== RATING & REPORTING ==================
+let ratingChannelId = null, reportChannelId = null, selectedRating = 0;
 
 async function openRating(channelId) {
     ratingChannelId = channelId;
     selectedRating = 0;
     
-    // Check if user already rated this channel
     try {
         const checkRes = await apiFetch(`/api/reviews/check/${channelId}`, { method: 'GET' });
-        
-        if (checkRes && checkRes.alreadyRated) {
-            alert('You have already rated this channel. You can only rate each channel once.');
-            return;
-        }
-    } catch (e) {
-        console.error('Error checking rating status:', e);
-    }
+        if (checkRes && checkRes.alreadyRated) { showAlert('You have already rated this channel.'); return; }
+    } catch (e) {}
     
     const modal = document.getElementById('rating-modal');
-    if (!modal) {
-        alert('Rating modal not found');
-        return;
-    }
-    
-    const starsContainer = document.getElementById('star-rating');
-    if (starsContainer) {
-        starsContainer.innerHTML = '';
-        for (let i = 1; i <= 5; i++) {
-            const star = document.createElement('span');
-            star.textContent = '☆';
-            star.className = 'cursor-pointer text-3xl text-yellow-500';
-            star.onclick = () => selectRating(i);
-            starsContainer.appendChild(star);
-        }
-    }
-    
-    modal.classList.remove('hidden');
+    if (modal) modal.classList.remove('hidden');
 }
 window.openRating = openRating;
-
-function selectRating(rating) {
-    selectedRating = rating;
-    const stars = document.querySelectorAll('#star-rating span');
-    stars.forEach((star, index) => {
-        star.textContent = index < rating ? '★' : '☆';
-    });
-}
-window.selectRating = selectRating;
-
-async function submitRating() {
-    if (selectedRating === 0) {
-        alert('Please select a rating');
-        return;
-    }
-    
-    const comment = document.getElementById('rating-comment')?.value || '';
-    
-    try {
-        const res = await apiFetch('/api/reviews', {
-            method: 'POST',
-            body: JSON.stringify({
-                channel_id: ratingChannelId,
-                rating: selectedRating,
-                comment: comment
-            })
-        });
-        
-        if (res.success) {
-            alert('Rating submitted successfully!');
-            closeRating();
-        } else {
-            alert('Error: ' + (res.error || 'Unknown error'));
-        }
-    } catch (e) {
-        console.error('Error submitting rating:', e);
-        alert('Error: ' + e.message);
-    }
-}
-window.submitRating = submitRating;
-
-function closeRating() {
-    const modal = document.getElementById('rating-modal');
-    if (modal) {
-        modal.classList.add('hidden');
-    }
-    ratingChannelId = null;
-    selectedRating = 0;
-}
-window.closeRating = closeRating;
 
 async function openReport(channelId) {
     reportChannelId = channelId;
     
-    // Check if user already reported this channel
     try {
         const checkRes = await apiFetch(`/api/reports/check/${channelId}`, { method: 'GET' });
-        
-        if (checkRes && checkRes.alreadyReported) {
-            alert('You have already reported this channel. You can only report each channel once.');
-            return;
-        }
-    } catch (e) {
-        console.error('Error checking report status:', e);
-    }
+        if (checkRes && checkRes.alreadyReported) { showAlert('You have already reported this channel.'); return; }
+    } catch (e) {}
     
     const modal = document.getElementById('report-modal');
-    if (!modal) {
-        alert('Report modal not found');
-        return;
-    }
-    
-    // Reset form
-    const reasonSelect = document.getElementById('report-reason');
-    if (reasonSelect) reasonSelect.value = 'scam';
-    
-    const descriptionInput = document.getElementById('report-description');
-    if (descriptionInput) descriptionInput.value = '';
-    
-    modal.classList.remove('hidden');
+    if (modal) modal.classList.remove('hidden');
 }
 window.openReport = openReport;
 
-async function submitReport() {
-    const reason = document.getElementById('report-reason')?.value || 'scam';
-    const description = document.getElementById('report-description')?.value || '';
-    
-    if (!description.trim()) {
-        alert('Please provide a description');
-        return;
-    }
-    
-    try {
-        const res = await apiFetch('/api/reports', {
-            method: 'POST',
-            body: JSON.stringify({
-                channel_id: reportChannelId,
-                reason: reason,
-                description: description
-            })
-        });
-        
-        if (res.success) {
-            alert('Report submitted successfully!');
-            closeReport();
-        } else {
-            alert('Error: ' + (res.error || 'Unknown error'));
-        }
-    } catch (e) {
-        console.error('Error submitting report:', e);
-        alert('Error: ' + e.message);
-    }
-}
-window.submitReport = submitReport;
+// ================== LANGUAGE ==================
+function openLanguageModal() { document.getElementById('language-modal')?.classList.remove('hidden'); }
+function closeLanguageModal() { document.getElementById('language-modal')?.classList.add('hidden'); }
+function selectLanguage(lang) { setLanguage(lang); closeLanguageModal(); }
 
-function closeReport() {
-    const modal = document.getElementById('report-modal');
-    if (modal) {
-        modal.classList.add('hidden');
-    }
-    reportChannelId = null;
-}
-window.closeReport = closeReport;
+window.openLanguageModal = openLanguageModal;
+window.closeLanguageModal = closeLanguageModal;
+window.selectLanguage = selectLanguage;
+window.toggleTheme = toggleTheme;
 
+// ================== START ==================
 window.onload = init;
