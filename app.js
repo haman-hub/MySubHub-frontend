@@ -2,8 +2,40 @@
 // Features: Pagination, Tutorial, Skeleton Loading, Gestures, Dark/Light Mode,
 //           Verified Badges, Channel Posts, Groups Support
 
-window.onerror = function(message) {
-    showAlert('Error: ' + message);
+// ================== CRITICAL: Expose functions to window immediately ==================
+// These are defined later but exposed now to prevent "not defined" errors
+window.switchPage = null;
+window.toggleTheme = null;
+window.openLanguageModal = null;
+window.closeLanguageModal = null;
+window.selectLanguage = null;
+window.openAddChannelModal = null;
+window.closeAddChannelModal = null;
+window.submitAddChannel = null;
+window.openRating = null;
+window.closeRating = null;
+window.selectRating = null;
+window.submitRating = null;
+window.openReport = null;
+window.closeReport = null;
+window.submitReport = null;
+window.renewSubscription = null;
+window.joinChannel = null;
+window.forwardChannel = null;
+window.copyDeepLink = null;
+window.toggleChannel = null;
+window.openEditModal = null;
+window.requestVerification = null;
+window.approveWithdrawal = null;
+window.reviewReport = null;
+window.requestWithdrawal = null;
+window.loadReferralDashboard = null;
+window.copyReferralLink = null;
+window.shareReferralLink = null;
+
+// Simple error handler that doesn't depend on showAlert
+window.onerror = function(message, source, lineno) {
+    console.error('Error:', message, 'at', source, 'line:', lineno);
     return true;
 };
 
@@ -480,7 +512,7 @@ async function apiFetch(url, options = {}) {
 function switchPage(pageId) {
     if (pageId === 'admin' && !isAdmin) pageId = 'subscriptions';
 
-    const allPages = ['purchase', 'subscriptions', 'owner', 'admin'];
+    const allPages = ['purchase', 'subscriptions', 'owner', 'referrals', 'admin'];
     allPages.forEach(p => {
         const sec = document.getElementById(`page-${p}`);
         if (sec) { sec.style.display = 'none'; sec.classList.add('hidden-page'); }
@@ -490,12 +522,22 @@ function switchPage(pageId) {
     if (target) { target.style.display = 'block'; target.classList.remove('hidden-page'); }
 
     // Update nav buttons
-    const navButtonMap = { 'subscriptions': 'nav-subscriptions', 'owner': 'nav-owner', 'admin': 'nav-admin' };
+    const navButtonMap = { 
+        'subscriptions': 'nav-subscriptions', 
+        'owner': 'nav-owner', 
+        'referrals': 'nav-referrals',
+        'admin': 'nav-admin' 
+    };
     Object.values(navButtonMap).forEach(id => {
         const btn = document.getElementById(id);
         if (btn) {
-            btn.classList.remove('active', 'text-ton-400', 'text-emerald-400', 'text-amber-400');
+            btn.classList.remove('active', 'text-ton-400', 'text-emerald-400', 'text-amber-400', 'text-purple-400');
             btn.classList.add('text-slate-400');
+            const indicator = btn.querySelector('.tab-indicator');
+            if (indicator) {
+                indicator.classList.remove('scale-x-100', 'opacity-100');
+                indicator.classList.add('scale-x-0', 'opacity-0');
+            }
         }
     });
 
@@ -506,14 +548,31 @@ function switchPage(pageId) {
             activeBtn.classList.add('active');
             activeBtn.classList.remove('text-slate-400');
             let colorClass = 'text-ton-400';
-            if (pageId === 'owner') colorClass = 'text-emerald-400';
-            else if (pageId === 'admin') colorClass = 'text-amber-400';
+            let indicatorColor = 'bg-ton-400';
+            if (pageId === 'owner') {
+                colorClass = 'text-emerald-400';
+                indicatorColor = 'bg-emerald-400';
+            }
+            else if (pageId === 'referrals') {
+                colorClass = 'text-purple-400';
+                indicatorColor = 'bg-purple-400';
+            }
+            else if (pageId === 'admin') {
+                colorClass = 'text-amber-400';
+                indicatorColor = 'bg-amber-400';
+            }
             activeBtn.classList.add(colorClass);
+            
+            const indicator = activeBtn.querySelector('.tab-indicator');
+            if (indicator) {
+                indicator.className = `tab-indicator w-5 h-0.5 rounded-full ${indicatorColor} mt-1 transition-all duration-200 opacity-100 scale-x-100`;
+            }
         }
     }
 
     if (pageId === 'subscriptions') loadSubscriptions();
     else if (pageId === 'owner') loadOwnerDashboard();
+    else if (pageId === 'referrals') loadReferralDashboard();
     else if (pageId === 'admin') loadAdminDashboard();
 
     currentPage = pageId;
