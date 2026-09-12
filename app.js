@@ -74,6 +74,9 @@ function toggleTheme() {
     TG.HapticFeedback.selectionChanged();
 }
 
+// Immediately assign to window to prevent reference errors
+window.toggleTheme = toggleTheme;
+
 // Listen for system theme changes
 window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
     if (currentTheme === 'system') {
@@ -1219,12 +1222,17 @@ window.openReport = openReport;
 // ================== LANGUAGE ==================
 function openLanguageModal() { document.getElementById('language-modal')?.classList.remove('hidden'); }
 function closeLanguageModal() { document.getElementById('language-modal')?.classList.add('hidden'); }
-function selectLanguage(lang) { setLanguage(lang); closeLanguageModal(); }
+function selectLanguage(lang) { 
+    if (typeof setLanguage === 'function') {
+        setLanguage(lang); 
+    }
+    closeLanguageModal(); 
+}
 
+// Immediately assign to window to prevent reference errors
 window.openLanguageModal = openLanguageModal;
 window.closeLanguageModal = closeLanguageModal;
 window.selectLanguage = selectLanguage;
-window.toggleTheme = toggleTheme;
 
 // ================== REFERRAL SYSTEM ==================
 async function loadReferralDashboard() {
