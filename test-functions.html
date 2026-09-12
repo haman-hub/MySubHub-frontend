@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Function Test - MySubHub</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #fff;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            background: #2a2a2a;
+            border-radius: 8px;
+        }
+        .test-button {
+            padding: 10px 20px;
+            margin: 5px;
+            background: #0098ea;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .test-button:hover {
+            background: #0077b5;
+        }
+        .success {
+            color: #4ade80;
+            font-weight: bold;
+        }
+        .error {
+            color: #f87171;
+            font-weight: bold;
+        }
+        .info {
+            color: #60a5fa;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 MySubHub Function Test</h1>
+    <p class="info">This page tests if all critical functions are properly loaded.</p>
+
+    <div class="test-section">
+        <h2>1. Function Existence Test</h2>
+        <div id="function-test"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>2. Function Call Test</h2>
+        <button class="test-button" onclick="testSwitchPage()">Test switchPage</button>
+        <button class="test-button" onclick="testToggleTheme()">Test toggleTheme</button>
+        <button class="test-button" onclick="testOpenLanguageModal()">Test openLanguageModal</button>
+        <div id="call-test" style="margin-top: 10px;"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>3. Console Errors</h2>
+        <div id="error-test"></div>
+    </div>
+
+    <script>
+        // Track errors
+        const errors = [];
+        window.onerror = function(message, source, lineno) {
+            errors.push({ message, source, lineno });
+            updateErrorDisplay();
+            return true;
+        };
+
+        // Test function existence
+        function testFunctionExistence() {
+            const functions = [
+                'switchPage',
+                'toggleTheme',
+                'openLanguageModal',
+                'closeLanguageModal',
+                'selectLanguage',
+                'openRating',
+                'closeRating',
+                'submitRating',
+                'openReport',
+                'closeReport',
+                'submitReport',
+                'forwardChannel',
+                'joinChannel',
+                'loadReferralDashboard'
+            ];
+
+            const container = document.getElementById('function-test');
+            let html = '<ul>';
+            
+            functions.forEach(fn => {
+                const exists = typeof window[fn] === 'function';
+                const status = exists ? '<span class="success">✓ Available</span>' : '<span class="error">✗ Not defined</span>';
+                html += `<li><code>${fn}()</code>: ${status}</li>`;
+            });
+            
+            html += '</ul>';
+            container.innerHTML = html;
+        }
+
+        // Test function calls
+        function testSwitchPage() {
+            try {
+                if (typeof window.switchPage === 'function') {
+                    window.switchPage('subscriptions');
+                    document.getElementById('call-test').innerHTML = '<span class="success">✓ switchPage() executed successfully</span>';
+                } else {
+                    document.getElementById('call-test').innerHTML = '<span class="error">✗ switchPage() is not a function</span>';
+                }
+            } catch (e) {
+                document.getElementById('call-test').innerHTML = `<span class="error">✗ Error: ${e.message}</span>`;
+            }
+        }
+
+        function testToggleTheme() {
+            try {
+                if (typeof window.toggleTheme === 'function') {
+                    window.toggleTheme();
+                    document.getElementById('call-test').innerHTML = '<span class="success">✓ toggleTheme() executed successfully</span>';
+                } else {
+                    document.getElementById('call-test').innerHTML = '<span class="error">✗ toggleTheme() is not a function</span>';
+                }
+            } catch (e) {
+                document.getElementById('call-test').innerHTML = `<span class="error">✗ Error: ${e.message}</span>`;
+            }
+        }
+
+        function testOpenLanguageModal() {
+            try {
+                if (typeof window.openLanguageModal === 'function') {
+                    // Don't actually open the modal, just check if function exists
+                    document.getElementById('call-test').innerHTML = '<span class="success">✓ openLanguageModal() is available</span>';
+                } else {
+                    document.getElementById('call-test').innerHTML = '<span class="error">✗ openLanguageModal() is not a function</span>';
+                }
+            } catch (e) {
+                document.getElementById('call-test').innerHTML = `<span class="error">✗ Error: ${e.message}</span>`;
+            }
+        }
+
+        // Update error display
+        function updateErrorDisplay() {
+            const container = document.getElementById('error-test');
+            if (errors.length === 0) {
+                container.innerHTML = '<span class="success">✓ No errors detected</span>';
+            } else {
+                let html = '<ul>';
+                errors.forEach(err => {
+                    html += `<li class="error">Error: ${err.message} at line ${err.lineno}</li>`;
+                });
+                html += '</ul>';
+                container.innerHTML = html;
+            }
+        }
+
+        // Run tests on load
+        window.addEventListener('DOMContentLoaded', () => {
+            testFunctionExistence();
+            updateErrorDisplay();
+        });
+    </script>
+</body>
+</html>
