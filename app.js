@@ -359,7 +359,7 @@ window.loadSubscriptions = async function() {
             const inviteLink = channel.channel_invite_link || '';
 
             return `
-                <div class="glass-card p-4 mb-3">
+                <div class="glass-card p-4 mb-3 cursor-pointer hover:border-blue-500/50 transition-all" onclick="joinChannel('${inviteLink}')">
                     <div class="flex justify-between items-start mb-2">
                         <div class="flex items-center gap-2">
                             <h3 class="font-semibold text-white">${channel.channel_name || 'Unknown'}</h3>
@@ -371,10 +371,10 @@ window.loadSubscriptions = async function() {
                     </div>
                     <p class="text-slate-400 text-sm mb-3">Expires: ${new Date(s.end_date).toLocaleDateString()}</p>
                     <div class="flex gap-2 flex-wrap">
-                        ${!isExpired && inviteLink ? `<button onclick="joinChannel('${inviteLink}')" class="btn-primary px-3 py-1.5 rounded-xl text-xs text-white">📺 Open Channel</button>` : ''}
-                        <button onclick="openRating('${s.channel_id}')" class="btn-secondary px-3 py-1.5 rounded-xl text-xs">⭐ Rate</button>
-                        <button onclick="openReport('${s.channel_id}')" class="btn-secondary px-3 py-1.5 rounded-xl text-xs">🚩 Report</button>
-                        ${isExpired ? `<button onclick="renewSubscription('${s.channel_id}')" class="btn-primary px-3 py-1.5 rounded-xl text-xs text-white">🔄 Renew</button>` : ''}
+                        ${!isExpired && inviteLink ? `<button onclick="event.stopPropagation(); joinChannel('${inviteLink}')" class="btn-primary px-3 py-1.5 rounded-xl text-xs text-white">📺 Open Channel</button>` : ''}
+                        <button onclick="event.stopPropagation(); openRating('${s.channel_id}')" class="btn-secondary px-3 py-1.5 rounded-xl text-xs">⭐ Rate</button>
+                        <button onclick="event.stopPropagation(); openReport('${s.channel_id}')" class="btn-secondary px-3 py-1.5 rounded-xl text-xs">🚩 Report</button>
+                        ${isExpired ? `<button onclick="event.stopPropagation(); renewSubscription('${s.channel_id}')" class="btn-primary px-3 py-1.5 rounded-xl text-xs text-white">🔄 Renew</button>` : ''}
                     </div>
                 </div>
             `;
@@ -566,6 +566,10 @@ window.loadReferralDashboard = async function() {
             return;
         }
 
+        // Generate bot referral link (no GitHub URL!)
+        const referralCode = stats.referralCode || 'unknown';
+        const botReferralLink = `https://t.me/MySubsHub_bot?start=ref_${referralCode}`;
+
         container.innerHTML = `
             <div class="glass-card p-6 mb-4">
                 <h3 class="text-xl font-bold text-white mb-4">🎁 Your Referral Program</h3>
@@ -590,7 +594,7 @@ window.loadReferralDashboard = async function() {
                 <div class="bg-gradient-to-r from-blue-600/20 to-purple-600/20 border border-blue-500/30 rounded-xl p-4 mb-4">
                     <p class="text-sm text-slate-300 mb-2">🔗 Your Referral Link</p>
                     <div class="flex gap-2">
-                        <input type="text" id="referral-link" value="${stats.referralLink || ''}" class="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white" readonly>
+                        <input type="text" id="referral-link" value="${botReferralLink}" class="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white" readonly>
                         <button onclick="copyReferralLink()" class="btn-primary px-4 py-2 rounded-lg text-sm">📋 Copy</button>
                     </div>
                     <p class="text-xs text-slate-400 mt-2">Earn 5% credits on every subscription made through your link!</p>
