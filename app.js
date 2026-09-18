@@ -447,15 +447,91 @@ window.loadPurchasePage = async function(channelId) {
 };
 
 window.initiatePayment = async function(channelId, price) {
-    console.log('initiatePayment called');
-    alert('Payment functionality - requires TON Connect integration');
+    console.log('initiatePayment called for channel:', channelId, 'price:', price);
+    
+    if (!tonConnectUI || !userWallet) {
+        alert('Please connect your wallet first');
+        return;
+    }
+    
+    try {
+        // Get payment details from backend
+        const paymentDetails = await apiFetch('/api/subscriptions/initiate', {
+            method: 'POST',
+            body: JSON.stringify({ channel_id: channelId })
+        });
+        
+        if (paymentDetails.error) {
+            alert('Error: ' + paymentDetails.error);
+            return;
+        }
+        
+        console.log('Payment details:', paymentDetails);
+        
+        // Create transaction
+        const transaction = {
+            validUntil: Math.floor(Date.now() / 1000) + 600, // 10 minutes
+            messages: [
+                {
+                    address: paymentDetails.wallet,
+                    amount: paymentDetails.amountNano
+                }
+            ]
+        };
+        
+        console.log('Sending transaction:', transaction);
+        
+        // Send transaction
+        const result = await tonConnectUI.sendTransaction(transaction);
+        console.log('Transaction result:', result);
+        
+        // Confirm payment with backend
+        const confirmResult = await apiFetch('/api/subscriptions/confirm', {
+            method: 'POST',
+            body: JSON.stringify({
+                channel_id: channelId,
+                boc: result.boc
+            })
+        });
+        
+        if (confirmResult.success) {
+            alert('Payment successful! You are now subscribed.');
+            window.switchPage('subscriptions');
+        } else {
+            alert('Payment confirmation failed: ' + (confirmResult.error || 'Unknown error'));
+        }
+        
+    } catch (e) {
+        console.error('Payment error:', e);
+        alert('Payment failed: ' + e.message);
+    }
 };
 
 // ================== OWNER DASHBOARD ==================
 window.loadOwnerDashboard = async function() {
     console.log('loadOwnerDashboard called');
     const container = document.getElementById('channels-list');
+    const walletSection = document.getElementById('wallet-section');
+    
     if (!container) return;
+    
+    // Add wallet connection section
+    if (walletSection) {
+        walletSection.innerHTML = `
+            <div class="glass-card p-4 mb-4">
+                <h3 class="text-lg font-bold text-white mb-3">💰 Wallet Connection</h3>
+                <div id="wallet-status" class="mb-3">
+                    <div class="flex items-center gap-2">
+                        <span class="text-slate-400">Loading wallet status...</span>
+                    </div>
+                </div>
+                <div class="text-xs text-slate-500">
+                    Connect your TON wallet to receive subscription payments from your channels.
+                </div>
+            </div>
+        `;
+        updateWalletUI();
+    }
     
     container.innerHTML = '<div class="text-center text-slate-400 py-6">Loading channels...</div>';
     
@@ -767,11 +843,118 @@ try {
     console.warn('Telegram WebApp init:', e);
 }
 
+// ================== TON CONNECT WALLET INIT ==================
+let tonConnectUI = null;
+let userWallet = null;
+
+async function initTonConnect() {
+    try {
+        if (window.TON_CONNECT_UI) {
+            tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
+                manifestUrl: 'https://haman-hub.github.io/MySubHub-frontend/manifest.json',
+                buttonRootId: 'ton-connect-button'
+            });
+            
+            // Listen for wallet connection
+            tonConnectUI.onStatusChange(wallet => {
+                if (wallet) {
+                    userWallet = wallet;
+                    console.log('Wallet connected:', wallet.account.address);
+                    updateWalletUI();
+                    // Save wallet to backend
+                    saveWalletToBackend(wallet.account.address);
+                } else {
+                    userWallet = null;
+                    updateWalletUI();
+                }
+            });
+            
+            // Check if already connected
+            if (tonConnectUI.wallet) {
+                userWallet = tonConnectUI.wallet;
+                updateWalletUI();
+            }
+            
+            console.log('TON Connect initialized');
+        } else {
+            console.warn('TON Connect UI not loaded');
+        }
+    } catch (e) {
+        console.error('TON Connect init error:', e);
+    }
+}
+
+function updateWalletUI() {
+    const walletStatus = document.getElementById('wallet-status');
+    if (walletStatus) {
+        if (userWallet) {
+            const address = userWallet.account.address;
+            const shortAddress = address.substring(0, 6) + '...' + address.substring(address.length - 4);
+            walletStatus.innerHTML = `
+                <div class="flex items-center gap-2">
+                    <span class="text-emerald-400">✓</span>
+                    <span class="text-sm text-white">${shortAddress}</span>
+                    <button onclick="disconnectWallet()" class="text-xs text-red-400 hover:text-red-300">Disconnect</button>
+                </div>
+            `;
+        } else {
+            walletStatus.innerHTML = `
+                <div class="flex items-center gap-2">
+                    <span class="text-slate-400">No wallet connected</span>
+                    <button onclick="connectWallet()" class="btn-primary px-3 py-1 rounded-lg text-xs text-white">Connect Wallet</button>
+                </div>
+            `;
+        }
+    }
+}
+
+async function saveWalletToBackend(address) {
+    try {
+        await apiFetch('/api/auth/wallet', {
+            method: 'POST',
+            body: JSON.stringify({ wallet_address: address })
+        });
+        console.log('Wallet saved to backend');
+    } catch (e) {
+        console.error('Error saving wallet:', e);
+    }
+}
+
+window.connectWallet = async function() {
+    if (!tonConnectUI) {
+        alert('TON Connect not initialized');
+        return;
+    }
+    
+    try {
+        await tonConnectUI.openModal();
+    } catch (e) {
+        console.error('Error connecting wallet:', e);
+        alert('Error connecting wallet: ' + e.message);
+    }
+};
+
+window.disconnectWallet = async function() {
+    if (!tonConnectUI) return;
+    
+    try {
+        await tonConnectUI.disconnect();
+        userWallet = null;
+        updateWalletUI();
+        console.log('Wallet disconnected');
+    } catch (e) {
+        console.error('Error disconnecting wallet:', e);
+    }
+};
+
 // ================== INITIALIZATION ==================
 async function init() {
     console.log('init() called');
     
     try {
+        // Initialize TON Connect
+        await initTonConnect();
+        
         // Show nav bar
         const navBar = document.getElementById('nav-bar');
         if (navBar) {
