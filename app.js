@@ -99,10 +99,11 @@ async function apiFetch(url, options = {}) {
   };
 
   if (!initData) {
-    if (url === '/api/auth/validate') return { user: null };
-    if (url === '/api/subscriptions/my') return [];
-    if (url === '/api/channels/my') return [];
-    if (url === '/api/referrals/stats') return { error: 'Not authenticated' };
+    console.warn('No Telegram initData available');
+    if (url === '/api/auth/validate') return { user: null, error: 'Not in Telegram' };
+    if (url === '/api/subscriptions/my') return { error: 'Not authenticated - open via Telegram bot' };
+    if (url === '/api/channels/my') return { error: 'Not authenticated - open via Telegram bot' };
+    if (url === '/api/referrals/stats') return { error: 'Not authenticated - open via Telegram bot' };
     return { success: true };
   }
 
@@ -111,31 +112,143 @@ async function apiFetch(url, options = {}) {
 
     if (res.status === 401 || res.status === 403) {
       if (url === '/api/auth/validate') return { user: null };
-      Toast.error('Session expired. Please reopen the app.');
-      return { error: 'Unauthorized' };
+      return { error: 'Unauthorized - please restart the app' };
     }
 
     if (res.status === 429) {
-      Toast.warning('Too many requests. Please wait a moment.');
-      return { error: 'Rate limited' };
+      return { error: 'Too many requests. Please wait.' };
     }
 
     if (res.status === 409) {
       const data = await res.json();
-      Toast.warning(data.error || 'Conflict detected');
       return data;
     }
 
     if (!res.ok) {
-      const error = await res.json().catch(() => ({}));
-      throw new Error(error.error || `HTTP ${res.status}`);
+      const error = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+      return { error: error.error || `Request failed` };
     }
     return res.json();
   } catch (err) {
     console.error('API fetch error:', err);
-    throw err;
+    return { error: 'Network error - check your connection' };
   }
 }
+
+// ================== DIAGNOSTIC FUNCTION ==================
+window.runDiagnostic = async function() {
+  console.log('🔍 Running MySubHub Diagnostic...\n');
+  
+  const results = {
+    apiBase: API_BASE,
+    hasTelegram: !!window.Telegram?.WebApp,
+    hasInitData: !!window.Telegram?.WebApp?.initData,
+    healthCheck: null,
+    authCheck: null,
+    subscriptionsCheck: null,
+    channelsCheck: null,
+    referralsCheck: null,
+  };
+  
+  // Health check
+  try {
+    const res = await fetch(`${API_BASE}/health`);
+    results.healthCheck = { status: res.status, data: await res.json() };
+    console.log('✅ Health check:', results.healthCheck);
+  } catch (e) {
+    results.healthCheck = { error: e.message };
+    console.error('❌ Health check failed:', e.message);
+  }
+  
+  // Auth check
+  try {
+    const auth = await apiFetch('/api/auth/validate');
+    results.authCheck = auth;
+    console.log('✅ Auth check:', auth);
+  } catch (e) {
+    results.authCheck = { error: e.message };
+    console.error('❌ Auth check failed:', e.message);
+  }
+  
+  // Subscriptions check
+  try {
+    const subs = await apiFetch('/api/subscriptions/my');
+    results.subscriptionsCheck = subs;
+    console.log('✅ Subscriptions check:', subs);
+  } catch (e) {
+    results.subscriptionsCheck = { error: e.message };
+    console.error('❌ Subscriptions check failed:', e.message);
+  }
+  
+  // Channels check
+  try {
+    const channels = await apiFetch('/api/channels/my');
+    results.channelsCheck = channels;
+    console.log('✅ Channels check:', channels);
+  } catch (e) {
+    results.channelsCheck = { error: e.message };
+    console.error('❌ Channels check failed:', e.message);
+  }
+  
+  // Referrals check
+  try {
+    const refs = await apiFetch('/api/referrals/stats');
+    results.referralsCheck = refs;
+    console.log('✅ Referrals check:', refs);
+  } catch (e) {
+    results.referralsCheck = { error: e.message };
+    console.error('❌ Referrals check failed:', e.message);
+  }
+  
+  console.log('\n📋 Full diagnostic results:', results);
+  
+  // Show results in UI
+  const modal = document.createElement('div');
+  modal.className = 'fixed inset-0 z-[9999] bg-black/80 backdrop-blur-md flex items-center justify-center p-4';
+  modal.innerHTML = `
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto">
+      <h2 class="text-xl font-bold text-white mb-4">🔍 Diagnostic Results</h2>
+      <div class="space-y-3 text-sm">
+        <div class="bg-slate-800/50 rounded-lg p-3">
+          <p class="text-slate-400 text-xs mb-1">API Base URL</p>
+          <p class="text-white font-mono text-xs break-all">${escapeHtml(results.apiBase)}</p>
+        </div>
+        <div class="bg-slate-800/50 rounded-lg p-3">
+          <p class="text-slate-400 text-xs mb-1">Telegram WebApp</p>
+          <p class="${results.hasTelegram ? 'text-emerald-400' : 'text-red-400'}">${results.hasTelegram ? '✅ Loaded' : '❌ Not loaded'}</p>
+        </div>
+        <div class="bg-slate-800/50 rounded-lg p-3">
+          <p class="text-slate-400 text-xs mb-1">Init Data</p>
+          <p class="${results.hasInitData ? 'text-emerald-400' : 'text-red-400'}">${results.hasInitData ? '✅ Present' : '❌ Missing'}</p>
+        </div>
+        <div class="bg-slate-800/50 rounded-lg p-3">
+          <p class="text-slate-400 text-xs mb-1">Health Check</p>
+          <p class="${results.healthCheck?.data?.status === 'healthy' ? 'text-emerald-400' : 'text-red-400'}">${results.healthCheck?.data?.status === 'healthy' ? '✅ Healthy' : '❌ ' + (results.healthCheck?.error || results.healthCheck?.data?.status || 'Failed')}</p>
+        </div>
+        <div class="bg-slate-800/50 rounded-lg p-3">
+          <p class="text-slate-400 text-xs mb-1">Auth</p>
+          <p class="${results.authCheck?.user ? 'text-emerald-400' : 'text-red-400'}">${results.authCheck?.user ? '✅ ' + escapeHtml(results.authCheck.user.first_name || 'User') : '❌ ' + escapeHtml(results.authCheck?.error || 'Failed')}</p>
+        </div>
+        <div class="bg-slate-800/50 rounded-lg p-3">
+          <p class="text-slate-400 text-xs mb-1">Subscriptions</p>
+          <p class="${Array.isArray(results.subscriptionsCheck) ? 'text-emerald-400' : 'text-red-400'}">${Array.isArray(results.subscriptionsCheck) ? '✅ ' + results.subscriptionsCheck.length + ' items' : '❌ ' + escapeHtml(results.subscriptionsCheck?.error || 'Failed')}</p>
+        </div>
+        <div class="bg-slate-800/50 rounded-lg p-3">
+          <p class="text-slate-400 text-xs mb-1">Channels</p>
+          <p class="${Array.isArray(results.channelsCheck) ? 'text-emerald-400' : 'text-red-400'}">${Array.isArray(results.channelsCheck) ? '✅ ' + results.channelsCheck.length + ' items' : '❌ ' + escapeHtml(results.channelsCheck?.error || 'Failed')}</p>
+        </div>
+        <div class="bg-slate-800/50 rounded-lg p-3">
+          <p class="text-slate-400 text-xs mb-1">Referrals</p>
+          <p class="${results.referralsCheck?.referralCode ? 'text-emerald-400' : 'text-red-400'}">${results.referralsCheck?.referralCode ? '✅ Loaded' : '❌ ' + escapeHtml(results.referralsCheck?.error || 'Failed')}</p>
+        </div>
+      </div>
+      <button onclick="this.closest('.fixed').remove()" class="btn-primary w-full mt-4 py-3 rounded-xl text-white font-semibold">Close</button>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  
+  return results;
+};
 
 // ================== PAGE NAVIGATION ==================
 window.switchPage = function(pageId) {
@@ -442,6 +555,18 @@ window.loadSubscriptions = async function() {
   try {
     const subs = await apiFetch('/api/subscriptions/my');
 
+    if (subs && subs.error) {
+      list.innerHTML = `
+        <div class="glass-card p-6 text-center">
+          <p class="text-red-400 mb-2">⚠️ Failed to load subscriptions</p>
+          <p class="text-xs text-slate-500 mb-3">${escapeHtml(subs.error)}</p>
+          <button onclick="loadSubscriptions()" class="btn-primary px-4 py-2 rounded-lg text-xs text-white">Retry</button>
+          <button onclick="runDiagnostic()" class="btn-secondary px-4 py-2 rounded-lg text-xs ml-2">Run Diagnostic</button>
+        </div>
+      `;
+      return;
+    }
+
     if (!subs || !subs.length) {
       list.innerHTML = '<div class="glass-card p-10 text-center text-slate-400">No subscriptions yet. Subscribe to a channel to get started!</div>';
       return;
@@ -527,6 +652,18 @@ window.loadOwnerDashboard = async function() {
   try {
     const channels = await apiFetch('/api/channels/my');
 
+    if (channels && channels.error) {
+      container.innerHTML = `
+        <div class="glass-card p-6 text-center">
+          <p class="text-red-400 mb-2">⚠️ Failed to load channels</p>
+          <p class="text-xs text-slate-500 mb-3">${escapeHtml(channels.error)}</p>
+          <button onclick="loadOwnerDashboard()" class="btn-primary px-4 py-2 rounded-lg text-xs text-white">Retry</button>
+          <button onclick="runDiagnostic()" class="btn-secondary px-4 py-2 rounded-lg text-xs ml-2">Run Diagnostic</button>
+        </div>
+      `;
+      return;
+    }
+
     if (!channels || !channels.length) {
       container.innerHTML = `
         <div class="glass-card p-8 text-center">
@@ -607,8 +744,15 @@ window.loadReferralDashboard = async function() {
   try {
     const stats = await apiFetch('/api/referrals/stats');
 
-    if (stats.error) {
-      container.innerHTML = `<p class="text-red-400 text-center py-6">${escapeHtml(stats.error)}</p>`;
+    if (stats && stats.error) {
+      container.innerHTML = `
+        <div class="glass-card p-6 text-center">
+          <p class="text-red-400 mb-2">⚠️ Failed to load referral data</p>
+          <p class="text-xs text-slate-500 mb-3">${escapeHtml(stats.error)}</p>
+          <button onclick="loadReferralDashboard()" class="btn-primary px-4 py-2 rounded-lg text-xs text-white">Retry</button>
+          <button onclick="runDiagnostic()" class="btn-secondary px-4 py-2 rounded-lg text-xs ml-2">Run Diagnostic</button>
+        </div>
+      `;
       return;
     }
 
