@@ -2,9 +2,9 @@
 // Run this script to set up your Telegram bot webhook
 // Usage: deno run --allow-net webhook-setup.js
 
-const BOT_TOKEN = prompt("Enter your BOT_TOKEN:");
-const WEBHOOK_URL = prompt("Enter your backend URL (e.g., https://your-backend.supabase.co/functions/v1/mainbot):");
-const WEBHOOK_SECRET = prompt("Enter your WEBHOOK_SECRET (or press Enter to skip):");
+const BOT_TOKEN = prompt("8881037426:AAFKnDo8ybWT4mJdoFhQy8brSjOMpsEe6hw");
+const WEBHOOK_URL = prompt("https://mslxnegbtstpdwauugmq.supabase.co/functions/v1/mainbot");
+const WEBHOOK_SECRET = prompt("a8f5f167f44f4964e6c998dee827110c3b2e3f9a6d7c8b5e2f1a4d9c7b6e3f8a");
 
 if (!BOT_TOKEN || !WEBHOOK_URL) {
   console.error("❌ BOT_TOKEN and WEBHOOK_URL are required");
