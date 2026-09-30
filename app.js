@@ -343,23 +343,62 @@ window.loadSubscriptions = async function() {
     return;
   }
   if (!subs || !subs.length) {
-    list.innerHTML = '<div class="glass-card p-10 text-center text-slate-400">No subscriptions yet. Subscribe to a channel to get started!</div>';
+    list.innerHTML = '<div class="glass-card p-10 text-center text-slate-400">No subscriptions yet.</div>';
     updateSubStats(0, 0, 0);
     return;
   }
 
   let active = 0, expiring = 0, spent = 0;
+  
   list.innerHTML = subs.map(s => {
     const ch = s.channel || {};
-    const daysLeft = Math.ceil((new Date(s.end_date) - Date.now()) / 86400000);
-    const isExpired = daysLeft < 0;
-    const isExpiring = daysLeft >= 0 && daysLeft <= 7;
-    if (!isExpired) active++;
-    if (isExpiring) expiring++;
+    const endDate = new Date(s.end_date);
+    const daysLeft = Math.ceil((endDate - Date.now()) / 86400000);
+    const isExpired = s.is_expired || s.status === 'expired' || daysLeft < 0;
+    const isExpiring = !isExpired && daysLeft >= 0 && daysLeft <= 7;
+    
+    if (!isExpired) {
+      active++;
+      if (isExpiring) expiring++;
+    }
     spent += parseFloat(s.amount || 0);
+    
     const inviteLink = escapeHtml(ch.channel_invite_link || '');
     const name = escapeHtml(ch.channel_name || 'Unknown');
+    const channelId = s.channel_id;
 
+    // EXPIRED SUBSCRIPTION
+    if (isExpired) {
+      return `
+        <div class="glass-card p-4 mb-3 border-2 border-red-500/30 bg-red-500/5 opacity-75">
+          <div class="flex justify-between items-start mb-2">
+            <div class="flex items-center gap-2">
+              <h3 class="font-semibold text-slate-400">${name}</h3>
+              ${ch.is_verified ? '<span class="text-blue-400 text-sm" title="Verified">✓</span>' : ''}
+            </div>
+            <span class="badge bg-red-500/20 text-red-400 border border-red-500/30">
+              ⚠️ Expired
+            </span>
+          </div>
+          <p class="text-slate-500 text-xs mb-3">
+            Expired: ${endDate.toLocaleDateString()} • ${parseFloat(s.amount || 0).toFixed(4)} TON
+          </p>
+          <div class="flex gap-2 flex-wrap">
+            <button onclick="renewSubscription('${channelId}')" class="btn-primary px-4 py-2 rounded-xl text-xs text-white font-semibold flex-1">
+              🔄 Renew Subscription
+            </button>
+            <button onclick="openReport('${channelId}')" class="btn-secondary px-3 py-2 rounded-xl text-xs">
+              🚩 Report
+            </button>
+          </div>
+          <p class="text-[10px] text-slate-500 mt-2 text-center">
+            Tap "Renew" to restore access
+          </p>
+        </div>
+      `;
+    }
+
+    // ACTIVE SUBSCRIPTION
     return `
       <div class="glass-card p-4 mb-3 cursor-pointer hover:border-blue-500/50 transition-all" onclick="${inviteLink ? `joinChannel('${inviteLink}')` : ''}">
         <div class="flex justify-between items-start mb-2">
@@ -367,20 +406,31 @@ window.loadSubscriptions = async function() {
             <h3 class="font-semibold text-white">${name}</h3>
             ${ch.is_verified ? '<span class="text-blue-400 text-sm" title="Verified">✓</span>' : ''}
           </div>
-          <span class="badge ${isExpired ? 'bg-red-500/10 text-red-400' : isExpiring ? 'bg-amber-500/10 text-amber-400' : 'bg-emerald-500/10 text-emerald-400'}">
-            ${isExpired ? 'Expired' : isExpiring ? '⚠️ ' + daysLeft + 'd' : 'Active'}
+          <span class="badge ${isExpiring ? 'bg-amber-500/10 text-amber-400' : 'bg-emerald-500/10 text-emerald-400'}">
+            ${isExpiring ? '⚠️ ' + daysLeft + 'd left' : 'Active'}
           </span>
         </div>
-        <p class="text-slate-400 text-xs mb-3">Expires: ${new Date(s.end_date).toLocaleDateString()} • ${parseFloat(s.amount || 0).toFixed(4)} TON</p>
+        <p class="text-slate-400 text-xs mb-3">Expires: ${endDate.toLocaleDateString()} • ${parseFloat(s.amount || 0).toFixed(4)} TON</p>
         <div class="flex gap-2 flex-wrap">
           ${!isExpired && inviteLink ? `<button onclick="event.stopPropagation();joinChannel('${inviteLink}')" class="btn-primary px-3 py-1.5 rounded-xl text-xs text-white">📺 Open</button>` : ''}
-          <button onclick="event.stopPropagation();openRating('${s.channel_id}')" class="btn-secondary px-3 py-1.5 rounded-xl text-xs">⭐ Rate</button>
-          <button onclick="event.stopPropagation();openReport('${s.channel_id}')" class="btn-secondary px-3 py-1.5 rounded-xl text-xs">🚩 Report</button>
-          ${isExpired ? `<button onclick="event.stopPropagation();loadPurchasePage('${s.channel_id}');switchPage('purchase')" class="btn-primary px-3 py-1.5 rounded-xl text-xs text-white">🔄 Renew</button>` : ''}
+          <button onclick="event.stopPropagation();openRating('${channelId}')" class="btn-secondary px-3 py-1.5 rounded-xl text-xs">⭐ Rate</button>
+          <button onclick="event.stopPropagation();openReport('${channelId}')" class="btn-secondary px-3 py-1.5 rounded-xl text-xs">🚩 Report</button>
         </div>
-      </div>`;
+      </div>
+    `;
   }).join('');
+  
   updateSubStats(active, expiring, spent);
+};
+
+// Add this new function after loadSubscriptions:
+window.renewSubscription = function(channelId) {
+  if (window.loadPurchasePage) {
+    window.loadPurchasePage(channelId);
+    window.switchPage('purchase');
+  } else {
+    Toast.error('Renewal not available');
+  }
 };
 
 function updateSubStats(active, expiring, spent) {
