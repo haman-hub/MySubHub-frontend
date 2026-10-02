@@ -554,13 +554,58 @@ window.submitAddChannel = async function() {
   });
 
   if (res.error) {
-    Toast.error(res.error);
+    // Check if error is about bot not being admin
+    if (res.error.includes('administrator') || res.error.includes('admin')) {
+      showBotAdminRequiredDialog(res.error);
+    } else {
+      Toast.error(res.error);
+    }
   } else {
     Toast.success('Channel added!');
     closeAddChannelModal();
     loadOwnerDashboard();
   }
 };
+
+// NEW: Show dialog when bot is not admin
+function showBotAdminRequiredDialog(errorMessage) {
+  const modal = document.createElement('div');
+  modal.className = 'fixed inset-0 z-[9999] bg-black/80 backdrop-blur-md flex items-center justify-center p-4';
+  modal.innerHTML = `
+    <div class="bg-slate-900 border border-amber-500/30 rounded-2xl p-6 max-w-md w-full">
+      <div class="text-center mb-4">
+        <div class="w-16 h-16 rounded-2xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center mx-auto mb-4">
+          <span class="text-3xl">⚠️</span>
+        </div>
+        <h2 class="text-xl font-bold text-white mb-2">Bot Admin Access Required</h2>
+        <p class="text-sm text-slate-300 mb-4">${escapeHtml(errorMessage)}</p>
+      </div>
+      
+      <div class="bg-slate-800/50 rounded-xl p-4 mb-4">
+        <h3 class="text-sm font-bold text-white mb-3">How to add bot as administrator:</h3>
+        <ol class="text-xs text-slate-300 space-y-2 list-decimal list-inside">
+          <li>Open your Telegram channel</li>
+          <li>Go to Channel Settings → Administrators</li>
+          <li>Click "Add Administrator"</li>
+          <li>Search for your bot and select it</li>
+          <li>Grant necessary permissions</li>
+          <li>Click "Save" or "Done"</li>
+          <li>Try adding the channel again</li>
+        </ol>
+      </div>
+      
+      <div class="flex gap-2">
+        <button onclick="this.closest('.fixed').remove()" class="flex-1 btn-secondary px-4 py-2 rounded-xl text-sm">
+          Close
+        </button>
+        <button onclick="this.closest('.fixed').remove(); openAddChannelModal()" class="flex-1 btn-primary px-4 py-2 rounded-xl text-sm text-white">
+          Try Again
+        </button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+}
 
 // ================== EDIT CHANNEL MODAL ==================
 window.openEditModal = function(channelId) {
