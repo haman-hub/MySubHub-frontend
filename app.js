@@ -464,6 +464,7 @@ window.loadOwnerDashboard = async function() {
         <div class="flex gap-2">
           <button onclick="openEditModal('${ch.id}')" class="btn-secondary px-3 py-1.5 rounded-xl text-xs">⚙️ Edit</button>
           <button onclick="copyShareLink('${ch.id}')" class="btn-secondary px-3 py-1.5 rounded-xl text-xs">📋 Share</button>
+          <button onclick="deleteChannel('${ch.id}')" class="bg-red-500/20 hover:bg-red-500/30 text-red-400 px-3 py-1.5 rounded-xl text-xs">🗑️ Delete</button>
         </div>
       </div>
     `;
@@ -583,6 +584,24 @@ window.submitEditChannel = async function() {
   });
   if (res.error) Toast.error(res.error);
   else { Toast.success('Channel updated!'); window.closeEditModal(); loadOwnerDashboard(); }
+};
+
+// ================== DELETE CHANNEL ==================
+window.deleteChannel = async function(channelId) {
+  if (!confirm('Are you sure you want to delete this channel? This action cannot be undone.')) {
+    return;
+  }
+
+  const res = await apiFetch(`/api/channels/${channelId}`, {
+    method: 'DELETE'
+  });
+
+  if (res.error) {
+    Toast.error(res.error);
+  } else {
+    Toast.success('Channel deleted successfully!');
+    loadOwnerDashboard();
+  }
 };
 
 // ================== REFERRALS (10% credits) ==================
