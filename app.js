@@ -462,13 +462,13 @@ window.loadOwnerDashboard = async function() {
             <li>Search for <strong class="text-blue-400">@MySubsHub_bot</strong></li>
             <li>Select the bot and grant ALL permissions</li>
             <li>Click "Save" or "Done"</li>
-            <li>Return here and click the button below</li>
+            <li>Return here and refresh this page</li>
           </ol>
         </div>
         
-        <button onclick="openAddChannelModal()" class="btn-primary w-full py-3 rounded-xl text-sm font-semibold text-white">
-          ➕ Add Channel Now
-        </button>
+        <div class="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3">
+          <p class="text-xs text-amber-300">⚠️ <strong>Important:</strong> The bot must be added as administrator before you can register your channel. This allows the bot to manage subscribers automatically.</p>
+        </div>
       </div>
     `;
     return;
@@ -712,29 +712,39 @@ window.closeEditModal = function() {
 };
 
 window.submitEditChannel = async function() {
-  const price = document.getElementById('edit-price')?.value;
-  const duration = document.getElementById('edit-duration')?.value;
+  const priceInput = document.getElementById('edit-price');
+  const durationInput = document.getElementById('edit-duration');
+  
+  if (!priceInput || !durationInput) {
+    Toast.error('Form elements not found');
+    return;
+  }
+  
+  const price = parseFloat(priceInput.value);
+  const duration = parseInt(durationInput.value);
+  
+  console.log('Edit channel:', { price, duration, channelId: window.currentEditChannelId });
   
   if (!window.currentEditChannelId) { 
     Toast.error('No channel selected'); 
     return; 
   }
   
-  if (!price || parseFloat(price) <= 0) { 
-    Toast.error('Invalid price'); 
+  if (isNaN(price) || price <= 0) { 
+    Toast.error('Please enter a valid price (greater than 0)'); 
     return; 
   }
   
-  if (!duration || parseInt(duration) <= 0) {
-    Toast.error('Invalid duration');
+  if (isNaN(duration) || duration <= 0) {
+    Toast.error('Please select a valid duration');
     return;
   }
 
   const res = await apiFetch(`/api/channels/${window.currentEditChannelId}`, {
     method: 'PUT',
     body: JSON.stringify({ 
-      subscription_price: parseFloat(price), 
-      duration_days: parseInt(duration) 
+      subscription_price: price, 
+      duration_days: duration 
     })
   });
   
@@ -1007,6 +1017,207 @@ window.disconnectWallet = async function() { if (tonConnectUI) try { await tonCo
 const TG = window.Telegram?.WebApp || { ready: () => {}, expand: () => {}, initData: '', initDataUnsafe: {}, HapticFeedback: { impactOccurred: () => {}, selectionChanged: () => {}, notificationOccurred: () => {} } };
 try { TG.ready(); TG.expand(); if (TG.setHeaderColor) TG.setHeaderColor('#040711'); if (TG.setBackgroundColor) TG.setBackgroundColor('#040711'); } catch {}
 
+// ================== HELP GUIDES ==================
+window.showSubscriberGuide = function() {
+  const modal = document.createElement('div');
+  modal.className = 'fixed inset-0 z-[9999] bg-black/90 backdrop-blur-md overflow-y-auto';
+  modal.innerHTML = `
+    <div class="min-h-screen p-4">
+      <div class="max-w-4xl mx-auto">
+        <div class="text-center mb-8">
+          <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center mx-auto mb-4">
+            <span class="text-4xl">👤</span>
+          </div>
+          <h1 class="text-3xl font-bold mb-2">Subscriber Guide</h1>
+          <p class="text-slate-400">Learn how to use MySubHub as a subscriber</p>
+        </div>
+
+        <div class="space-y-6">
+          <div class="glass-card p-6">
+            <div class="flex items-start gap-4">
+              <div class="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center flex-shrink-0">
+                <span class="text-2xl">1️⃣</span>
+              </div>
+              <div>
+                <h2 class="text-xl font-bold mb-2">Browse Channels</h2>
+                <p class="text-slate-300 mb-3">Discover premium Telegram channels and groups that offer exclusive content.</p>
+                <ul class="text-sm text-slate-400 space-y-1 list-disc list-inside">
+                  <li>Channels are listed in the main dashboard</li>
+                  <li>Each channel shows price, duration, and ratings</li>
+                  <li>Click on a channel to see more details</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <div class="glass-card p-6">
+            <div class="flex items-start gap-4">
+              <div class="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center flex-shrink-0">
+                <span class="text-2xl">2️⃣</span>
+              </div>
+              <div>
+                <h2 class="text-xl font-bold mb-2">Subscribe with TON</h2>
+                <p class="text-slate-300 mb-3">Pay securely using your TON wallet to access premium content.</p>
+                <ul class="text-sm text-slate-400 space-y-1 list-disc list-inside">
+                  <li>Connect your TON wallet (Tonkeeper, Tonhub, etc.)</li>
+                  <li>Review the subscription price and duration</li>
+                  <li>Confirm the payment in your wallet</li>
+                  <li>You'll be automatically added to the channel</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <div class="glass-card p-6">
+            <div class="flex items-start gap-4">
+              <div class="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center flex-shrink-0">
+                <span class="text-2xl">3️⃣</span>
+              </div>
+              <div>
+                <h2 class="text-xl font-bold mb-2">Earn Referral Credits</h2>
+                <p class="text-slate-300 mb-3">Invite friends and earn 10% credits on their subscriptions!</p>
+                <ul class="text-sm text-slate-400 space-y-1 list-disc list-inside">
+                  <li>Go to the "Referrals" tab</li>
+                  <li>Copy your unique referral link</li>
+                  <li>Share it with friends</li>
+                  <li>Earn 10% credits when they subscribe</li>
+                  <li>Use credits for your own subscriptions</li>
+                </ul>
+                <div class="mt-3 p-3 bg-blue-500/10 border border-blue-500/30 rounded-xl">
+                  <p class="text-xs text-blue-300">💡 <strong>Note:</strong> Credits can only be used for subscriptions and cannot be withdrawn as TON.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="text-center">
+            <button onclick="this.closest('.fixed').remove()" class="btn-primary px-6 py-3 rounded-xl text-sm font-semibold text-white">
+              ← Back to App
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+};
+
+window.showOwnerGuide = function() {
+  const modal = document.createElement('div');
+  modal.className = 'fixed inset-0 z-[9999] bg-black/90 backdrop-blur-md overflow-y-auto';
+  modal.innerHTML = `
+    <div class="min-h-screen p-4">
+      <div class="max-w-4xl mx-auto">
+        <div class="text-center mb-8">
+          <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-emerald-500 to-blue-600 flex items-center justify-center mx-auto mb-4">
+            <span class="text-4xl">📺</span>
+          </div>
+          <h1 class="text-3xl font-bold mb-2">Channel Owner Guide</h1>
+          <p class="text-slate-400">Learn how to monetize your Telegram channel</p>
+        </div>
+
+        <div class="space-y-6">
+          <div class="glass-card p-6">
+            <div class="flex items-start gap-4">
+              <div class="w-12 h-12 rounded-xl bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
+                <span class="text-2xl">1️⃣</span>
+              </div>
+              <div>
+                <h2 class="text-xl font-bold mb-2">Add Bot as Administrator</h2>
+                <p class="text-slate-300 mb-3">First, add @MySubsHub_bot to your channel as an administrator.</p>
+                <ul class="text-sm text-slate-400 space-y-1 list-disc list-inside">
+                  <li>Open your Telegram channel</li>
+                  <li>Go to Channel Settings → Administrators</li>
+                  <li>Click "Add Administrator"</li>
+                  <li>Search for <strong class="text-blue-400">@MySubsHub_bot</strong></li>
+                  <li>Grant ALL permissions (important!)</li>
+                  <li>Click "Save" or "Done"</li>
+                </ul>
+                <div class="mt-3 p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl">
+                  <p class="text-xs text-amber-300">⚠️ <strong>Important:</strong> The bot needs full admin permissions to manage subscribers and verify payments.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="glass-card p-6">
+            <div class="flex items-start gap-4">
+              <div class="w-12 h-12 rounded-xl bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
+                <span class="text-2xl">2️⃣</span>
+              </div>
+              <div>
+                <h2 class="text-xl font-bold mb-2">Register Your Channel</h2>
+                <p class="text-slate-300 mb-3">Add your channel to MySubHub platform.</p>
+                <ul class="text-sm text-slate-400 space-y-1 list-disc list-inside">
+                  <li>Go to "My Channels" tab</li>
+                  <li>Fill in channel details:
+                    <ul class="ml-4 mt-1 space-y-1">
+                      <li>• Channel name</li>
+                      <li>• Invite link</li>
+                      <li>• Subscription price (in TON)</li>
+                      <li>• Duration (1 week to unlimited)</li>
+                    </ul>
+                  </li>
+                  <li>Click "Add Channel"</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <div class="glass-card p-6">
+            <div class="flex items-start gap-4">
+              <div class="w-12 h-12 rounded-xl bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
+                <span class="text-2xl">3️⃣</span>
+              </div>
+              <div>
+                <h2 class="text-xl font-bold mb-2">Earn 99% of Revenue</h2>
+                <p class="text-slate-300 mb-3">You receive 99% of subscription fees. Platform takes only 1% fee.</p>
+                <ul class="text-sm text-slate-400 space-y-1 list-disc list-inside">
+                  <li>Payments go directly to your TON wallet</li>
+                  <li>Track earnings in dashboard</li>
+                  <li>Request withdrawals anytime</li>
+                  <li>Minimum withdrawal: 1 TON</li>
+                </ul>
+                <div class="mt-3 p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl">
+                  <p class="text-xs text-emerald-300">💰 <strong>Revenue Split:</strong> You receive 99% of subscription fees. Platform takes 1% fee.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="glass-card p-6">
+            <div class="flex items-start gap-4">
+              <div class="w-12 h-12 rounded-xl bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
+                <span class="text-2xl">4️⃣</span>
+              </div>
+              <div>
+                <h2 class="text-xl font-bold mb-2">Automatic Subscriber Management</h2>
+                <p class="text-slate-300 mb-3">The bot automatically manages your subscribers.</p>
+                <ul class="text-sm text-slate-400 space-y-1 list-disc list-inside">
+                  <li>When user pays → Bot adds them to channel</li>
+                  <li>When subscription expires → Bot removes them</li>
+                  <li>Users can renew with one click</li>
+                  <li>Track active subscribers in dashboard</li>
+                </ul>
+                <div class="mt-3 p-3 bg-blue-500/10 border border-blue-500/30 rounded-xl">
+                  <p class="text-xs text-blue-300">🤖 <strong>Automatic:</strong> Everything is automated! You don't need to manually add/remove users.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="text-center">
+            <button onclick="this.closest('.fixed').remove()" class="btn-primary px-6 py-3 rounded-xl text-sm font-semibold text-white">
+              ← Back to App
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+};
+
 // ================== MAIN INIT ==================
 async function init() {
   try {
@@ -1024,6 +1235,10 @@ async function init() {
     if (startParam && /^[0-9a-fA-F-]{36}$/.test(startParam)) {
       await loadPurchasePage(startParam);
       window.switchPage('purchase');
+    } else if (startParam === 'help-subscriber') {
+      showSubscriberGuide();
+    } else if (startParam === 'help-owner') {
+      showOwnerGuide();
     } else if (startParam === 'owner') {
       window.switchPage('owner');
     } else if (startParam === 'admin' && window.isAdmin) {
