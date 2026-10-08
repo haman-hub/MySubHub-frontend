@@ -443,7 +443,34 @@ window.loadOwnerDashboard = async function() {
   }
 
   if (!channels || !channels.length) {
-    container.innerHTML = `<div class="glass-card p-8 text-center"><p class="text-slate-400 mb-4">No channels yet.</p><button onclick="openAddChannelModal()" class="btn-primary text-white px-6 py-3 rounded-xl font-semibold">+ Add Channel</button></div>`;
+    container.innerHTML = `
+      <div class="glass-card p-8">
+        <div class="text-center mb-6">
+          <div class="w-16 h-16 rounded-2xl bg-blue-500/20 border border-blue-500/30 flex items-center justify-center mx-auto mb-4">
+            <span class="text-3xl">🤖</span>
+          </div>
+          <h3 class="text-lg font-bold text-white mb-2">Add Your First Channel</h3>
+          <p class="text-sm text-slate-400 mb-4">To add your channel, you must first add <strong class="text-blue-400">@MySubsHub_bot</strong> to your channel as an administrator with maximum permissions.</p>
+        </div>
+        
+        <div class="bg-slate-800/50 rounded-xl p-4 mb-4">
+          <h4 class="text-sm font-bold text-white mb-3">How to add the bot:</h4>
+          <ol class="text-xs text-slate-300 space-y-2 list-decimal list-inside">
+            <li>Open your Telegram channel</li>
+            <li>Go to Channel Settings → Administrators</li>
+            <li>Click "Add Administrator"</li>
+            <li>Search for <strong class="text-blue-400">@MySubsHub_bot</strong></li>
+            <li>Select the bot and grant ALL permissions</li>
+            <li>Click "Save" or "Done"</li>
+            <li>Return here and click the button below</li>
+          </ol>
+        </div>
+        
+        <button onclick="openAddChannelModal()" class="btn-primary w-full py-3 rounded-xl text-sm font-semibold text-white">
+          ➕ Add Channel Now
+        </button>
+      </div>
+    `;
     return;
   }
 
@@ -463,7 +490,8 @@ window.loadOwnerDashboard = async function() {
         </div>
         <div class="flex gap-2">
           <button onclick="openEditModal('${ch.id}')" class="btn-secondary px-3 py-1.5 rounded-xl text-xs">⚙️ Edit</button>
-          <button onclick="copyShareLink('${ch.id}')" class="btn-secondary px-3 py-1.5 rounded-xl text-xs">📋 Share</button>
+          <button onclick="copyShareLink('${ch.id}')" class="btn-secondary px-3 py-1.5 rounded-xl text-xs">📋 Copy</button>
+          <button onclick="forwardChannelLink('${ch.id}', '${escapeHtml(ch.channel_name)}')" class="btn-secondary px-3 py-1.5 rounded-xl text-xs">📤 Forward</button>
           <button onclick="deleteChannel('${ch.id}')" class="bg-red-500/20 hover:bg-red-500/30 text-red-400 px-3 py-1.5 rounded-xl text-xs">🗑️ Delete</button>
         </div>
       </div>
@@ -608,27 +636,115 @@ function showBotAdminRequiredDialog(errorMessage) {
 }
 
 // ================== EDIT CHANNEL MODAL ==================
-window.openEditModal = function(channelId) {
+window.openEditModal = async function(channelId) {
   window.currentEditChannelId = channelId;
-  document.getElementById('edit-modal')?.classList.remove('hidden');
+  
+  // Fetch channel data to pre-fill the form
+  const channel = await apiFetch(`/api/channels/${channelId}`);
+  if (channel.error) {
+    Toast.error('Failed to load channel data');
+    return;
+  }
+  
+  const modal = document.createElement('div');
+  modal.id = 'edit-modal-dynamic';
+  modal.className = 'fixed inset-0 z-[9999] bg-black/80 backdrop-blur-md flex items-center justify-center p-4';
+  modal.innerHTML = `
+    <div class="glass-card p-6 w-full max-w-md">
+      <h2 class="text-lg font-bold text-white mb-4">Edit Channel</h2>
+      <div class="space-y-4">
+        <div>
+          <label class="text-xs text-slate-400 mb-1 block">Channel Name</label>
+          <input type="text" id="edit-channel-name" value="${escapeHtml(channel.channel_name || '')}" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white" readonly />
+          <p class="text-[10px] text-slate-500 mt-1">Channel name cannot be changed</p>
+        </div>
+        <div>
+          <label class="text-xs text-slate-400 mb-1 block">Subscription Price (TON)</label>
+          <input type="number" id="edit-price" step="0.01" min="0.01" value="${channel.subscription_price || ''}" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white" />
+        </div>
+        <div>
+          <label class="text-xs text-slate-400 mb-2 block">Subscription Duration</label>
+          <div class="grid grid-cols-3 gap-2">
+            <button onclick="selectEditDuration(7)" class="edit-duration-btn bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white hover:border-blue-500" data-days="7">1 Week</button>
+            <button onclick="selectEditDuration(30)" class="edit-duration-btn bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white hover:border-blue-500" data-days="30">1 Month</button>
+            <button onclick="selectEditDuration(90)" class="edit-duration-btn bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white hover:border-blue-500" data-days="90">3 Months</button>
+            <button onclick="selectEditDuration(180)" class="edit-duration-btn bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white hover:border-blue-500" data-days="180">6 Months</button>
+            <button onclick="selectEditDuration(365)" class="edit-duration-btn bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white hover:border-blue-500" data-days="365">1 Year</button>
+            <button onclick="selectEditDuration(9999)" class="edit-duration-btn bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white hover:border-blue-500" data-days="9999">Unlimited</button>
+          </div>
+          <input type="hidden" id="edit-duration" value="${channel.duration_days || 30}" />
+        </div>
+      </div>
+      <div class="flex gap-2 mt-6">
+        <button onclick="closeEditModal()" class="flex-1 btn-secondary px-4 py-2 rounded-xl text-sm">Cancel</button>
+        <button onclick="submitEditChannel()" class="flex-1 btn-primary px-4 py-2 rounded-xl text-sm text-white">Save Changes</button>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(modal);
+  
+  // Highlight current duration
+  const currentDuration = channel.duration_days || 30;
+  selectEditDuration(currentDuration);
+};
+
+window.selectEditDuration = function(days) {
+  document.getElementById('edit-duration').value = days;
+  document.querySelectorAll('.edit-duration-btn').forEach(btn => {
+    btn.classList.remove('border-blue-500', 'bg-blue-500/20');
+    btn.classList.add('border-slate-700');
+  });
+  const selectedBtn = document.querySelector(`.edit-duration-btn[data-days="${days}"]`);
+  if (selectedBtn) {
+    selectedBtn.classList.remove('border-slate-700');
+    selectedBtn.classList.add('border-blue-500', 'bg-blue-500/20');
+  }
 };
 
 window.closeEditModal = function() {
+  const modal = document.getElementById('edit-modal-dynamic');
+  if (modal) {
+    modal.remove();
+  }
+  // Also hide static modal if it exists
   document.getElementById('edit-modal')?.classList.add('hidden');
 };
 
 window.submitEditChannel = async function() {
   const price = document.getElementById('edit-price')?.value;
   const duration = document.getElementById('edit-duration')?.value;
-  if (!window.currentEditChannelId) { Toast.error('No channel selected'); return; }
-  if (!price || parseFloat(price) <= 0) { Toast.error('Invalid price'); return; }
+  
+  if (!window.currentEditChannelId) { 
+    Toast.error('No channel selected'); 
+    return; 
+  }
+  
+  if (!price || parseFloat(price) <= 0) { 
+    Toast.error('Invalid price'); 
+    return; 
+  }
+  
+  if (!duration || parseInt(duration) <= 0) {
+    Toast.error('Invalid duration');
+    return;
+  }
 
   const res = await apiFetch(`/api/channels/${window.currentEditChannelId}`, {
     method: 'PUT',
-    body: JSON.stringify({ subscription_price: parseFloat(price), duration_days: parseInt(duration) })
+    body: JSON.stringify({ 
+      subscription_price: parseFloat(price), 
+      duration_days: parseInt(duration) 
+    })
   });
-  if (res.error) Toast.error(res.error);
-  else { Toast.success('Channel updated!'); window.closeEditModal(); loadOwnerDashboard(); }
+  
+  if (res.error) {
+    Toast.error(res.error);
+  } else {
+    Toast.success('Channel updated successfully!');
+    closeEditModal();
+    loadOwnerDashboard();
+  }
 };
 
 // ================== DELETE CHANNEL ==================
@@ -798,7 +914,40 @@ function copyToClipboard(text, msg) {
 }
 
 window.copyShareLink = function(channelId) {
-  copyToClipboard(`https://t.me/${BOT_USERNAME}?start=${channelId}`, 'Share link copied!');
+  copyToClipboard(`https://t.me/${BOT_USERNAME}?start=${channelId}`, 'Link copied!');
+};
+
+window.forwardChannelLink = async function(channelId, channelName) {
+  const link = `https://t.me/${BOT_USERNAME}?start=${channelId}`;
+  const message = `🎯 Subscribe to "${channelName}" on MySubHub!\n\n💎 Get premium content with TON payments\n🔒 Secure and private\n✨ Easy subscription management\n\nClick here to subscribe: ${link}`;
+  
+  // Try to use Telegram's native share functionality
+  const TG = window.Telegram?.WebApp;
+  if (TG?.switchInlineQuery) {
+    try {
+      TG.switchInlineQuery(message, ['users', 'groups', 'channels']);
+      return;
+    } catch (e) {
+      console.log('switchInlineQuery not available, using fallback');
+    }
+  }
+  
+  // Fallback: Use Web Share API if available
+  if (navigator.share) {
+    try {
+      await navigator.share({
+        title: `Subscribe to ${channelName}`,
+        text: message,
+        url: link
+      });
+      return;
+    } catch (e) {
+      console.log('Web Share API cancelled or failed');
+    }
+  }
+  
+  // Final fallback: Copy to clipboard
+  copyToClipboard(message, 'Message copied! Share it anywhere.');
 };
 
 // ================== DIAGNOSTIC ==================
