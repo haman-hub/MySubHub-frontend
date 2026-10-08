@@ -3,315 +3,186 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MySubHub - Subscriber Guide</title>
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <title>Subscriber Guide - MySubHub</title>
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: #333;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
             min-height: 100vh;
-            padding: 20px;
-            line-height: 1.6;
         }
-        
-        .container {
-            max-width: 600px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 20px;
-            padding: 30px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-        }
-        
-        .header {
-            text-align: center;
-            margin-bottom: 30px;
-            padding-bottom: 20px;
-            border-bottom: 2px solid #f0f0f0;
-        }
-        
-        .header h1 {
-            color: #667eea;
-            font-size: 28px;
-            margin-bottom: 10px;
-        }
-        
-        .header p {
-            color: #666;
-            font-size: 16px;
-        }
-        
-        .section {
-            margin-bottom: 30px;
-            padding: 20px;
-            background: #f8f9fa;
-            border-radius: 15px;
-            border-left: 4px solid #667eea;
-        }
-        
-        .section h2 {
-            color: #667eea;
-            font-size: 20px;
-            margin-bottom: 15px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        
-        .step {
-            margin-bottom: 20px;
-            padding-left: 20px;
-            position: relative;
-        }
-        
-        .step::before {
-            content: attr(data-step);
-            position: absolute;
-            left: -10px;
-            top: 0;
-            background: #667eea;
-            color: white;
-            width: 30px;
-            height: 30px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-            font-size: 14px;
-        }
-        
-        .step h3 {
-            color: #333;
-            font-size: 16px;
-            margin-bottom: 8px;
-            margin-left: 10px;
-        }
-        
-        .step p {
-            color: #666;
-            font-size: 14px;
-            margin-left: 10px;
-        }
-        
-        .tip {
-            background: #fff3cd;
-            border-left: 4px solid #ffc107;
-            padding: 15px;
-            margin: 15px 0;
-            border-radius: 8px;
-        }
-        
-        .tip strong {
-            color: #856404;
-        }
-        
-        .warning {
-            background: #f8d7da;
-            border-left: 4px solid #dc3545;
-            padding: 15px;
-            margin: 15px 0;
-            border-radius: 8px;
-        }
-        
-        .warning strong {
-            color: #721c24;
-        }
-        
-        .success {
-            background: #d4edda;
-            border-left: 4px solid #28a745;
-            padding: 15px;
-            margin: 15px 0;
-            border-radius: 8px;
-        }
-        
-        .success strong {
-            color: #155724;
-        }
-        
-        .faq {
-            margin-top: 30px;
-        }
-        
-        .faq-item {
-            margin-bottom: 20px;
-            padding: 15px;
-            background: #f8f9fa;
-            border-radius: 10px;
-        }
-        
-        .faq-item h3 {
-            color: #667eea;
-            font-size: 16px;
-            margin-bottom: 10px;
-        }
-        
-        .faq-item p {
-            color: #666;
-            font-size: 14px;
-        }
-        
-        .back-button {
-            display: block;
-            width: 100%;
-            padding: 15px;
-            background: #667eea;
-            color: white;
-            text-align: center;
-            text-decoration: none;
-            border-radius: 10px;
-            font-weight: bold;
-            margin-top: 30px;
-            transition: background 0.3s;
-        }
-        
-        .back-button:hover {
-            background: #5568d3;
-        }
-        
-        .icon {
-            font-size: 24px;
+        .glass {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
         }
     </style>
 </head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>👤 Subscriber Guide</h1>
-            <p>Learn how to subscribe to premium channels and groups</p>
+<body class="text-white p-4">
+    <div class="max-w-4xl mx-auto">
+        <!-- Header -->
+        <div class="text-center mb-8">
+            <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center mx-auto mb-4">
+                <span class="text-4xl">👤</span>
+            </div>
+            <h1 class="text-3xl font-bold mb-2">Subscriber Guide</h1>
+            <p class="text-slate-400">Learn how to use MySubHub as a subscriber</p>
         </div>
-        
-        <div class="section">
-            <h2><span class="icon">🔍</span> Finding Channels</h2>
-            <div class="step" data-step="1">
-                <h3>Get an Invite Link</h3>
-                <p>Receive an invite link from a channel owner or friend. The link looks like: <code>https://t.me/YourBot?start=channel-id</code></p>
+
+        <!-- Guide Content -->
+        <div class="space-y-6">
+            <!-- Step 1 -->
+            <div class="glass rounded-2xl p-6">
+                <div class="flex items-start gap-4">
+                    <div class="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center flex-shrink-0">
+                        <span class="text-2xl">1️⃣</span>
+                    </div>
+                    <div>
+                        <h2 class="text-xl font-bold mb-2">Browse Channels</h2>
+                        <p class="text-slate-300 mb-3">Discover premium Telegram channels and groups that offer exclusive content.</p>
+                        <ul class="text-sm text-slate-400 space-y-1 list-disc list-inside">
+                            <li>Channels are listed in the main dashboard</li>
+                            <li>Each channel shows price, duration, and ratings</li>
+                            <li>Click on a channel to see more details</li>
+                        </ul>
+                    </div>
+                </div>
             </div>
-            <div class="step" data-step="2">
-                <h3>Click the Link</h3>
-                <p>Tap the invite link to open the MySubHub webapp. You'll see the channel details including price and duration.</p>
+
+            <!-- Step 2 -->
+            <div class="glass rounded-2xl p-6">
+                <div class="flex items-start gap-4">
+                    <div class="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center flex-shrink-0">
+                        <span class="text-2xl">2️⃣</span>
+                    </div>
+                    <div>
+                        <h2 class="text-xl font-bold mb-2">Subscribe with TON</h2>
+                        <p class="text-slate-300 mb-3">Pay securely using your TON wallet to access premium content.</p>
+                        <ul class="text-sm text-slate-400 space-y-1 list-disc list-inside">
+                            <li>Connect your TON wallet (Tonkeeper, Tonhub, etc.)</li>
+                            <li>Review the subscription price and duration</li>
+                            <li>Confirm the payment in your wallet</li>
+                            <li>You'll be automatically added to the channel</li>
+                        </ul>
+                    </div>
+                </div>
             </div>
-            <div class="step" data-step="3">
-                <h3>Review Channel Info</h3>
-                <p>Check the channel name, rating, reviews, subscription price, and duration before subscribing.</p>
+
+            <!-- Step 3 -->
+            <div class="glass rounded-2xl p-6">
+                <div class="flex items-start gap-4">
+                    <div class="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center flex-shrink-0">
+                        <span class="text-2xl">3️⃣</span>
+                    </div>
+                    <div>
+                        <h2 class="text-xl font-bold mb-2">Access Premium Content</h2>
+                        <p class="text-slate-300 mb-3">Once subscribed, you'll have full access to the channel's content.</p>
+                        <ul class="text-sm text-slate-400 space-y-1 list-disc list-inside">
+                            <li>Click "Open" button on your subscription card</li>
+                            <li>You'll be redirected to the Telegram channel</li>
+                            <li>Enjoy exclusive content during your subscription period</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 4 -->
+            <div class="glass rounded-2xl p-6">
+                <div class="flex items-start gap-4">
+                    <div class="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center flex-shrink-0">
+                        <span class="text-2xl">4️⃣</span>
+                    </div>
+                    <div>
+                        <h2 class="text-xl font-bold mb-2">Rate & Review</h2>
+                        <p class="text-slate-300 mb-3">Help other users by rating channels you've subscribed to.</p>
+                        <ul class="text-sm text-slate-400 space-y-1 list-disc list-inside">
+                            <li>Click the "⭐ Rate" button on your subscription</li>
+                            <li>Give a rating from 1 to 5 stars</li>
+                            <li>Leave a comment about your experience</li>
+                            <li>Your review helps others make informed decisions</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 5 -->
+            <div class="glass rounded-2xl p-6">
+                <div class="flex items-start gap-4">
+                    <div class="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center flex-shrink-0">
+                        <span class="text-2xl">5️⃣</span>
+                    </div>
+                    <div>
+                        <h2 class="text-xl font-bold mb-2">Earn Referral Credits</h2>
+                        <p class="text-slate-300 mb-3">Invite friends and earn 10% credits on their subscriptions!</p>
+                        <ul class="text-sm text-slate-400 space-y-1 list-disc list-inside">
+                            <li>Go to the "Referrals" tab</li>
+                            <li>Copy your unique referral link</li>
+                            <li>Share it with friends</li>
+                            <li>Earn 10% credits when they subscribe</li>
+                            <li>Use credits for your own subscriptions</li>
+                        </ul>
+                        <div class="mt-3 p-3 bg-blue-500/10 border border-blue-500/30 rounded-xl">
+                            <p class="text-xs text-blue-300">💡 <strong>Note:</strong> Credits can only be used for subscriptions and cannot be withdrawn as TON.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 6 -->
+            <div class="glass rounded-2xl p-6">
+                <div class="flex items-start gap-4">
+                    <div class="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center flex-shrink-0">
+                        <span class="text-2xl">6️⃣</span>
+                    </div>
+                    <div>
+                        <h2 class="text-xl font-bold mb-2">Manage Subscriptions</h2>
+                        <p class="text-slate-300 mb-3">Keep track of your active subscriptions and renewals.</p>
+                        <ul class="text-sm text-slate-400 space-y-1 list-disc list-inside">
+                            <li>View all subscriptions in the "My Subscriptions" tab</li>
+                            <li>See expiration dates and renewal options</li>
+                            <li>Click "🔄 Renew" to extend your subscription</li>
+                            <li>Expired subscriptions show in red with renewal option</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- FAQ Section -->
+            <div class="glass rounded-2xl p-6">
+                <h2 class="text-xl font-bold mb-4 flex items-center gap-2">
+                    <span>❓</span> Frequently Asked Questions
+                </h2>
+                <div class="space-y-4">
+                    <div>
+                        <h3 class="font-semibold text-white mb-2">What happens when my subscription expires?</h3>
+                        <p class="text-sm text-slate-400">You'll be removed from the channel automatically. You can renew anytime by clicking the "Renew" button.</p>
+                    </div>
+                    <div>
+                        <h3 class="font-semibold text-white mb-2">Can I get a refund?</h3>
+                        <p class="text-sm text-slate-400">Refunds are handled by individual channel owners. Contact the channel owner directly for refund requests.</p>
+                    </div>
+                    <div>
+                        <h3 class="font-semibold text-white mb-2">How do referral credits work?</h3>
+                        <p class="text-sm text-slate-400">When someone subscribes using your referral link, you earn 10% of the subscription price as credits. These credits can be used for your own subscriptions.</p>
+                    </div>
+                    <div>
+                        <h3 class="font-semibold text-white mb-2">Is my payment secure?</h3>
+                        <p class="text-sm text-slate-400">Yes! All payments are made directly through TON blockchain. We never hold your funds. The channel owner receives 99% and the platform takes 1% fee.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Back Button -->
+            <div class="text-center">
+                <button onclick="window.history.back()" class="btn-primary px-6 py-3 rounded-xl text-sm font-semibold text-white">
+                    ← Back to App
+                </button>
             </div>
         </div>
-        
-        <div class="section">
-            <h2><span class="icon">💳</span> Subscribing to a Channel</h2>
-            <div class="step" data-step="1">
-                <h3>Connect Your Wallet</h3>
-                <p>Click "Pay with TON" and connect your TON wallet (Tonkeeper, Tonhub, or other TON Connect compatible wallets).</p>
-            </div>
-            <div class="step" data-step="2">
-                <h3>Confirm Payment</h3>
-                <p>Review the payment details including the subscription price, platform fee (1%), and network fee. Confirm the transaction in your wallet.</p>
-            </div>
-            <div class="step" data-step="3">
-                <h3>Wait for Confirmation</h3>
-                <p>After payment, wait for the transaction to be confirmed on the blockchain (usually 10-30 seconds).</p>
-            </div>
-            <div class="step" data-step="4">
-                <h3>Access the Channel</h3>
-                <p>Once confirmed, you'll be automatically added to the channel/group. You can now access all premium content!</p>
-            </div>
+
+        <!-- Footer -->
+        <div class="text-center text-slate-500 text-sm mt-8">
+            <p>MySubHub Subscriber Guide • v1.0</p>
         </div>
-        
-        <div class="section">
-            <h2><span class="icon">📋</span> Managing Your Subscriptions</h2>
-            <div class="step" data-step="1">
-                <h3>View Active Subscriptions</h3>
-                <p>Open the dashboard and go to "My Subscriptions" tab to see all your active subscriptions.</p>
-            </div>
-            <div class="step" data-step="2">
-                <h3>Check Expiration Dates</h3>
-                <p>Each subscription shows the expiration date. You'll receive reminders before expiration.</p>
-            </div>
-            <div class="step" data-step="3">
-                <h3>Renew Subscriptions</h3>
-                <p>Click "Renew" on expired subscriptions to extend your access. The payment process is the same as initial subscription.</p>
-            </div>
-        </div>
-        
-        <div class="section">
-            <h2><span class="icon">⭐</span> Rating and Reporting</h2>
-            <div class="step" data-step="1">
-                <h3>Rate Channels</h3>
-                <p>After subscribing, you can rate the channel from 1 to 5 stars. Your rating helps other users make informed decisions.</p>
-            </div>
-            <div class="step" data-step="2">
-                <h3>Report Issues</h3>
-                <p>If you encounter scams, inappropriate content, or other issues, use the "Report" button to notify the platform admins.</p>
-            </div>
-        </div>
-        
-        <div class="tip">
-            <strong>💡 Pro Tip:</strong> Always check the channel rating and reviews before subscribing. Channels with higher ratings are more reliable.
-        </div>
-        
-        <div class="warning">
-            <strong>⚠️ Important:</strong> Subscriptions are non-refundable. Make sure you understand the channel content and price before subscribing.
-        </div>
-        
-        <div class="faq">
-            <h2 style="color: #667eea; margin-bottom: 20px;">❓ Frequently Asked Questions</h2>
-            
-            <div class="faq-item">
-                <h3>How long does it take to get access?</h3>
-                <p>After payment confirmation, you'll be added to the channel within 10-30 seconds. If it takes longer, check your subscription status in the dashboard.</p>
-            </div>
-            
-            <div class="faq-item">
-                <h3>What happens when my subscription expires?</h3>
-                <p>You'll be automatically removed from the channel. You can renew anytime by clicking the "Renew" button in your subscriptions list.</p>
-            </div>
-            
-            <div class="faq-item">
-                <h3>Can I get a refund?</h3>
-                <p>Subscriptions are non-refundable. Please review the channel details carefully before subscribing.</p>
-            </div>
-            
-            <div class="faq-item">
-                <h3>What if I don't get access after payment?</h3>
-                <p>Wait up to 1 minute for the transaction to confirm. If you still don't have access, contact support through the bot with your transaction hash.</p>
-            </div>
-            
-            <div class="faq-item">
-                <h3>Can I subscribe to multiple channels?</h3>
-                <p>Yes! You can subscribe to as many channels as you want. Each subscription is managed independently.</p>
-            </div>
-            
-            <div class="faq-item">
-                <h3>What wallets are supported?</h3>
-                <p>Any TON Connect compatible wallet including Tonkeeper, Tonhub, OpenMask, and others.</p>
-            </div>
-        </div>
-        
-        <div class="success">
-            <strong>✅ Need Help?</strong> If you have any questions or issues, use the /help command in the bot or contact support.
-        </div>
-        
-        <a href="javascript:window.history.back()" class="back-button">← Back to Dashboard</a>
     </div>
-    
-    <script>
-        // Initialize Telegram WebApp
-        const tg = window.Telegram.WebApp;
-        tg.ready();
-        tg.expand();
-        
-        // Apply Telegram theme
-        if (tg.themeParams) {
-            document.body.style.background = tg.themeParams.bg_color || 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
-        }
-    </script>
 </body>
 </html>
