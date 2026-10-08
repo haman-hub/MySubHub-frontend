@@ -3,373 +3,301 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MySubHub - Channel Owner Guide</title>
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <title>Channel Owner Guide - MySubHub</title>
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-            color: #333;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
             min-height: 100vh;
-            padding: 20px;
-            line-height: 1.6;
         }
-        
-        .container {
-            max-width: 600px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 20px;
-            padding: 30px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-        }
-        
-        .header {
-            text-align: center;
-            margin-bottom: 30px;
-            padding-bottom: 20px;
-            border-bottom: 2px solid #f0f0f0;
-        }
-        
-        .header h1 {
-            color: #f5576c;
-            font-size: 28px;
-            margin-bottom: 10px;
-        }
-        
-        .header p {
-            color: #666;
-            font-size: 16px;
-        }
-        
-        .section {
-            margin-bottom: 30px;
-            padding: 20px;
-            background: #f8f9fa;
-            border-radius: 15px;
-            border-left: 4px solid #f5576c;
-        }
-        
-        .section h2 {
-            color: #f5576c;
-            font-size: 20px;
-            margin-bottom: 15px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        
-        .step {
-            margin-bottom: 20px;
-            padding-left: 20px;
-            position: relative;
-        }
-        
-        .step::before {
-            content: attr(data-step);
-            position: absolute;
-            left: -10px;
-            top: 0;
-            background: #f5576c;
-            color: white;
-            width: 30px;
-            height: 30px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-            font-size: 14px;
-        }
-        
-        .step h3 {
-            color: #333;
-            font-size: 16px;
-            margin-bottom: 8px;
-            margin-left: 10px;
-        }
-        
-        .step p {
-            color: #666;
-            font-size: 14px;
-            margin-left: 10px;
-        }
-        
-        .tip {
-            background: #fff3cd;
-            border-left: 4px solid #ffc107;
-            padding: 15px;
-            margin: 15px 0;
-            border-radius: 8px;
-        }
-        
-        .tip strong {
-            color: #856404;
-        }
-        
-        .warning {
-            background: #f8d7da;
-            border-left: 4px solid #dc3545;
-            padding: 15px;
-            margin: 15px 0;
-            border-radius: 8px;
-        }
-        
-        .warning strong {
-            color: #721c24;
-        }
-        
-        .success {
-            background: #d4edda;
-            border-left: 4px solid #28a745;
-            padding: 15px;
-            margin: 15px 0;
-            border-radius: 8px;
-        }
-        
-        .success strong {
-            color: #155724;
-        }
-        
-        .faq {
-            margin-top: 30px;
-        }
-        
-        .faq-item {
-            margin-bottom: 20px;
-            padding: 15px;
-            background: #f8f9fa;
-            border-radius: 10px;
-        }
-        
-        .faq-item h3 {
-            color: #f5576c;
-            font-size: 16px;
-            margin-bottom: 10px;
-        }
-        
-        .faq-item p {
-            color: #666;
-            font-size: 14px;
-        }
-        
-        .back-button {
-            display: block;
-            width: 100%;
-            padding: 15px;
-            background: #f5576c;
-            color: white;
-            text-align: center;
-            text-decoration: none;
-            border-radius: 10px;
-            font-weight: bold;
-            margin-top: 30px;
-            transition: background 0.3s;
-        }
-        
-        .back-button:hover {
-            background: #e4445c;
-        }
-        
-        .icon {
-            font-size: 24px;
-        }
-        
-        .pricing-example {
-            background: white;
-            padding: 15px;
-            border-radius: 10px;
-            margin: 15px 0;
-            font-family: monospace;
-            font-size: 13px;
-        }
-        
-        .pricing-example .highlight {
-            color: #f5576c;
-            font-weight: bold;
+        .glass {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
         }
     </style>
 </head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>📺 Channel Owner Guide</h1>
-            <p>Learn how to monetize your Telegram channel or group</p>
+<body class="text-white p-4">
+    <div class="max-w-4xl mx-auto">
+        <!-- Header -->
+        <div class="text-center mb-8">
+            <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-emerald-500 to-blue-600 flex items-center justify-center mx-auto mb-4">
+                <span class="text-4xl">📺</span>
+            </div>
+            <h1 class="text-3xl font-bold mb-2">Channel Owner Guide</h1>
+            <p class="text-slate-400">Learn how to monetize your Telegram channel</p>
         </div>
-        
-        <div class="section">
-            <h2><span class="icon">🚀</span> Getting Started</h2>
-            <div class="step" data-step="1">
-                <h3>Add the Bot as Admin</h3>
-                <p>Go to your channel/group → Click on channel name → Administrators → Add Administrator → Search for <code>@MySubsHub_bot</code> → Add as admin with "Invite Users" permission.</p>
+
+        <!-- Guide Content -->
+        <div class="space-y-6">
+            <!-- Step 1 -->
+            <div class="glass rounded-2xl p-6">
+                <div class="flex items-start gap-4">
+                    <div class="w-12 h-12 rounded-xl bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
+                        <span class="text-2xl">1️⃣</span>
+                    </div>
+                    <div>
+                        <h2 class="text-xl font-bold mb-2">Add Bot as Administrator</h2>
+                        <p class="text-slate-300 mb-3">First, add @MySubsHub_bot to your channel as an administrator.</p>
+                        <ul class="text-sm text-slate-400 space-y-1 list-disc list-inside">
+                            <li>Open your Telegram channel</li>
+                            <li>Go to Channel Settings → Administrators</li>
+                            <li>Click "Add Administrator"</li>
+                            <li>Search for <strong class="text-blue-400">@MySubsHub_bot</strong></li>
+                            <li>Grant ALL permissions (important!)</li>
+                            <li>Click "Save" or "Done"</li>
+                        </ul>
+                        <div class="mt-3 p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl">
+                            <p class="text-xs text-amber-300">⚠️ <strong>Important:</strong> The bot needs full admin permissions to manage subscribers and verify payments.</p>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div class="step" data-step="2">
-                <h3>Bot Detects Your Channel</h3>
-                <p>Once added, the bot will automatically detect your channel and send you a confirmation message with a link to configure your channel.</p>
+
+            <!-- Step 2 -->
+            <div class="glass rounded-2xl p-6">
+                <div class="flex items-start gap-4">
+                    <div class="w-12 h-12 rounded-xl bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
+                        <span class="text-2xl">2️⃣</span>
+                    </div>
+                    <div>
+                        <h2 class="text-xl font-bold mb-2">Register Your Channel</h2>
+                        <p class="text-slate-300 mb-3">Add your channel to MySubHub platform.</p>
+                        <ul class="text-sm text-slate-400 space-y-1 list-disc list-inside">
+                            <li>Go to "My Channels" tab</li>
+                            <li>Click "➕ Add Channel Now"</li>
+                            <li>Fill in channel details:
+                                <ul class="ml-4 mt-1 space-y-1">
+                                    <li>• Channel name</li>
+                                    <li>• Invite link</li>
+                                    <li>• Subscription price (in TON)</li>
+                                    <li>• Duration (1 week to unlimited)</li>
+                                </ul>
+                            </li>
+                            <li>Click "Add Channel"</li>
+                        </ul>
+                    </div>
+                </div>
             </div>
-            <div class="step" data-step="3">
-                <h3>Open Configuration Dashboard</h3>
-                <p>Click the link in the bot message or use the /mychannels command to open your channel management dashboard.</p>
+
+            <!-- Step 3 -->
+            <div class="glass rounded-2xl p-6">
+                <div class="flex items-start gap-4">
+                    <div class="w-12 h-12 rounded-xl bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
+                        <span class="text-2xl">3️⃣</span>
+                    </div>
+                    <div>
+                        <h2 class="text-xl font-bold mb-2">Connect Your Wallet</h2>
+                        <p class="text-slate-300 mb-3">Connect your TON wallet to receive payments.</p>
+                        <ul class="text-sm text-slate-400 space-y-1 list-disc list-inside">
+                            <li>Click on wallet icon in the top right</li>
+                            <li>Connect your TON wallet (Tonkeeper, Tonhub, etc.)</li>
+                            <li>Your wallet address will be saved automatically</li>
+                            <li>All payments will go directly to your wallet</li>
+                        </ul>
+                        <div class="mt-3 p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl">
+                            <p class="text-xs text-emerald-300">💰 <strong>Revenue Split:</strong> You receive 99% of subscription fees. Platform takes 1% fee.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 4 -->
+            <div class="glass rounded-2xl p-6">
+                <div class="flex items-start gap-4">
+                    <div class="w-12 h-12 rounded-xl bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
+                        <span class="text-2xl">4️⃣</span>
+                    </div>
+                    <div>
+                        <h2 class="text-xl font-bold mb-2">Share Your Channel</h2>
+                        <p class="text-slate-300 mb-3">Promote your channel and attract subscribers.</p>
+                        <ul class="text-sm text-slate-400 space-y-1 list-disc list-inside">
+                            <li>Go to "My Channels" tab</li>
+                            <li>Click "📋 Copy" to copy subscription link</li>
+                            <li>Or click "📤 Forward" to share with template message</li>
+                            <li>Share in social media, other channels, etc.</li>
+                            <li>Users click the link to subscribe</li>
+                        </ul>
+                        <div class="mt-3 bg-slate-800/50 rounded-xl p-3">
+                            <p class="text-xs text-slate-400 mb-2">Example subscription link:</p>
+                            <code class="text-xs text-blue-400 break-all">https://t.me/MySubsHub_bot?start=your-channel-id</code>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 5 -->
+            <div class="glass rounded-2xl p-6">
+                <div class="flex items-start gap-4">
+                    <div class="w-12 h-12 rounded-xl bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
+                        <span class="text-2xl">5️⃣</span>
+                    </div>
+                    <div>
+                        <h2 class="text-xl font-bold mb-2">Manage Subscribers</h2>
+                        <p class="text-slate-300 mb-3">The bot automatically manages your subscribers.</p>
+                        <ul class="text-sm text-slate-400 space-y-1 list-disc list-inside">
+                            <li>When user pays → Bot adds them to channel</li>
+                            <li>When subscription expires → Bot removes them</li>
+                            <li>Users can renew with one click</li>
+                            <li>Track active subscribers in dashboard</li>
+                        </ul>
+                        <div class="mt-3 p-3 bg-blue-500/10 border border-blue-500/30 rounded-xl">
+                            <p class="text-xs text-blue-300">🤖 <strong>Automatic:</strong> Everything is automated! You don't need to manually add/remove users.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 6 -->
+            <div class="glass rounded-2xl p-6">
+                <div class="flex items-start gap-4">
+                    <div class="w-12 h-12 rounded-xl bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
+                        <span class="text-2xl">6️⃣</span>
+                    </div>
+                    <div>
+                        <h2 class="text-xl font-bold mb-2">Track Earnings</h2>
+                        <p class="text-slate-300 mb-3">Monitor your revenue and subscriber stats.</p>
+                        <ul class="text-sm text-slate-400 space-y-1 list-disc list-inside">
+                            <li>View total subscribers count</li>
+                            <li>See active vs expired subscriptions</li>
+                            <li>Track total earnings</li>
+                            <li>Monitor channel ratings and reviews</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 7 -->
+            <div class="glass rounded-2xl p-6">
+                <div class="flex items-start gap-4">
+                    <div class="w-12 h-12 rounded-xl bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
+                        <span class="text-2xl">7️⃣</span>
+                    </div>
+                    <div>
+                        <h2 class="text-xl font-bold mb-2">Withdraw Earnings</h2>
+                        <p class="text-slate-300 mb-3">Request withdrawal of your accumulated earnings.</p>
+                        <ul class="text-sm text-slate-400 space-y-1 list-disc list-inside">
+                            <li>Go to "Withdrawals" section</li>
+                            <li>Enter withdrawal amount (minimum 1 TON)</li>
+                            <li>Submit withdrawal request</li>
+                            <li>Admin processes your request</li>
+                            <li>Funds sent to your connected wallet</li>
+                        </ul>
+                        <div class="mt-3 p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl">
+                            <p class="text-xs text-amber-300">⏱️ <strong>Processing Time:</strong> Withdrawals are processed manually by admin. Please allow 24-48 hours.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 8 -->
+            <div class="glass rounded-2xl p-6">
+                <div class="flex items-start gap-4">
+                    <div class="w-12 h-12 rounded-xl bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
+                        <span class="text-2xl">8️⃣</span>
+                    </div>
+                    <div>
+                        <h2 class="text-xl font-bold mb-2">Edit Channel Settings</h2>
+                        <p class="text-slate-300 mb-3">Update your channel's price and duration anytime.</p>
+                        <ul class="text-sm text-slate-400 space-y-1 list-disc list-inside">
+                            <li>Go to "My Channels" tab</li>
+                            <li>Click "⚙️ Edit" on your channel</li>
+                            <li>Update subscription price</li>
+                            <li>Change duration if needed</li>
+                            <li>Click "Save Changes"</li>
+                        </ul>
+                        <div class="mt-3 p-3 bg-blue-500/10 border border-blue-500/30 rounded-xl">
+                            <p class="text-xs text-blue-300">💡 <strong>Note:</strong> Changes apply to new subscriptions only. Existing subscriptions keep their original terms.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tips Section -->
+            <div class="glass rounded-2xl p-6">
+                <h2 class="text-xl font-bold mb-4 flex items-center gap-2">
+                    <span>💡</span> Tips for Success
+                </h2>
+                <div class="space-y-3">
+                    <div class="flex items-start gap-3">
+                        <span class="text-emerald-400 text-lg">✓</span>
+                        <div>
+                            <p class="text-sm font-semibold text-white">Set Competitive Prices</p>
+                            <p class="text-xs text-slate-400">Research similar channels and price competitively</p>
+                        </div>
+                    </div>
+                    <div class="flex items-start gap-3">
+                        <span class="text-emerald-400 text-lg">✓</span>
+                        <div>
+                            <p class="text-sm font-semibold text-white">Offer Multiple Durations</p>
+                            <p class="text-xs text-slate-400">Give users options (weekly, monthly, yearly)</p>
+                        </div>
+                    </div>
+                    <div class="flex items-start gap-3">
+                        <span class="text-emerald-400 text-lg">✓</span>
+                        <div>
+                            <p class="text-sm font-semibold text-white">Provide Quality Content</p>
+                            <p class="text-xs text-slate-400">Deliver value to keep subscribers engaged</p>
+                        </div>
+                    </div>
+                    <div class="flex items-start gap-3">
+                        <span class="text-emerald-400 text-lg">✓</span>
+                        <div>
+                            <p class="text-sm font-semibold text-white">Promote Actively</p>
+                            <p class="text-xs text-slate-400">Share your link on social media and other channels</p>
+                        </div>
+                    </div>
+                    <div class="flex items-start gap-3">
+                        <span class="text-emerald-400 text-lg">✓</span>
+                        <div>
+                            <p class="text-sm font-semibold text-white">Encourage Reviews</p>
+                            <p class="text-xs text-slate-400">Good ratings attract more subscribers</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- FAQ Section -->
+            <div class="glass rounded-2xl p-6">
+                <h2 class="text-xl font-bold mb-4 flex items-center gap-2">
+                    <span>❓</span> Frequently Asked Questions
+                </h2>
+                <div class="space-y-4">
+                    <div>
+                        <h3 class="font-semibold text-white mb-2">How much do I earn?</h3>
+                        <p class="text-sm text-slate-400">You receive 99% of subscription fees. The platform takes a 1% fee to cover operational costs.</p>
+                    </div>
+                    <div>
+                        <h3 class="font-semibold text-white mb-2">When do I receive payments?</h3>
+                        <p class="text-sm text-slate-400">Payments go directly to your connected TON wallet instantly when users subscribe.</p>
+                    </div>
+                    <div>
+                        <h3 class="font-semibold text-white mb-2">Can I have multiple channels?</h3>
+                        <p class="text-sm text-slate-400">Yes! You can register up to 5 channels per account.</p>
+                    </div>
+                    <div>
+                        <h3 class="font-semibold text-white mb-2">What happens if a subscriber requests a refund?</h3>
+                        <p class="text-sm text-slate-400">Refunds are handled directly between you and the subscriber. The platform doesn't process refunds automatically.</p>
+                    </div>
+                    <div>
+                        <h3 class="font-semibold text-white mb-2">Can I change the subscription price?</h3>
+                        <p class="text-sm text-slate-400">Yes! You can update your price anytime. Changes apply to new subscriptions only.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Back Button -->
+            <div class="text-center">
+                <button onclick="window.history.back()" class="btn-primary px-6 py-3 rounded-xl text-sm font-semibold text-white">
+                    ← Back to App
+                </button>
             </div>
         </div>
-        
-        <div class="section">
-            <h2><span class="icon">⚙️</span> Configuring Your Channel</h2>
-            <div class="step" data-step="1">
-                <h3>Set Subscription Price</h3>
-                <p>Click "Edit" on your channel and set the subscription price in TON. Choose a price that matches your content value.</p>
-            </div>
-            <div class="step" data-step="2">
-                <h3>Set Subscription Duration</h3>
-                <p>Choose the subscription duration (e.g., 30 days, 90 days, 365 days). This determines how long subscribers have access.</p>
-            </div>
-            <div class="step" data-step="3">
-                <h3>Activate Your Channel</h3>
-                <p>Toggle the "Active" switch to enable your channel. Once active, users can subscribe and you'll start receiving payments.</p>
-            </div>
-            <div class="step" data-step="4">
-                <h3>Connect Your Wallet</h3>
-                <p>Connect your TON wallet to receive payments. Click "Connect Wallet" and select your wallet (Tonkeeper, Tonhub, etc.).</p>
-            </div>
+
+        <!-- Footer -->
+        <div class="text-center text-slate-500 text-sm mt-8">
+            <p>MySubHub Channel Owner Guide • v1.0</p>
         </div>
-        
-        <div class="section">
-            <h2><span class="icon">💰</span> Understanding Revenue</h2>
-            <div class="step" data-step="1">
-                <h3>Revenue Distribution</h3>
-                <p>When a user subscribes, the payment is split as follows:</p>
-            </div>
-            
-            <div class="pricing-example">
-                <strong>Example: 1 TON subscription</strong><br><br>
-                Total paid by user: <span class="highlight">1.05 TON</span><br>
-                ├─ Your earnings (99%): <span class="highlight">0.99 TON</span><br>
-                ├─ Platform fee (1%): 0.01 TON<br>
-                └─ Network fee: 0.05 TON<br><br>
-                <strong>You receive: 0.99 TON</strong>
-            </div>
-            
-            <div class="step" data-step="2">
-                <h3>Track Earnings</h3>
-                <p>View your pending earnings in the dashboard. Earnings show the total amount available for withdrawal.</p>
-            </div>
-            <div class="step" data-step="3">
-                <h3>Request Withdrawal</h3>
-                <p>Click "Request Withdrawal" to transfer your earnings to your wallet. Withdrawals are processed manually by the admin team.</p>
-            </div>
-        </div>
-        
-        <div class="section">
-            <h2><span class="icon">📢</span> Promoting Your Channel</h2>
-            <div class="step" data-step="1">
-                <h3>Copy Invite Link</h3>
-                <p>Click "Copy Link" to get your unique invite link. Share this link to attract subscribers.</p>
-            </div>
-            <div class="step" data-step="2">
-                <h3>Forward to Contacts</h3>
-                <p>Click "Forward" to share your channel with contacts. The message includes channel details, rating, and a direct subscribe link.</p>
-            </div>
-            <div class="step" data-step="3">
-                <h3>Auto-Post Welcome Messages</h3>
-                <p>Enable auto-post to send personalized welcome messages when users subscribe. Edit the template to include your custom message.</p>
-            </div>
-        </div>
-        
-        <div class="section">
-            <h2><span class="icon">🏆</span> Getting Verified</h2>
-            <div class="step" data-step="1">
-                <h3>Request Verification</h3>
-                <p>Click "Verify" on your channel card. Provide evidence such as social media links, website, or channel statistics.</p>
-            </div>
-            <div class="step" data-step="2">
-                <h3>Admin Review</h3>
-                <p>The admin team will review your submission. Verification usually takes 24-48 hours.</p>
-            </div>
-            <div class="step" data-step="3">
-                <h3>Get Verified Badge</h3>
-                <p>Once verified, your channel will show a blue checkmark badge, increasing credibility and attracting more subscribers.</p>
-            </div>
-        </div>
-        
-        <div class="tip">
-            <strong>💡 Pro Tip:</strong> Channels with verification badges and high ratings get 40% more subscribers. Focus on quality content and encourage satisfied subscribers to leave reviews.
-        </div>
-        
-        <div class="warning">
-            <strong>⚠️ Important:</strong> Keep your channel content appropriate and follow Telegram's terms of service. Channels that receive multiple reports may be suspended.
-        </div>
-        
-        <div class="success">
-            <strong>✅ Auto-Post Template Variables:</strong> Use <code>{user}</code> for subscriber name, <code>{channel}</code> for channel name, and <code>{date}</code> for subscription date.
-        </div>
-        
-        <div class="faq">
-            <h2 style="color: #f5576c; margin-bottom: 20px;">❓ Frequently Asked Questions</h2>
-            
-            <div class="faq-item">
-                <h3>How do I receive payments?</h3>
-                <p>Connect your TON wallet in the dashboard. When users subscribe, 99% of the payment goes to your wallet. Request withdrawals anytime.</p>
-            </div>
-            
-            <div class="faq-item">
-                <h3>How long do withdrawals take?</h3>
-                <p>Withdrawals are processed manually by the admin team. Processing time is typically 24-48 hours.</p>
-            </div>
-            
-            <div class="faq-item">
-                <h3>Can I change the price later?</h3>
-                <p>Yes! You can update your subscription price anytime. Price changes only apply to new subscribers.</p>
-            </div>
-            
-            <div class="faq-item">
-                <h3>What if a subscriber requests a refund?</h3>
-                <p>Subscriptions are non-refundable. Make sure your channel description clearly explains the content and value.</p>
-            </div>
-            
-            <div class="faq-item">
-                <h3>Can I have multiple channels?</h3>
-                <p>Yes! You can add and manage multiple channels. Each channel has its own settings and earnings.</p>
-            </div>
-            
-            <div class="faq-item">
-                <h3>What if my channel is reported?</h3>
-                <p>The admin team will review the report. If the report is valid, your channel may be suspended. Maintain quality content to avoid reports.</p>
-            </div>
-            
-            <div class="faq-item">
-                <h3>How do I get more reviews?</h3>
-                <p>Encourage subscribers to leave reviews by providing excellent content. You can mention this in your channel posts.</p>
-            </div>
-            
-            <div class="faq-item">
-                <h3>What happens when a subscription expires?</h3>
-                <p>The subscriber is automatically removed from your channel. They can renew anytime to regain access.</p>
-            </div>
-        </div>
-        
-        <div class="success">
-            <strong>✅ Need Help?</strong> If you have any questions or issues, use the /help command in the bot or contact support.
-        </div>
-        
-        <a href="javascript:window.history.back()" class="back-button">← Back to Dashboard</a>
     </div>
-    
-    <script>
-        // Initialize Telegram WebApp
-        const tg = window.Telegram.WebApp;
-        tg.ready();
-        tg.expand();
-        
-        // Apply Telegram theme
-        if (tg.themeParams) {
-            document.body.style.background = tg.themeParams.bg_color || 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)';
-        }
-    </script>
 </body>
 </html>
