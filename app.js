@@ -646,6 +646,9 @@ window.openEditModal = async function(channelId) {
     return;
   }
   
+  // Ensure price is a valid number
+  const currentPrice = parseFloat(channel.subscription_price) || 0.1;
+  
   const modal = document.createElement('div');
   modal.id = 'edit-modal-dynamic';
   modal.className = 'fixed inset-0 z-[9999] bg-black/80 backdrop-blur-md flex items-center justify-center p-4';
@@ -660,7 +663,7 @@ window.openEditModal = async function(channelId) {
         </div>
         <div>
           <label class="text-xs text-slate-400 mb-1 block">Subscription Price (TON)</label>
-          <input type="number" id="edit-price" step="0.01" min="0.01" value="${channel.subscription_price || ''}" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white" />
+          <input type="number" id="edit-price" step="0.01" min="0.01" value="${currentPrice}" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white" />
         </div>
         <div>
           <label class="text-xs text-slate-400 mb-2 block">Subscription Duration</label>
@@ -720,10 +723,16 @@ window.submitEditChannel = async function() {
     return;
   }
   
-  const price = parseFloat(priceInput.value);
-  const duration = parseInt(durationInput.value);
+  // Get values and trim whitespace
+  const priceValue = priceInput.value.trim();
+  const durationValue = durationInput.value.trim();
   
-  console.log('Edit channel:', { price, duration, channelId: window.currentEditChannelId });
+  console.log('Raw input values:', { priceValue, durationValue });
+  
+  const price = parseFloat(priceValue);
+  const duration = parseInt(durationValue);
+  
+  console.log('Parsed values:', { price, duration, channelId: window.currentEditChannelId });
   
   if (!window.currentEditChannelId) { 
     Toast.error('No channel selected'); 
@@ -731,6 +740,7 @@ window.submitEditChannel = async function() {
   }
   
   if (isNaN(price) || price <= 0) { 
+    console.error('Price validation failed:', { priceValue, price, isNaN: isNaN(price) });
     Toast.error('Please enter a valid price (greater than 0)'); 
     return; 
   }
