@@ -667,21 +667,21 @@ window.openEditModal = async function(channelId) {
   modal.id = 'edit-modal-dynamic';
   modal.className = 'fixed inset-0 z-[9999] bg-black/80 backdrop-blur-md flex items-center justify-center p-4';
   
-  // Create modal content with proper input handling
+  // Create modal content - DON'T set value in template, set it after
   modal.innerHTML = `
     <div class="glass-card p-6 w-full max-w-md">
       <h2 class="text-lg font-bold text-white mb-4">Edit Channel</h2>
       <div class="space-y-4">
         <div>
           <label class="text-xs text-slate-400 mb-1 block">Channel Name</label>
-          <input type="text" id="edit-channel-name" value="${escapeHtml(channel.channel_name || '')}" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white" readonly />
+          <input type="text" id="edit-channel-name" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white" readonly />
           <p class="text-[10px] text-slate-500 mt-1">Channel name cannot be changed</p>
         </div>
         <div>
           <label class="text-xs text-slate-400 mb-1 block">Subscription Price (TON)</label>
-          <input type="number" id="edit-price" step="0.01" min="0.01" value="${currentPrice}" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white" oninput="console.log('Price input changed to:', this.value)" />
+          <input type="number" id="edit-price" step="0.01" min="0.01" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white" />
           <p class="text-[10px] text-slate-500 mt-1">Enter price in TON (e.g., 1, 0.5, 2.5)</p>
-          <p class="text-[10px] text-blue-400 mt-1" id="price-debug">Current value: ${currentPrice}</p>
+          <p class="text-[10px] text-blue-400 mt-1" id="price-debug">Current value: 0</p>
         </div>
         <div>
           <label class="text-xs text-slate-400 mb-2 block">Subscription Duration</label>
@@ -705,22 +705,60 @@ window.openEditModal = async function(channelId) {
   
   document.body.appendChild(modal);
   
-  // Add event listener to update debug display
+  // CRITICAL FIX: Explicitly set ALL input values after modal is added to DOM
   const priceInput = document.getElementById('edit-price');
+  const durationInput = document.getElementById('edit-duration');
+  const channelNameInput = document.getElementById('edit-channel-name');
   const priceDebug = document.getElementById('price-debug');
-  if (priceInput && priceDebug) {
+  
+  // Set channel name
+  if (channelNameInput) {
+    channelNameInput.value = channel.channel_name || '';
+    console.log('Channel name set to:', channelNameInput.value);
+  }
+  
+  // Set price - THIS IS THE CRITICAL FIX
+  if (priceInput) {
+    priceInput.value = currentPrice.toString();
+    console.log('✅ Price input value explicitly set to:', priceInput.value);
+    
+    // Update debug display
+    if (priceDebug) {
+      priceDebug.textContent = 'Current value: ' + currentPrice;
+    }
+    
+    // Add event listener to track changes
     priceInput.addEventListener('input', function() {
-      priceDebug.textContent = 'Current value: ' + this.value;
-      console.log('Price debug updated:', this.value);
+      const newValue = this.value;
+      console.log('📝 Price input changed to:', newValue);
+      if (priceDebug) {
+        priceDebug.textContent = 'Current value: ' + newValue;
+      }
     });
+    
+    // Verify the value is actually set
+    setTimeout(() => {
+      console.log('🔍 Verification - Price input value after 100ms:', priceInput.value);
+    }, 100);
+  } else {
+    console.error('❌ ERROR: Price input element not found!');
+    Toast.error('Form error - please try again');
+    return;
+  }
+  
+  // Set duration
+  if (durationInput) {
+    const currentDuration = channel.duration_days || 30;
+    durationInput.value = currentDuration.toString();
+    console.log('✅ Duration input value set to:', durationInput.value);
   }
   
   // Highlight current duration
   const currentDuration = channel.duration_days || 30;
   selectEditDuration(currentDuration);
   
-  console.log('Edit modal opened successfully');
-  console.log('Price input value:', priceInput?.value);
+  console.log('✅ Edit modal opened successfully');
+  console.log('📊 Final values - Price:', priceInput?.value, 'Duration:', durationInput?.value);
 };
 
 window.selectEditDuration = function(days) {
@@ -762,9 +800,22 @@ window.submitEditChannel = async function() {
     return;
   }
   
-  // Get values - try multiple methods to ensure we get the value
+  // CRITICAL: Get values with multiple fallback methods
   let priceValue = priceInput.value;
   let durationValue = durationInput.value;
+  
+  // If value is empty, try to get it from the attribute
+  if (!priceValue || priceValue.trim() === '') {
+    console.warn('Price input value is empty, trying fallback...');
+    priceValue = priceInput.getAttribute('value') || '0.1';
+    console.log('Using fallback price value:', priceValue);
+  }
+  
+  if (!durationValue || durationValue.trim() === '') {
+    console.warn('Duration input value is empty, trying fallback...');
+    durationValue = durationInput.getAttribute('value') || '30';
+    console.log('Using fallback duration value:', durationValue);
+  }
   
   console.log('Raw values from input:', { 
     priceValue: priceValue, 
