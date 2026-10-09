@@ -641,6 +641,8 @@ function showBotAdminRequiredDialog(errorMessage) {
 window.openEditModal = async function(channelId) {
   window.currentEditChannelId = channelId;
   
+  console.log('Opening edit modal for channel:', channelId);
+  
   // Fetch channel data to pre-fill the form
   const channel = await apiFetch(`/api/channels/${channelId}`);
   if (channel.error) {
@@ -648,12 +650,24 @@ window.openEditModal = async function(channelId) {
     return;
   }
   
-  // Ensure price is a valid number
-  const currentPrice = parseFloat(channel.subscription_price) || 0.1;
+  console.log('Channel data loaded:', channel);
+  
+  // Ensure price is a valid number - handle various formats
+  let currentPrice = 0.1; // default
+  if (channel.subscription_price) {
+    const parsed = parseFloat(channel.subscription_price);
+    if (!isNaN(parsed) && parsed > 0) {
+      currentPrice = parsed;
+    }
+  }
+  
+  console.log('Current price to display:', currentPrice);
   
   const modal = document.createElement('div');
   modal.id = 'edit-modal-dynamic';
   modal.className = 'fixed inset-0 z-[9999] bg-black/80 backdrop-blur-md flex items-center justify-center p-4';
+  
+  // Create modal content with proper input handling
   modal.innerHTML = `
     <div class="glass-card p-6 w-full max-w-md">
       <h2 class="text-lg font-bold text-white mb-4">Edit Channel</h2>
@@ -665,7 +679,9 @@ window.openEditModal = async function(channelId) {
         </div>
         <div>
           <label class="text-xs text-slate-400 mb-1 block">Subscription Price (TON)</label>
-          <input type="number" id="edit-price" step="0.01" min="0.01" value="${currentPrice}" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white" />
+          <input type="number" id="edit-price" step="0.01" min="0.01" value="${currentPrice}" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white" oninput="console.log('Price input changed to:', this.value)" />
+          <p class="text-[10px] text-slate-500 mt-1">Enter price in TON (e.g., 1, 0.5, 2.5)</p>
+          <p class="text-[10px] text-blue-400 mt-1" id="price-debug">Current value: ${currentPrice}</p>
         </div>
         <div>
           <label class="text-xs text-slate-400 mb-2 block">Subscription Duration</label>
@@ -689,9 +705,22 @@ window.openEditModal = async function(channelId) {
   
   document.body.appendChild(modal);
   
+  // Add event listener to update debug display
+  const priceInput = document.getElementById('edit-price');
+  const priceDebug = document.getElementById('price-debug');
+  if (priceInput && priceDebug) {
+    priceInput.addEventListener('input', function() {
+      priceDebug.textContent = 'Current value: ' + this.value;
+      console.log('Price debug updated:', this.value);
+    });
+  }
+  
   // Highlight current duration
   const currentDuration = channel.duration_days || 30;
   selectEditDuration(currentDuration);
+  
+  console.log('Edit modal opened successfully');
+  console.log('Price input value:', priceInput?.value);
 };
 
 window.selectEditDuration = function(days) {
@@ -717,35 +746,81 @@ window.closeEditModal = function() {
 };
 
 window.submitEditChannel = async function() {
+  console.log('=== SUBMIT EDIT CHANNEL START ===');
+  
   const priceInput = document.getElementById('edit-price');
   const durationInput = document.getElementById('edit-duration');
   
+  console.log('Input elements found:', { 
+    priceInput: !!priceInput, 
+    durationInput: !!durationInput 
+  });
+  
   if (!priceInput || !durationInput) {
+    console.error('Form elements not found!');
     Toast.error('Form elements not found');
     return;
   }
   
-  // Get values and trim whitespace
-  const priceValue = priceInput.value.trim();
-  const durationValue = durationInput.value.trim();
+  // Get values - try multiple methods to ensure we get the value
+  let priceValue = priceInput.value;
+  let durationValue = durationInput.value;
   
-  console.log('Raw input values:', { priceValue, durationValue });
+  console.log('Raw values from input:', { 
+    priceValue: priceValue, 
+    priceValueType: typeof priceValue,
+    durationValue: durationValue,
+    durationValueType: typeof durationValue
+  });
   
+  // Trim whitespace
+  if (typeof priceValue === 'string') {
+    priceValue = priceValue.trim();
+  }
+  if (typeof durationValue === 'string') {
+    durationValue = durationValue.trim();
+  }
+  
+  console.log('Trimmed values:', { priceValue, durationValue });
+  
+  // Parse values
   const price = parseFloat(priceValue);
   const duration = parseInt(durationValue);
   
-  console.log('Parsed values:', { price, duration, channelId: window.currentEditChannelId });
+  console.log('Parsed values:', { 
+    price: price, 
+    priceIsNaN: isNaN(price),
+    duration: duration,
+    durationIsNaN: isNaN(duration),
+    channelId: window.currentEditChannelId
+  });
   
   if (!window.currentEditChannelId) { 
+    console.error('No channel ID!');
     Toast.error('No channel selected'); 
     return; 
   }
   
-  if (isNaN(price) || price <= 0) { 
-    console.error('Price validation failed:', { priceValue, price, isNaN: isNaN(price) });
-    Toast.error('Please enter a valid price (greater than 0)'); 
-    return; 
+  // More lenient validation - check if price is a valid number
+  if (isNaN(price)) {
+    console.error('Price is NaN!', { priceValue, price });
+    Toast.error('Please enter a valid number for price');
+    return;
   }
+  
+  if (price <= 0) {
+    console.error('Price is <= 0!', { price });
+    Toast.error('Price must be greater than 0');
+    return;
+  }
+  
+  if (isNaN(duration) || duration <= 0) {
+    console.error('Duration invalid!', { duration });
+    Toast.error('Please select a valid duration');
+    return;
+  }
+  
+  console.log('Validation passed, proceeding with update...');
   
   if (isNaN(duration) || duration <= 0) {
     Toast.error('Please select a valid duration');
