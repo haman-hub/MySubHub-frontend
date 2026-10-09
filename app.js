@@ -927,37 +927,17 @@ window.copyShareLink = function(channelId) {
   copyToClipboard(`https://t.me/${BOT_USERNAME}?start=${channelId}`, 'Link copied!');
 };
 
-window.forwardChannelLink = async function(channelId, channelName) {
+window.forwardChannelLink = function(channelId, channelName) {
   const link = `https://t.me/${BOT_USERNAME}?start=${channelId}`;
   const message = `🎯 Subscribe to "${channelName}" on MySubHub!\n\n💎 Get premium content with TON payments\n🔒 Secure and private\n✨ Easy subscription management\n\nClick here to subscribe: ${link}`;
   
-  // Try to use Telegram's native share functionality
-  const TG = window.Telegram?.WebApp;
-  if (TG?.switchInlineQuery) {
-    try {
-      TG.switchInlineQuery(message, ['users', 'groups', 'channels']);
-      return;
-    } catch (e) {
-      console.log('switchInlineQuery not available, using fallback');
-    }
-  }
+  // Use Telegram's native share URL format for forwarding
+  const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(message)}`;
   
-  // Fallback: Use Web Share API if available
-  if (navigator.share) {
-    try {
-      await navigator.share({
-        title: `Subscribe to ${channelName}`,
-        text: message,
-        url: link
-      });
-      return;
-    } catch (e) {
-      console.log('Web Share API cancelled or failed');
-    }
-  }
+  // Open Telegram share dialog
+  window.open(shareUrl, '_blank');
   
-  // Final fallback: Copy to clipboard
-  copyToClipboard(message, 'Message copied! Share it anywhere.');
+  Toast.success('Share dialog opened!');
 };
 
 // ================== DIAGNOSTIC ==================
