@@ -100,8 +100,10 @@ async function authenticateUser() {
     window.currentUser = auth.user;
     window.isAdmin = auth.isAdmin === true;
     const adminTab = document.getElementById('nav-admin');
-    if (adminTab && window.isAdmin) {
-      adminTab.style.setProperty('display', 'flex', 'important');
+    const adminChannelsTab = document.getElementById('nav-admin-channels');
+    if (window.isAdmin) {
+      if (adminTab) adminTab.style.setProperty('display', 'flex', 'important');
+      if (adminChannelsTab) adminChannelsTab.style.setProperty('display', 'flex', 'important');
     }
   }
   return auth;
