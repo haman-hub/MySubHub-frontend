@@ -778,9 +778,8 @@ window.closeEditModal = function() {
   const modal = document.getElementById('edit-modal-dynamic');
   if (modal) {
     modal.remove();
+    console.log('✅ Edit modal removed from DOM');
   }
-  // Also hide static modal if it exists
-  document.getElementById('edit-modal')?.classList.add('hidden');
 };
 
 window.submitEditChannel = async function() {
