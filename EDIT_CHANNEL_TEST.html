@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit Channel Test - Debug Tool</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            min-height: 100vh;
+        }
+        .glass-card {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+    </style>
+</head>
+<body class="text-white p-4">
+    <div class="max-w-2xl mx-auto">
+        <div class="glass-card rounded-2xl p-6 mb-6">
+            <h1 class="text-2xl font-bold mb-4">🔧 Edit Channel Debug Test</h1>
+            <p class="text-slate-400 text-sm mb-6">
+                This tool helps debug the edit channel price validation issue.
+            </p>
+
+            <!-- Test 1: Basic Input -->
+            <div class="mb-6">
+                <h2 class="text-lg font-semibold mb-3">Test 1: Basic Number Input</h2>
+                <div class="space-y-2">
+                    <label class="text-xs text-slate-400 block">Enter a price:</label>
+                    <input type="number" id="test-input-1" step="0.01" min="0.01" value="0.1" 
+                           class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                           oninput="updateDebug1()">
+                    <p class="text-xs text-blue-400" id="debug-1">Current value: 0.1</p>
+                    <button onclick="testParse1()" class="btn-primary px-4 py-2 rounded-lg text-sm text-white">
+                        Test Parse & Validate
+                    </button>
+                    <div id="result-1" class="text-xs mt-2"></div>
+                </div>
+            </div>
+
+            <!-- Test 2: Dynamic Modal -->
+            <div class="mb-6">
+                <h2 class="text-lg font-semibold mb-3">Test 2: Dynamic Modal Creation</h2>
+                <button onclick="createTestModal()" class="btn-primary px-4 py-2 rounded-lg text-sm text-white">
+                    Create Test Modal
+                </button>
+                <p class="text-xs text-slate-400 mt-2">
+                    This creates a modal similar to the edit channel modal
+                </p>
+            </div>
+
+            <!-- Test 3: Console Log -->
+            <div class="mb-6">
+                <h2 class="text-lg font-semibold mb-3">Test 3: Console Debug</h2>
+                <button onclick="runConsoleTests()" class="btn-primary px-4 py-2 rounded-lg text-sm text-white">
+                    Run Console Tests
+                </button>
+                <p class="text-xs text-slate-400 mt-2">
+                    Check browser console (F12) for output
+                </p>
+            </div>
+
+            <!-- Instructions -->
+            <div class="bg-slate-800/50 rounded-xl p-4">
+                <h3 class="text-sm font-semibold mb-2">📋 Instructions:</h3>
+                <ol class="text-xs text-slate-300 space-y-1 list-decimal list-inside">
+                    <li>Open browser console (F12)</li>
+                    <li>Test each section above</li>
+                    <li>Watch console for debug messages</li>
+                    <li>Copy all console output</li>
+                    <li>Share with developer for analysis</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Test 1: Basic Input
+        function updateDebug1() {
+            const input = document.getElementById('test-input-1');
+            const debug = document.getElementById('debug-1');
+            debug.textContent = 'Current value: ' + input.value;
+            console.log('Test 1 - Input changed:', input.value);
+        }
+
+        function testParse1() {
+            const input = document.getElementById('test-input-1');
+            const result = document.getElementById('result-1');
+            
+            const value = input.value;
+            const parsed = parseFloat(value);
+            
+            console.log('=== TEST 1 RESULTS ===');
+            console.log('Raw value:', value);
+            console.log('Type:', typeof value);
+            console.log('Parsed:', parsed);
+            console.log('Is NaN:', isNaN(parsed));
+            console.log('Is > 0:', parsed > 0);
+            
+            let html = '<div class="space-y-1">';
+            html += `<p>Raw value: <code class="text-blue-400">${value}</code></p>`;
+            html += `<p>Type: <code class="text-blue-400">${typeof value}</code></p>`;
+            html += `<p>Parsed: <code class="text-blue-400">${parsed}</code></p>`;
+            html += `<p>Is NaN: <code class="${isNaN(parsed) ? 'text-red-400' : 'text-green-400'}">${isNaN(parsed)}</code></p>`;
+            html += `<p>Is > 0: <code class="${parsed > 0 ? 'text-green-400' : 'text-red-400'}">${parsed > 0}</code></p>`;
+            
+            if (isNaN(parsed)) {
+                html += '<p class="text-red-400 font-bold">❌ VALIDATION FAILED: Value is NaN</p>';
+            } else if (parsed <= 0) {
+                html += '<p class="text-red-400 font-bold">❌ VALIDATION FAILED: Value <= 0</p>';
+            } else {
+                html += '<p class="text-green-400 font-bold">✅ VALIDATION PASSED</p>';
+            }
+            
+            html += '</div>';
+            result.innerHTML = html;
+        }
+
+        // Test 2: Dynamic Modal
+        function createTestModal() {
+            console.log('=== CREATING TEST MODAL ===');
+            
+            const modal = document.createElement('div');
+            modal.id = 'test-modal';
+            modal.className = 'fixed inset-0 z-[9999] bg-black/80 backdrop-blur-md flex items-center justify-center p-4';
+            
+            modal.innerHTML = `
+                <div class="glass-card p-6 w-full max-w-md">
+                    <h2 class="text-lg font-bold mb-4">Test Modal</h2>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="text-xs text-slate-400 mb-1 block">Price Input</label>
+                            <input type="number" id="modal-price" step="0.01" min="0.01" value="0.1" 
+                                   class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                                   oninput="console.log('Modal input changed:', this.value)">
+                            <p class="text-xs text-blue-400 mt-1" id="modal-debug">Current value: 0.1</p>
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="testModalInput()" class="flex-1 btn-primary px-4 py-2 rounded-lg text-sm text-white">
+                                Test Input
+                            </button>
+                            <button onclick="closeTestModal()" class="flex-1 btn-secondary px-4 py-2 rounded-lg text-sm">
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+            console.log('Modal created and appended to DOM');
+            
+            // Add event listener
+            const input = document.getElementById('modal-price');
+            const debug = document.getElementById('modal-debug');
+            
+            if (input && debug) {
+                input.addEventListener('input', function() {
+                    debug.textContent = 'Current value: ' + this.value;
+                    console.log('Modal debug updated:', this.value);
+                });
+                console.log('Event listener added to input');
+                console.log('Initial input value:', input.value);
+            } else {
+                console.error('Could not find input or debug elements!');
+            }
+        }
+
+        function testModalInput() {
+            const input = document.getElementById('modal-price');
+            if (!input) {
+                console.error('Input not found!');
+                alert('Input not found!');
+                return;
+            }
+            
+            const value = input.value;
+            const parsed = parseFloat(value);
+            
+            console.log('=== MODAL INPUT TEST ===');
+            console.log('Input element:', input);
+            console.log('Input value:', value);
+            console.log('Parsed:', parsed);
+            console.log('Is NaN:', isNaN(parsed));
+            console.log('Is > 0:', parsed > 0);
+            
+            if (isNaN(parsed) || parsed <= 0) {
+                alert('❌ Validation failed!\nValue: ' + value + '\nParsed: ' + parsed);
+            } else {
+                alert('✅ Validation passed!\nValue: ' + value + '\nParsed: ' + parsed);
+            }
+        }
+
+        function closeTestModal() {
+            const modal = document.getElementById('test-modal');
+            if (modal) {
+                modal.remove();
+                console.log('Modal removed');
+            }
+        }
+
+        // Test 3: Console Tests
+        function runConsoleTests() {
+            console.log('=== RUNNING CONSOLE TESTS ===');
+            
+            // Test 1: Check if we can create elements
+            const testDiv = document.createElement('div');
+            testDiv.id = 'console-test';
+            testDiv.innerHTML = '<input type="number" id="console-input" value="1">';
+            document.body.appendChild(testDiv);
+            
+            const input = document.getElementById('console-input');
+            console.log('Created input element:', input);
+            console.log('Input value:', input.value);
+            console.log('Input type:', typeof input.value);
+            
+            const parsed = parseFloat(input.value);
+            console.log('Parsed value:', parsed);
+            console.log('Is NaN:', isNaN(parsed));
+            
+            testDiv.remove();
+            
+            console.log('=== TESTS COMPLETE ===');
+            alert('Check console for results!');
+        }
+
+        // Initial log
+        console.log('🔧 Edit Channel Debug Tool Loaded');
+        console.log('Ready for testing...');
+    </script>
+</body>
+</html>
