@@ -275,7 +275,9 @@ window.loadPurchasePage = async function(channelId) {
       return;
     }
 
-    const price = parseFloat(channel.subscription_price || 0).toFixed(4);
+    const channelPrice = parseFloat(channel.subscription_price || 0);
+    const platformFee = channelPrice * 0.01; // 1% platform fee
+    const totalPrice = channelPrice + platformFee;
     const days = channel.duration_days || 30;
     const name = escapeHtml(channel.channel_name || 'Unknown');
     const reviews = channel.reviews || [];
@@ -313,8 +315,16 @@ window.loadPurchasePage = async function(channelId) {
       
       <div class="bg-slate-800/50 rounded-xl p-4 mb-4 space-y-3">
         <div class="flex justify-between items-center">
-          <span class="text-sm text-slate-400">Price</span>
-          <span class="text-lg font-bold text-white font-mono">${price} TON</span>
+          <span class="text-sm text-slate-400">Channel Price</span>
+          <span class="text-sm font-semibold text-white font-mono">${channelPrice.toFixed(4)} TON</span>
+        </div>
+        <div class="flex justify-between items-center">
+          <span class="text-sm text-slate-400">Platform Fee (1%)</span>
+          <span class="text-sm text-slate-400 font-mono">${platformFee.toFixed(4)} TON</span>
+        </div>
+        <div class="border-t border-slate-700 pt-2 flex justify-between items-center">
+          <span class="text-sm font-bold text-white">Total to Pay</span>
+          <span class="text-lg font-bold text-emerald-400 font-mono">${totalPrice.toFixed(4)} TON</span>
         </div>
         <div class="flex justify-between items-center">
           <span class="text-sm text-slate-400">Duration</span>
