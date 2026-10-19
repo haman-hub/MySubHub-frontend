@@ -1758,15 +1758,3 @@ async function init() {
 window.onload = function() { init(); };
 console.log('MySubHub app.js v3.3.0 - ALL 5 PHASES loaded');
 console.log('Language:', currentLanguage);
-   ) return;
-    this.container = document.createElement('div');
-    this.container.id = 'toast-container';
-    this.container.style.cssText = 'position:fixed;top:80px;right:16px;z-index:9999;display:flex;flex-direction-direction:column;gap:8px;pointer-events:none;max-width:340px;';
-    document.body.appendChild(this.container);
-  },
-  show(message, type = 'info', duration = 3000) {
-    this.init();
-    const toast = document.createElement('div');
-    const colors = { success: 'bg-emerald-500/90 border-emerald-400', error: 'bg-red-500/90 border-red-400', warning: 'bg-amber-500/90 border-amber-400', info: 'bg-blue-500/90 border-blue-400' };
-    const icons = { success: '✓', error: '✕', warning: '⚠', info: 'ℹ' };
-    toast.style.cssText = `pointer-events:auto;padding:12px 16px;border-radius:12px;border:1px solid;color:white;font-size:13px;font-weight:500;
