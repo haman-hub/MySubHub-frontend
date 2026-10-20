@@ -1,11 +1,4 @@
-// MySubHub Frontend v3.3.0 - ALL 5 PHASES IMPLEMENTED
-// Phase 1: Channel Discovery
-// Phase 2: Notification System
-// Phase 3: Security Hardening
-// Phase 4: Visual Hierarchy
-// Phase 5: Multi-language Support
 
-// ================== SECURITY (Phase 3) ==================
 function escapeHtml(str) {
   if (!str) return '';
   const div = document.createElement('div');
