@@ -27,7 +27,7 @@ const API_BASE = window.MYSUBHUB_API || 'https://mslxnegbtstpdwauugmq.supabase.c
 const BOT_USERNAME = window.MYSUBHUB_BOT || 'MySubsHub_bot';
 
 // ================== MULTI-LANGUAGE (Phase 5) ==================
-const translations = {
+const mySubHubTranslationsV331 = {
   en: {
     nav: { subscriptions: 'My Subs', channels: 'My Channels', referrals: 'Referrals', admin: 'Admin', discover: 'Discover' },
     common: { loading: 'Loading...', retry: 'Retry', cancel: 'Cancel', save: 'Save', delete: 'Delete', edit: 'Edit', close: 'Close' },
@@ -144,7 +144,7 @@ let currentLanguage = 'en';
 function detectLanguage() {
   // Check user preference
   const savedLang = localStorage.getItem('mysubhub_language');
-  if (savedLang && translations[savedLang]) {
+  if (savedLang && mySubHubTranslationsV331[savedLang]) {
     return savedLang;
   }
   
@@ -171,7 +171,7 @@ function detectLanguage() {
 
 function t(key) {
   const keys = key.split('.');
-  let value = translations[currentLanguage];
+  let value = mySubHubTranslationsV331[currentLanguage];
   for (const k of keys) {
     if (value && value[k]) {
       value = value[k];
@@ -183,7 +183,7 @@ function t(key) {
 }
 
 function setLanguage(lang) {
-  if (translations[lang]) {
+  if (mySubHubTranslationsV331[lang]) {
     currentLanguage = lang;
     localStorage.setItem('mysubhub_language', lang);
     // Refresh UI
