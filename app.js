@@ -1,4 +1,11 @@
+// MySubHub Frontend v3.3.1 - Payment confirmation hardening
+// Phase 1: Channel Discovery
+// Phase 2: Notification System
+// Phase 3: Security Hardening
+// Phase 4: Visual Hierarchy
+// Phase 5: Multi-language Support
 
+// ================== SECURITY (Phase 3) ==================
 function escapeHtml(str) {
   if (!str) return '';
   const div = document.createElement('div');
@@ -243,8 +250,8 @@ async function apiFetch(url, options = {}, retries = 1) {
       if (res.status === 429) return { error: 'Too many requests' };
       if (res.status === 409) return await res.json();
       if (!res.ok) {
-        const error = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
-        return { error: error.error || 'Request failed' };
+        const payload = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+        return { ...payload, error: payload.error || `HTTP ${res.status}` || 'Request failed' };
       }
       return await res.json();
     } catch (err) {
@@ -780,7 +787,7 @@ window.initiatePurchase = async function(channelId) {
     const initiation = await apiFetch('/api/subscriptions/initiate', {
       method: 'POST',
       body: JSON.stringify({ channel_id: channelId, credits_used: useCredits ? creditsAmount : 0 })
-    });
+    }, 0);
 
     if (initiation.error) {
       status.innerHTML = `<p class="text-red-400 text-sm text-center">${escapeHtml(initiation.error)}</p>`;
@@ -792,8 +799,8 @@ window.initiatePurchase = async function(channelId) {
     if (!initiation.paymentDetails || parseFloat(initiation.paymentDetails.amount) <= 0) {
       const confirm = await apiFetch('/api/subscriptions/confirm', {
         method: 'POST',
-        body: JSON.stringify({ channel_id: channelId, credits_used: creditsAmount, nonce: initiation.nonce })
-      });
+        body: JSON.stringify({ channel_id: channelId, nonce: initiation.nonce })
+      }, 0);
       if (confirm.success) {
         status.innerHTML = '<p class="text-emerald-400 text-sm text-center">✅ Subscription activated with credits!</p>';
         Toast.success('Subscription activated!');
@@ -813,31 +820,43 @@ window.initiatePurchase = async function(channelId) {
       return;
     }
 
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    const intentExpiry = Math.floor(Date.parse(initiation.expires_at || '') / 1000);
+    const validUntil = Number.isFinite(intentExpiry) && intentExpiry > nowSeconds
+      ? Math.min(nowSeconds + 600, intentExpiry - 10)
+      : nowSeconds + 600;
+    if (validUntil <= nowSeconds) throw new Error('Payment reference expired. Start checkout again.');
+
     const txResult = await tonConnectUI.sendTransaction({
-      validUntil: Math.floor(Date.now() / 1000) + 600,
+      validUntil,
+      network: initiation.paymentDetails.network || '-3',
       messages: [{
         address: initiation.paymentDetails.wallet,
         amount: initiation.paymentDetails.amountNano,
+        payload: initiation.paymentDetails.payload,
       }]
     });
+    if (!txResult || !txResult.boc) throw new Error('Wallet did not return a transaction BOC');
 
     status.innerHTML = '<p class="text-blue-400 text-sm text-center">Verifying payment...</p>';
 
-    const confirmation = await apiFetch('/api/subscriptions/confirm', {
-      method: 'POST',
-      body: JSON.stringify({
-        channel_id: channelId,
-        transaction_hash: txResult,
-        nonce: initiation.nonce,
-      })
-    });
+    let confirmation = null;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      confirmation = await apiFetch('/api/subscriptions/confirm', {
+        method: 'POST',
+        body: JSON.stringify({ channel_id: channelId, nonce: initiation.nonce })
+      }, 0);
+      if (confirmation.success || !confirmation.pending) break;
+      if (attempt < 4) await new Promise(resolve => setTimeout(resolve, 1800));
+    }
 
-    if (confirmation.success) {
+    if (confirmation?.success) {
       status.innerHTML = '<p class="text-emerald-400 text-sm text-center">✅ Subscription activated!</p>';
       Toast.success('Subscription activated!');
       setTimeout(() => switchPage('subscriptions'), 2000);
-    } else {
-      status.innerHTML = `<p class="text-amber-400 text-sm text-center">Payment sent but verification pending</p>`;
+    } else if (confirmation?.pending || confirmation?.error) {
+      status.innerHTML = `<p class="text-amber-300 text-sm text-center mb-3">${escapeHtml(confirmation.error || 'Payment is still being indexed. Do not pay again yet.')}</p>
+        <button class="btn-secondary w-full px-4 py-3 rounded-xl text-sm" onclick="retrySubscriptionConfirmation('${escapeHtml(channelId)}','${escapeHtml(initiation.nonce)}')">🔄 Verify payment again</button>`;
     }
   } catch (e) {
     status.innerHTML = `<p class="text-red-400 text-sm text-center">${escapeHtml(e.message || 'Failed')}</p>`;
@@ -847,29 +866,45 @@ window.initiatePurchase = async function(channelId) {
   btn.innerHTML = `💎 ${t('purchase.pay_with_ton')}`;
 };
 
+window.retrySubscriptionConfirmation = async function(channelId, nonce) {
+  const status = document.getElementById('purchase-status');
+  if (status) status.innerHTML = '<p class="text-blue-300 text-sm text-center">Checking the blockchain...</p>';
+  const result = await apiFetch('/api/subscriptions/confirm', {
+    method: 'POST',
+    body: JSON.stringify({ channel_id: channelId, nonce })
+  }, 0);
+  if (result.success) {
+    if (status) status.innerHTML = '<p class="text-emerald-400 text-sm text-center">✅ Subscription activated!</p>';
+    Toast.success('Subscription activated!');
+    setTimeout(() => switchPage('subscriptions'), 1500);
+  } else {
+    if (status) status.innerHTML = `<p class="text-amber-300 text-sm text-center">${escapeHtml(result.error || 'Payment is still being verified. Retry shortly; do not send another payment.')}</p>
+      <button class="btn-secondary w-full px-4 py-3 rounded-xl text-sm mt-3" onclick="retrySubscriptionConfirmation('${escapeHtml(channelId)}','${escapeHtml(nonce)}')">🔄 Verify payment again</button>`;
+  }
+};
+
 // ================== OWNER DASHBOARD ==================
 window.loadOwnerDashboard = async function() {
   const container = document.getElementById('channels-list') || document.getElementById('owner-dashboard');
   if (!container) return;
   container.innerHTML = '<div class="glass-card p-10 text-center text-slate-400"><div class="animate-pulse">Loading...</div></div>';
 
-  const channels = await apiFetch('/api/channels/my');
-  if (channels.error) {
-    container.innerHTML = `<div class="glass-card p-6 text-center"><p class="text-red-400 mb-2">${escapeHtml(channels.error)}</p><button onclick="loadOwnerDashboard()" class="btn-primary px-4 py-2 rounded-lg text-xs text-white">${t('common.retry')}</button></div>`;
-    return;
-  }
+  const [channels, withdrawalData] = await Promise.all([
+    apiFetch('/api/channels/my'),
+    apiFetch('/api/withdrawals/my')
+  ]);
 
-  if (!channels || !channels.length) {
-    container.innerHTML = `
-      <div class="glass-card p-8">
+  let channelsMarkup = '';
+  if (channels?.error) {
+    channelsMarkup = `<div class="glass-card p-6 text-center mb-4"><p class="text-red-400 mb-2">${escapeHtml(channels.error)}</p><button onclick="loadOwnerDashboard()" class="btn-primary px-4 py-2 rounded-lg text-xs text-white">${t('common.retry')}</button></div>`;
+  } else if (!Array.isArray(channels) || channels.length === 0) {
+    channelsMarkup = `
+      <div class="glass-card p-8 mb-4">
         <div class="text-center mb-6">
-          <div class="w-20 h-20 rounded-2xl bg-blue-500/20 border-2 border-blue-500/30 flex items-center justify-center mx-auto mb-4">
-            <span class="text-4xl">🤖</span>
-          </div>
+          <div class="w-20 h-20 rounded-2xl bg-blue-500/20 border-2 border-blue-500/30 flex items-center justify-center mx-auto mb-4"><span class="text-4xl">🤖</span></div>
           <h3 class="text-xl font-bold text-white mb-2">${t('channels.add_first')}</h3>
           <p class="text-sm text-slate-400 mb-4">${t('channels.bot_admin_instructions')}</p>
         </div>
-        
         <div class="bg-slate-800/50 rounded-xl p-5 mb-5">
           <h4 class="text-base font-bold text-white mb-3">How to add the bot:</h4>
           <ol class="text-sm text-slate-300 space-y-2 list-decimal list-inside">
@@ -877,43 +912,103 @@ window.loadOwnerDashboard = async function() {
             <li>Go to Channel Settings → Administrators</li>
             <li>Click "Add Administrator"</li>
             <li>Search for <strong class="text-blue-400">@MySubsHub_bot</strong></li>
-            <li>Select the bot and grant ALL permissions</li>
-            <li>Click "Save" or "Done"</li>
-            <li>Return here and refresh this page</li>
+            <li>Select the bot and grant the required permissions</li>
+            <li>Click "Save" or "Done", then return here</li>
           </ol>
         </div>
-        
         <div class="bg-amber-500/10 border-2 border-amber-500/30 rounded-xl p-4">
-          <p class="text-sm text-amber-300">⚠️ <strong>Important:</strong> The bot must be added as administrator before you can register your channel. This allows the bot to manage subscribers automatically.</p>
+          <p class="text-sm text-amber-300">⚠️ The bot must be an administrator to manage subscribers automatically.</p>
         </div>
-      </div>
-    `;
-    return;
+      </div>`;
+  } else {
+    channelsMarkup = channels.map(ch => {
+      const name = escapeHtml(ch.channel_name || 'Unknown');
+      const price = parseFloat(ch.subscription_price || 0).toFixed(2);
+      const days = ch.duration_days || 30;
+      const id = escapeHtml(ch.id || '');
+      return `
+        <div class="glass-card p-5 mb-3">
+          <div class="flex justify-between items-start mb-4">
+            <div>
+              <h3 class="font-semibold text-white text-lg">${name}</h3>
+              <p class="text-slate-400 text-sm mt-1">${price} TON / ${days} days</p>
+            </div>
+            <span class="badge ${ch.is_active ? 'bg-emerald-500/10 text-emerald-400' : 'bg-slate-500/10 text-slate-400'} px-3 py-1 rounded-full text-xs font-bold">${ch.is_active ? `● ${t('channels.active')}` : `○ ${t('channels.inactive')}`}</span>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <button onclick="openEditModal('${id}')" class="btn-secondary px-4 py-2 rounded-xl text-xs">⚙️ ${t('channels.edit')}</button>
+            <button onclick="copyShareLink('${id}')" class="btn-secondary px-4 py-2 rounded-xl text-xs">📋 ${t('channels.copy')}</button>
+            <button onclick="forwardChannelLink('${id}', '${escapeHtml(ch.channel_name || '')}')" class="btn-secondary px-4 py-2 rounded-xl text-xs">📤 ${t('channels.forward')}</button>
+            <button onclick="deleteChannel('${id}')" class="bg-red-500/20 hover:bg-red-500/30 text-red-400 px-4 py-2 rounded-xl text-xs">🗑️ ${t('channels.delete')}</button>
+          </div>
+        </div>`;
+    }).join('');
   }
 
-  container.innerHTML = channels.map(ch => {
-    const name = escapeHtml(ch.channel_name || 'Unknown');
-    const price = parseFloat(ch.subscription_price || 0).toFixed(2);
-    const days = ch.duration_days || 30;
+  container.innerHTML = channelsMarkup + renderOwnerWithdrawalCard(withdrawalData);
+};
 
-    return `
-      <div class="glass-card p-5 mb-3">
-        <div class="flex justify-between items-start mb-4">
-          <div>
-            <h3 class="font-semibold text-white text-lg">${name}</h3>
-            <p class="text-slate-400 text-sm mt-1">${price} TON / ${days} days</p>
-          </div>
-          <span class="badge ${ch.is_active ? 'bg-emerald-500/10 text-emerald-400' : 'bg-slate-500/10 text-slate-400'} px-3 py-1 rounded-full text-xs font-bold">${ch.is_active ? `● ${t('channels.active')}` : `○ ${t('channels.inactive')}`}</span>
+function renderOwnerWithdrawalCard(data) {
+  if (!data || data.error) {
+    return `<div class="glass-card p-4 mt-4"><p class="text-sm text-amber-300">${escapeHtml(data?.error || 'Could not load withdrawal balance.')}</p></div>`;
+  }
+  const balance = Number(data.pendingEarnings || 0);
+  const wallet = window.currentUser?.wallet_address || '';
+  const history = Array.isArray(data.withdrawals)
+    ? data.withdrawals.slice().sort((a, b) => new Date(b.request_date || 0) - new Date(a.request_date || 0)).slice(0, 5)
+    : [];
+  return `
+    <div class="glass-card p-5 mt-4">
+      <div class="flex items-start justify-between gap-3 mb-4">
+        <div>
+          <h3 class="text-lg font-bold text-white">💰 Earnings & withdrawals</h3>
+          <p class="text-xs text-slate-400 mt-1">Withdrawal requests reserve your balance. Payout is complete only after an admin verifies the outgoing TON transfer.</p>
         </div>
-        <div class="flex gap-2">
-          <button onclick="openEditModal('${ch.id}')" class="btn-secondary px-4 py-2 rounded-xl text-xs">⚙️ ${t('channels.edit')}</button>
-          <button onclick="copyShareLink('${ch.id}')" class="btn-secondary px-4 py-2 rounded-xl text-xs">📋 ${t('channels.copy')}</button>
-          <button onclick="forwardChannelLink('${ch.id}', '${escapeHtml(ch.channel_name)}')" class="btn-secondary px-4 py-2 rounded-xl text-xs">📤 ${t('channels.forward')}</button>
-          <button onclick="deleteChannel('${ch.id}')" class="bg-red-500/20 hover:bg-red-500/30 text-red-400 px-4 py-2 rounded-xl text-xs">🗑️ ${t('channels.delete')}</button>
+        <div class="text-right">
+          <p class="text-xs text-slate-400">Available</p>
+          <p class="text-xl font-bold text-emerald-400 font-mono">${balance.toFixed(4)} TON</p>
         </div>
       </div>
-    `;
-  }).join('');
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+        <div>
+          <label class="block text-xs text-slate-400 mb-1" for="withdrawal-amount">Amount (minimum 1 TON)</label>
+          <input id="withdrawal-amount" type="number" min="1" max="${Math.max(0, balance).toFixed(9)}" step="0.000000001" placeholder="1.000000000" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm" />
+        </div>
+        <div>
+          <label class="block text-xs text-slate-400 mb-1" for="withdrawal-wallet">Destination TON wallet</label>
+          <input id="withdrawal-wallet" type="text" maxlength="128" value="${escapeHtml(wallet)}" placeholder="UQ... or EQ..." class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-xs font-mono" />
+        </div>
+      </div>
+      <button onclick="requestOwnerWithdrawal()" ${balance < 1 ? 'disabled' : ''} class="btn-primary w-full px-4 py-3 rounded-xl text-sm font-semibold text-white disabled:opacity-40">Request withdrawal</button>
+      <div id="withdrawal-request-status" class="text-xs mt-3"></div>
+      ${history.length ? `<div class="mt-4 border-t border-slate-700 pt-3"><h4 class="text-sm font-semibold text-white mb-2">Recent requests</h4><div class="space-y-2">${history.map(w => `<div class="flex justify-between gap-3 text-xs bg-slate-900/50 rounded-lg p-3"><span class="text-slate-300">${Number(w.amount || 0).toFixed(4)} TON</span><span class="text-slate-400">${escapeHtml(String(w.status || 'unknown'))}</span></div>`).join('')}</div></div>` : ''}
+    </div>`;
+}
+
+window.requestOwnerWithdrawal = async function() {
+  const amount = Number(document.getElementById('withdrawal-amount')?.value);
+  const wallet_address = document.getElementById('withdrawal-wallet')?.value?.trim() || '';
+  const status = document.getElementById('withdrawal-request-status');
+  if (!Number.isFinite(amount) || amount < 1) {
+    if (status) status.textContent = 'Minimum withdrawal is 1 TON.';
+    return;
+  }
+  if (!wallet_address) {
+    if (status) status.textContent = 'Enter the destination TON wallet.';
+    return;
+  }
+  if (status) status.textContent = 'Submitting withdrawal request...';
+  const result = await apiFetch('/api/withdrawals/request', {
+    method: 'POST',
+    body: JSON.stringify({ amount, wallet_address })
+  }, 0);
+  if (result.error) {
+    if (status) status.textContent = result.error;
+    Toast.error(result.error);
+    return;
+  }
+  Toast.success('Withdrawal request submitted.');
+  await window.loadOwnerDashboard();
 };
 
 // ================== ADD CHANNEL MODAL ==================
@@ -1347,7 +1442,63 @@ window.loadAdminDashboard = async function() {
   if (!window.isAdmin) { Toast.error('Admin only'); return; }
   const container = document.getElementById('admin-dashboard');
   if (!container) return;
-  container.innerHTML = `<div class="glass-card p-10 text-center text-slate-400">${t('admin.title')}</div>`;
+  container.innerHTML = '<div class="glass-card p-10 text-center text-slate-400 animate-pulse">Loading admin dashboard...</div>';
+  const requests = await apiFetch('/api/admin/withdrawals');
+  if (requests.error) {
+    container.innerHTML = `<div class="glass-card p-6"><p class="text-red-300">${escapeHtml(requests.error)}</p></div>`;
+    return;
+  }
+  const items = Array.isArray(requests) ? requests : [];
+  container.innerHTML = `
+    <div class="glass-card p-5">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-lg font-bold text-white">💸 Escrow withdrawals</h3>
+        <button onclick="loadAdminDashboard()" class="btn-secondary px-3 py-2 rounded-lg text-xs">Refresh</button>
+      </div>
+      ${items.length ? items.map(w => {
+        const status = String(w.status || 'pending');
+        const id = String(w.id || '');
+        return `<div class="bg-slate-900/60 border border-slate-700 rounded-xl p-4 mb-3">
+          <div class="flex flex-wrap justify-between gap-3 mb-2">
+            <div>
+              <p class="text-white font-semibold">${Number(w.amount || 0).toFixed(4)} TON</p>
+              <p class="text-xs text-slate-400 break-all">${escapeHtml(String(w.wallet_address || ''))}</p>
+              <p class="text-[10px] text-slate-500 mt-1">Request ${escapeHtml(id)}</p>
+            </div>
+            <span class="text-xs rounded-full px-3 py-1 ${status === 'approved' ? 'bg-amber-500/10 text-amber-300' : 'bg-blue-500/10 text-blue-300'}">${escapeHtml(status)}</span>
+          </div>
+          ${status === 'pending' ? `<button onclick="approveOwnerWithdrawal('${escapeHtml(id)}')" class="btn-primary px-4 py-2 rounded-lg text-xs text-white">Approve / show transfer instructions</button>` : ''}
+          ${status === 'approved' ? `<p class="text-xs text-amber-300 mb-2">Approved. After sending exactly ${Number(w.amount || 0).toFixed(9)} TON to this wallet, enter the outgoing TON Center transaction hash below.</p>
+            <div class="flex gap-2"><input id="payout-hash-${escapeHtml(id)}" type="text" placeholder="Outgoing transaction hash" class="flex-1 min-w-0 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-mono"><button onclick="completeOwnerWithdrawal('${escapeHtml(id)}')" class="btn-primary px-3 py-2 rounded-lg text-xs text-white">Verify payout</button></div>` : ''}
+        </div>`;
+      }).join('') : '<p class="text-sm text-slate-400">No pending or approved withdrawals.</p>'}
+    </div>`;
+};
+
+window.approveOwnerWithdrawal = async function(withdrawalId) {
+  const result = await apiFetch(`/api/admin/withdrawals/${encodeURIComponent(withdrawalId)}/approve`, {
+    method: 'POST',
+    body: JSON.stringify({})
+  }, 0);
+  if (result.error) { Toast.error(result.error); return; }
+  const instruction = result.transfer_instructions;
+  if (instruction) {
+    alert(`Send ${instruction.amount} TON\nFrom: ${instruction.from}\nTo: ${instruction.to}\nThen return here and submit the outgoing transaction hash.`);
+  }
+  Toast.success('Withdrawal approved; payout is not yet marked complete.');
+  await window.loadAdminDashboard();
+};
+
+window.completeOwnerWithdrawal = async function(withdrawalId) {
+  const hash = document.getElementById(`payout-hash-${withdrawalId}`)?.value?.trim();
+  if (!hash) { Toast.error('Enter the outgoing transaction hash.'); return; }
+  const result = await apiFetch(`/api/admin/withdrawals/${encodeURIComponent(withdrawalId)}/complete`, {
+    method: 'POST',
+    body: JSON.stringify({ transaction_hash: hash })
+  }, 0);
+  if (result.error) { Toast.error(result.error); return; }
+  Toast.success('Outgoing payment verified and withdrawal recorded.');
+  await window.loadAdminDashboard();
 };
 
 // ================== ADMIN CHANNELS LIST ==================
@@ -1749,5 +1900,5 @@ async function init() {
 }
 
 window.onload = function() { init(); };
-console.log('MySubHub app.js v3.3.0 - ALL 5 PHASES loaded');
+console.log('MySubHub app.js v3.3.1 - payment confirmation hardened');
 console.log('Language:', currentLanguage);
