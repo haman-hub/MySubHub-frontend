@@ -1,4 +1,4 @@
-// MySubHub Frontend v3.3.1 - Payment confirmation hardening
+// MySubHub Frontend v3.4.1 - Coordinated security and UX repair
 // Phase 1: Channel Discovery
 // Phase 2: Notification System
 // Phase 3: Security Hardening
@@ -391,11 +391,11 @@ async function loadCategories() {
     if (categories.error) return;
     
     categoriesContainer.innerHTML = `
-      <button onclick="filterByCategory('')" class="category-btn bg-cyan-500/20 border border-cyan-500/30 text-cyan-400 px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap">
+      <button onclick="filterByCategory('', this)" class="category-btn bg-cyan-500/20 border border-cyan-500/30 text-cyan-400 px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap">
         All
       </button>
       ${categories.map(cat => `
-        <button onclick="filterByCategory('${cat.id}')" class="category-btn bg-slate-800 border border-slate-700 text-slate-300 px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap hover:border-cyan-500/50">
+        <button onclick="filterByCategory('${cat.id}', this)" class="category-btn bg-slate-800 border border-slate-700 text-slate-300 px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap hover:border-cyan-500/50">
           ${cat.icon} ${cat.name}
         </button>
       `).join('')}
@@ -406,15 +406,17 @@ async function loadCategories() {
 }
 
 let currentCategory = '';
-window.filterByCategory = function(category) {
+window.filterByCategory = function(category, button) {
   currentCategory = category;
   // Update button styles
   document.querySelectorAll('.category-btn').forEach(btn => {
     btn.classList.remove('bg-cyan-500/20', 'border-cyan-500/30', 'text-cyan-400');
     btn.classList.add('bg-slate-800', 'border-slate-700', 'text-slate-300');
   });
-  event.target.classList.remove('bg-slate-800', 'border-slate-700', 'text-slate-300');
-  event.target.classList.add('bg-cyan-500/20', 'border-cyan-500/30', 'text-cyan-400');
+  if (button) {
+    button.classList.remove('bg-slate-800', 'border-slate-700', 'text-slate-300');
+    button.classList.add('bg-cyan-500/20', 'border-cyan-500/30', 'text-cyan-400');
+  }
   
   loadDiscoverChannels();
 };
@@ -507,7 +509,9 @@ window.loadNotifications = async function() {
 };
 
 window.showNotifications = async function() {
+  document.getElementById('notifications-modal')?.remove();
   const modal = document.createElement('div');
+  modal.id = 'notifications-modal';
   modal.className = 'fixed inset-0 z-[9999] bg-black/80 backdrop-blur-md flex items-center justify-center p-4';
   modal.innerHTML = `
     <div class="glass-card p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto">
@@ -549,6 +553,7 @@ window.showNotifications = async function() {
 
 window.markAllNotificationsRead = async function() {
   await apiFetch('/api/notifications/read', { method: 'POST' });
+  document.getElementById('notifications-modal')?.remove();
   const badge = document.getElementById('notification-badge');
   if (badge) badge.style.display = 'none';
   Toast.success('All notifications marked as read');
@@ -587,7 +592,7 @@ window.loadSubscriptions = async function() {
     }
     spent += parseFloat(s.amount || 0);
     
-    const inviteLink = escapeHtml(ch.channel_invite_link || '');
+    const inviteLink = escapeHtml(s.access_invite_link || '');
     const name = escapeHtml(ch.channel_name || 'Unknown');
     const channelId = s.channel_id;
 
@@ -619,7 +624,7 @@ window.loadSubscriptions = async function() {
     }
 
     return `
-      <div class="glass-card p-5 mb-3 cursor-pointer hover:border-blue-500/50 transition-all" onclick="${inviteLink ? `joinChannel('${inviteLink}')` : ''}">
+      <div class="glass-card p-5 mb-3 hover:border-blue-500/50 transition-all">
         <div class="flex justify-between items-start mb-3">
           <div class="flex items-center gap-2">
             <h3 class="font-semibold text-white text-lg">${name}</h3>
@@ -631,7 +636,7 @@ window.loadSubscriptions = async function() {
         </div>
         <p class="text-slate-400 text-sm mb-4">${t('subscriptions.expired')}: ${endDate.toLocaleDateString()} • ${parseFloat(s.amount || 0).toFixed(4)} TON</p>
         <div class="flex gap-2 flex-wrap">
-          ${!isExpired && inviteLink ? `<button onclick="event.stopPropagation();joinChannel('${inviteLink}')" class="btn-primary px-4 py-2 rounded-xl text-xs text-white">📺 ${t('subscriptions.open')}</button>` : ''}
+          ${inviteLink ? `<button onclick="joinChannel('${inviteLink}')" class="btn-primary px-4 py-2 rounded-xl text-xs text-white">📺 ${t('subscriptions.open')}</button>` : `<button onclick="requestSubscriptionAccessLink('${escapeHtml(s.id)}')" class="btn-primary px-4 py-2 rounded-xl text-xs text-white">🔗 Get access link</button>`}
           <button onclick="event.stopPropagation();renewSubscription('${channelId}')" class="btn-secondary px-4 py-2 rounded-xl text-xs">🔄 ${t('subscriptions.renew')}</button>
           <button onclick="event.stopPropagation();openRating('${channelId}')" class="btn-secondary px-4 py-2 rounded-xl text-xs">⭐ ${t('subscriptions.rate')}</button>
           <button onclick="event.stopPropagation();openReport('${channelId}')" class="btn-secondary px-4 py-2 rounded-xl text-xs">🚩 ${t('subscriptions.report')}</button>
@@ -648,6 +653,25 @@ function updateSubStats(active, expiring, spent) {
   const e = document.getElementById('stat-expiring'); if (e) e.textContent = expiring;
   const s = document.getElementById('stat-spent'); if (s) s.textContent = spent.toFixed(2);
 }
+
+window.requestSubscriptionAccessLink = async function(subscriptionId) {
+  const result = await apiFetch(`/api/subscriptions/${encodeURIComponent(subscriptionId)}/access-link`, {
+    method: 'POST',
+    body: JSON.stringify({})
+  });
+  if (result.error) {
+    Toast.error(result.error);
+    return;
+  }
+  if (result.already_member) {
+    Toast.success('You already have access to this channel.');
+    return;
+  }
+  if (result.invite_link) {
+    joinChannel(result.invite_link);
+    loadSubscriptions();
+  }
+};
 
 // ================== RENEW SUBSCRIPTION ==================
 window.renewSubscription = function(channelId) {
@@ -802,9 +826,14 @@ window.initiatePurchase = async function(channelId) {
         body: JSON.stringify({ channel_id: channelId, nonce: initiation.nonce })
       }, 0);
       if (confirm.success) {
-        status.innerHTML = '<p class="text-emerald-400 text-sm text-center">✅ Subscription activated with credits!</p>';
-        Toast.success('Subscription activated!');
-        setTimeout(() => switchPage('subscriptions'), 2000);
+        if (confirm.referral_reward_pending) {
+          status.innerHTML = `<p class="text-emerald-400 text-sm text-center">✅ Subscription activated. Referral credit is still being finalized.</p>
+            <button class="btn-secondary w-full px-4 py-3 rounded-xl text-sm mt-3" onclick="retrySubscriptionConfirmation('${escapeHtml(channelId)}','${escapeHtml(initiation.nonce)}')">🔄 Retry referral confirmation</button>`;
+        } else {
+          status.innerHTML = '<p class="text-emerald-400 text-sm text-center">✅ Subscription activated with credits!</p>';
+          Toast.success('Subscription activated!');
+          setTimeout(() => switchPage('subscriptions'), 2000);
+        }
       } else {
         status.innerHTML = `<p class="text-red-400 text-sm text-center">${escapeHtml(confirm.error || 'Failed')}</p>`;
       }
@@ -851,9 +880,14 @@ window.initiatePurchase = async function(channelId) {
     }
 
     if (confirmation?.success) {
-      status.innerHTML = '<p class="text-emerald-400 text-sm text-center">✅ Subscription activated!</p>';
-      Toast.success('Subscription activated!');
-      setTimeout(() => switchPage('subscriptions'), 2000);
+      if (confirmation.referral_reward_pending) {
+        status.innerHTML = `<p class="text-emerald-400 text-sm text-center">✅ Subscription activated. Referral credit is still being finalized.</p>
+          <button class="btn-secondary w-full px-4 py-3 rounded-xl text-sm mt-3" onclick="retrySubscriptionConfirmation('${escapeHtml(channelId)}','${escapeHtml(initiation.nonce)}')">🔄 Retry referral confirmation</button>`;
+      } else {
+        status.innerHTML = '<p class="text-emerald-400 text-sm text-center">✅ Subscription activated!</p>';
+        Toast.success('Subscription activated!');
+        setTimeout(() => switchPage('subscriptions'), 2000);
+      }
     } else if (confirmation?.pending || confirmation?.error) {
       status.innerHTML = `<p class="text-amber-300 text-sm text-center mb-3">${escapeHtml(confirmation.error || 'Payment is still being indexed. Do not pay again yet.')}</p>
         <button class="btn-secondary w-full px-4 py-3 rounded-xl text-sm" onclick="retrySubscriptionConfirmation('${escapeHtml(channelId)}','${escapeHtml(initiation.nonce)}')">🔄 Verify payment again</button>`;
@@ -873,7 +907,10 @@ window.retrySubscriptionConfirmation = async function(channelId, nonce) {
     method: 'POST',
     body: JSON.stringify({ channel_id: channelId, nonce })
   }, 0);
-  if (result.success) {
+  if (result.success && result.referral_reward_pending) {
+    if (status) status.innerHTML = `<p class="text-emerald-400 text-sm text-center">✅ Subscription is active. Referral credit is still pending; retrying does not charge you again.</p>
+      <button class="btn-secondary w-full px-4 py-3 rounded-xl text-sm mt-3" onclick="retrySubscriptionConfirmation('${escapeHtml(channelId)}','${escapeHtml(nonce)}')">🔄 Retry referral confirmation</button>`;
+  } else if (result.success) {
     if (status) status.innerHTML = '<p class="text-emerald-400 text-sm text-center">✅ Subscription activated!</p>';
     Toast.success('Subscription activated!');
     setTimeout(() => switchPage('subscriptions'), 1500);
@@ -939,7 +976,7 @@ window.loadOwnerDashboard = async function() {
             <button onclick="openEditModal('${id}')" class="btn-secondary px-4 py-2 rounded-xl text-xs">⚙️ ${t('channels.edit')}</button>
             <button onclick="copyShareLink('${id}')" class="btn-secondary px-4 py-2 rounded-xl text-xs">📋 ${t('channels.copy')}</button>
             <button onclick="forwardChannelLink('${id}', '${escapeHtml(ch.channel_name || '')}')" class="btn-secondary px-4 py-2 rounded-xl text-xs">📤 ${t('channels.forward')}</button>
-            <button onclick="deleteChannel('${id}')" class="bg-red-500/20 hover:bg-red-500/30 text-red-400 px-4 py-2 rounded-xl text-xs">🗑️ ${t('channels.delete')}</button>
+            <button onclick="deleteChannel('${id}')" class="bg-red-500/20 hover:bg-red-500/30 text-red-400 px-4 py-2 rounded-xl text-xs">⏸ Deactivate</button>
           </div>
         </div>`;
     }).join('');
@@ -1353,7 +1390,7 @@ window.submitEditChannel = async function() {
 
 // ================== DELETE CHANNEL ==================
 window.deleteChannel = async function(channelId) {
-  if (!confirm('Are you sure you want to delete this channel? This action cannot be undone.')) {
+  if (!confirm('Deactivate this channel? New subscriptions will stop. Existing paid subscribers keep access until their subscription ends, and financial history is preserved.')) {
     return;
   }
 
@@ -1364,7 +1401,7 @@ window.deleteChannel = async function(channelId) {
   if (res.error) {
     Toast.error(res.error);
   } else {
-    Toast.success('Channel deleted successfully!');
+    Toast.success('Channel deactivated. Existing subscriptions and financial history were preserved.');
     loadOwnerDashboard();
   }
 };
@@ -1900,5 +1937,5 @@ async function init() {
 }
 
 window.onload = function() { init(); };
-console.log('MySubHub app.js v3.3.1 - payment confirmation hardened');
+console.log('MySubHub app.js v3.4.1 - coordinated access and referral repairs');
 console.log('Language:', currentLanguage);
