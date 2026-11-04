@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>MySubHub - Premium Channel Subscriptions</title>
     <meta name="description" content="Telegram Mini App for managing paid channel subscriptions on the TON blockchain.">
     
@@ -12,8 +12,6 @@
     <script src="https://cdn.jsdelivr.net/npm/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Lucide Icons -->
-    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
     <!-- Custom Styles -->
     <link rel="stylesheet" href="styles_v2.css">
     
@@ -238,6 +236,12 @@
 
             <div class="flex items-center gap-2">
                 <div id="ton-connect-button" class="flex-shrink-0 scale-90 sm:scale-100 origin-right"></div>
+                <button id="btn-notifications" onclick="showNotifications()" class="relative w-9 h-9 flex items-center justify-center rounded-xl bg-slate-900/90 border border-slate-800 text-slate-300 hover:text-white" title="Notifications" aria-label="Notifications">
+                    <svg class="w-4 h-4 text-ton-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/>
+                    </svg>
+                    <span id="notification-badge" class="absolute -top-1 -right-1 hidden min-w-4 h-4 px-1 rounded-full bg-rose-500 text-white text-[9px] font-bold items-center justify-center"></span>
+                </button>
                 <button id="btn-language" onclick="openLanguageModal()" class="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-900/90 border border-slate-800 hover:border-slate-700 hover:bg-slate-800 active:scale-95 transition-all text-slate-300 hover:text-white shadow-sm flex-shrink-0" title="Change Language">
                     <svg class="w-4 h-4 text-ton-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <circle cx="12" cy="12" r="10"></circle>
@@ -254,6 +258,11 @@
         <!-- Purchase Page -->
         <section id="page-purchase" class="hidden-page">
             <div id="purchase-card" class="glass-card p-6 sm:p-8 max-w-md mx-auto relative overflow-hidden"></div>
+        </section>
+
+        <!-- Discover Page -->
+        <section id="page-discover" class="hidden-page">
+            <div id="discover-container"></div>
         </section>
 
         <!-- Subscriptions Page -->
@@ -294,17 +303,18 @@
 
         <!-- Owner Dashboard -->
         <section id="page-owner" class="hidden-page">
-            <div class="glass-card p-5 mb-5 relative overflow-hidden border border-slate-800/90">
-                <div>
-                    <span class="text-[11px] font-bold text-emerald-400 uppercase tracking-wider block mb-1">Channel Creator Studio</span>
-                    <h2 class="text-xl font-extrabold text-white tracking-tight" data-i18n="owner.your_channels">Your Channels</h2>
+            <div class="glass-card p-5 mb-4 relative overflow-hidden border border-slate-800/90">
+                <div class="flex items-center justify-between gap-3">
+                    <div class="min-w-0">
+                        <span class="text-[11px] font-bold text-emerald-400 uppercase tracking-wider block mb-1">Creator studio</span>
+                        <h2 class="text-xl font-extrabold text-white tracking-tight" data-i18n="owner.your_channels">Your Channels</h2>
+                        <p class="text-xs text-slate-400 mt-1">Publish, grow and manage your paid communities.</p>
+                    </div>
+                    <button type="button" onclick="openAddChannelModal()" class="btn-primary shrink-0 px-3 py-2.5 rounded-xl text-xs font-semibold text-white">＋ Add channel</button>
                 </div>
             </div>
-
+            <div id="owner-summary"></div>
             <div id="channels-list" class="space-y-3 mb-5"></div>
-
-            <div id="wallet-section" class="glass-card p-5 mb-5 border border-slate-800/90"></div>
-            <div id="withdrawal-section" class="glass-card p-5 border border-slate-800/90"></div>
         </section>
 
         <!-- Referrals Page -->
@@ -376,6 +386,13 @@
     <!-- Bottom Navigation Bar -->
     <nav id="nav-bar" class="fixed bottom-0 inset-x-0 z-40 glass-tabbar px-3 py-2 flex items-center justify-center hidden">
         <div class="w-full max-w-md mx-auto flex items-center justify-around gap-1">
+            <button id="nav-discover" onclick="switchPage('discover')" class="tab-btn flex-1 flex flex-col items-center justify-center py-1.5 px-2 rounded-2xl text-cyan-400 group transition-all duration-200">
+                <div class="tab-icon-box w-10 h-8 flex items-center justify-center rounded-xl bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 transition-all duration-200">
+                    <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+                </div>
+                <span class="text-[11px] font-bold tracking-tight mt-1 leading-tight truncate max-w-full">Discover</span>
+                <div class="tab-indicator w-5 h-0.5 rounded-full bg-cyan-400 mt-1 transition-all duration-200 opacity-0 scale-x-0"></div>
+            </button>
             <button id="nav-subscriptions" onclick="switchPage('subscriptions')" class="tab-btn flex-1 flex flex-col items-center justify-center py-1.5 px-2 rounded-2xl text-ton-400 group transition-all duration-200">
                 <div class="tab-icon-box w-10 h-8 flex items-center justify-center rounded-xl bg-ton-500/20 text-ton-400 border border-ton-500/30 transition-all duration-200">
                     <svg class="w-5 h-5 transition-transform duration-200 group-hover:scale-110" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -466,7 +483,7 @@
         <div class="glass-card p-6 w-full max-w-sm modal-content border border-slate-700/60">
             <h3 class="text-base font-bold text-white mb-2" data-i18n="rating.title">Rate this Channel</h3>
             <p class="text-xs text-slate-400 mb-4">Share your feedback to help other subscribers.</p>
-            <div id="star-rating" class="flex items-center justify-center gap-2 py-3 bg-slate-900/70 rounded-xl border border-slate-800/80 mb-4"></div>
+            <div id="star-rating" class="flex items-center justify-center gap-2 py-3 bg-slate-900/70 rounded-xl border border-slate-800/80 mb-4" role="group" aria-label="Choose a rating"></div>
             <textarea id="rating-comment" placeholder="Write a review (optional)..." class="w-full input-dark rounded-xl p-3 text-white text-xs mb-4 resize-none" rows="3"></textarea>
             <div class="flex items-center justify-end gap-2.5">
                 <button onclick="closeRating()" class="btn-secondary px-4 py-2 text-slate-300 text-xs font-semibold rounded-xl">Cancel</button>
@@ -525,10 +542,7 @@
     </div>
 
     <!-- Translations are bundled in app.js; do not load translations.js separately. -->
-    <script src="app.js?v=3.3.1"></script>
-    <script>
-        if (window.lucide) { lucide.createIcons(); }
-    </script>
+    <script src="app.js?v=3.5.1"></script>
 
 </body>
 </html>
