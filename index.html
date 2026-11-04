@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>MySubHub - Premium Channel Subscriptions</title>
-    <meta name="description" content="Telegram Mini App for managing paid channel subscriptions on the TON blockchain.">
+    <title>MySubHub - Discover Premium Telegram Communities</title>
+    <meta name="description" content="Discover and manage premium Telegram communities with secure TON subscriptions.">
     
     <!-- Telegram WebApp SDK -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
@@ -13,7 +13,7 @@
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Custom Styles -->
-    <link rel="stylesheet" href="styles_v2.css">
+    <link rel="stylesheet" href="styles_v2.css?v=3.6.0">
     
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -263,6 +263,11 @@
         <!-- Discover Page -->
         <section id="page-discover" class="hidden-page">
             <div id="discover-container"></div>
+        </section>
+
+        <!-- Channel Detail Page -->
+        <section id="page-channel-detail" class="hidden-page">
+            <div id="channel-detail-card"></div>
         </section>
 
         <!-- Subscriptions Page -->
@@ -542,7 +547,7 @@
     </div>
 
     <!-- Translations are bundled in app.js; do not load translations.js separately. -->
-    <script src="app.js?v=3.5.1"></script>
+    <script src="app.js?v=3.6.0"></script>
 
 </body>
 </html>

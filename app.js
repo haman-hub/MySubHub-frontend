@@ -1,9 +1,6 @@
-// MySubHub Frontend v3.5.1 - Low-resource marketplace UX and API optimization
-// Phase 1: Channel Discovery and resource optimization
-// Phase 2: Notification System
-// Phase 3: Security Hardening
-// Phase 4: Visual Hierarchy
-// Phase 5: Multi-language Support
+// MySubHub Frontend v3.6.0 - Phase 2 marketplace experience
+// Phase 1: Low-resource API and discovery optimization
+// Phase 2: Channel detail pages, creator analytics, and marketplace sharing
 
 // ================== SECURITY (Phase 3) ==================
 function escapeHtml(str) {
@@ -31,6 +28,28 @@ function sanitizeInput(input) {
     const escapeMap = { '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#x27;', '&': '&amp;' };
     return escapeMap[match];
   });
+}
+
+
+// Public images are optional HTTPS URLs hosted outside Supabase Storage to avoid
+// consuming the project's limited storage and egress allowance.
+function safePublicImageUrl(value) {
+  if (typeof value !== 'string' || !value.trim() || value.length > 2048) return '';
+  try {
+    const parsed = new URL(value.trim());
+    if (parsed.protocol !== 'https:' || parsed.username || parsed.password) return '';
+    return parsed.href;
+  } catch {
+    return '';
+  }
+}
+
+function channelAvatarMarkup(channel, className = 'phase2-channel-avatar') {
+  const imageUrl = safePublicImageUrl(channel?.image_url);
+  const fallback = escapeHtml(discoverCategoryIcon(channel?.category));
+  return imageUrl
+    ? `<span class="${className} phase2-avatar-wrap"><img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(channel?.channel_name || 'Channel image')}" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span class="${className} phase2-avatar-fallback" aria-hidden="true" style="display:none">${fallback}</span></span>`
+    : `<span class="${className} phase2-avatar-fallback" aria-hidden="true">${fallback}</span>`;
 }
 
 // ================== CONFIG ==================
@@ -270,6 +289,9 @@ const API_CACHE_MAX_ENTRIES = 48;
 function apiCacheTtl(url) {
   const path = String(url).split('?')[0];
   if (path === '/api/channels/discover') return 45_000;
+  if (path === '/api/channels/discover-v2') return 45_000;
+  if (/^\/api\/channels\/[0-9a-f-]{36}\/analytics$/i.test(path)) return 60_000;
+  if (/^\/api\/reviews\/[0-9a-f-]{36}$/i.test(path)) return 60_000;
   if (path === '/api/channels/my') return 20_000;
   if (path === '/api/owner/dashboard') return 15_000;
   if (path === '/api/subscriptions/my') return 15_000;
@@ -285,13 +307,14 @@ function apiCacheTtl(url) {
 function invalidateApiCacheForMutation(url) {
   const path = String(url).split('?')[0];
   const invalidationGroups = [];
-  if (path.startsWith('/api/channels')) invalidationGroups.push('/api/channels', '/api/owner/dashboard');
+  if (path.startsWith('/api/channels')) invalidationGroups.push('/api/channels', '/api/owner/dashboard', '/api/admin/channels');
   if (path.startsWith('/api/subscriptions')) invalidationGroups.push('/api/subscriptions', '/api/channels/discover', '/api/channels/', '/api/referrals/stats', '/api/notifications/my');
   if (path.startsWith('/api/withdrawals')) invalidationGroups.push('/api/withdrawals', '/api/admin/withdrawals', '/api/owner/dashboard');
-  if (path.startsWith('/api/reviews')) invalidationGroups.push('/api/channels/discover', '/api/channels/', '/api/owner/dashboard', '/api/admin/channels');
+  if (path.startsWith('/api/reviews')) invalidationGroups.push('/api/channels/discover', '/api/channels/discover-v2', '/api/channels/', '/api/owner/dashboard', '/api/admin/channels');
   if (path.startsWith('/api/reports')) invalidationGroups.push('/api/admin/reports');
   if (path.startsWith('/api/admin/reports')) invalidationGroups.push('/api/admin/reports', '/api/admin/channels', '/api/channels/discover');
   if (path.startsWith('/api/admin/withdrawals')) invalidationGroups.push('/api/admin/withdrawals', '/api/owner/dashboard');
+  if (path.startsWith('/api/admin/channels')) invalidationGroups.push('/api/admin/channels', '/api/channels/discover-v2');
   if (path.startsWith('/api/notifications')) invalidationGroups.push('/api/notifications/my');
   if (path.startsWith('/api/auth/wallet')) invalidationGroups.push('/api/auth/validate', '/api/withdrawals/my');
 
@@ -417,6 +440,8 @@ window.currentEditChannelId = null;
 window.currentRatingChannelId = null;
 window.currentRating = 0;
 window.currentReportChannelId = null;
+window.currentChannelDetails = null;
+let channelReviewState = { channelId: null, offset: 0, total: 0, loading: false };
 let tonConnectUI = null;
 let userWallet = null;
 
@@ -463,7 +488,7 @@ window.switchPage = function(pageId) {
   if (pageId === 'admin' && !window.isAdmin) pageId = 'subscriptions';
   if (pageId === 'admin-channels' && !window.isAdmin) pageId = 'subscriptions';
   
-  const allPages = ['purchase', 'subscriptions', 'owner', 'referrals', 'admin', 'admin-channels', 'discover'];
+  const allPages = ['purchase', 'channel-detail', 'subscriptions', 'owner', 'referrals', 'admin', 'admin-channels', 'discover'];
   allPages.forEach(p => {
     const sec = document.getElementById(`page-${p}`);
     if (sec) { sec.style.display = 'none'; sec.classList.add('hidden-page'); }
@@ -625,17 +650,19 @@ function renderDiscoverCard(channel) {
   const rating = Number(channel.avg_rating || 0);
   const reviews = Number(channel.review_count || 0);
   const subscribers = Number(channel.active_subscribers || 0);
-  const durationLabel = duration === 9999 ? '9,999 days' : `${duration} days`;
-  const ratingLabel = reviews > 0 ? `⭐ ${rating.toFixed(1)} <span class="text-slate-500">(${reviews})</span>` : '<span class="text-slate-500">New listing</span>';
+  const durationLabel = `${duration.toLocaleString()} days`;
+  const ratingLabel = reviews > 0 ? `★ ${rating.toFixed(1)} <span class="text-slate-500">(${reviews})</span>` : '<span class="text-slate-500">New listing</span>';
+  const featured = channel.is_featured === true;
 
   return `
-    <article class="glass-card p-4 sm:p-5 discover-card">
+    <article class="glass-card p-4 sm:p-5 discover-card ${featured ? 'phase2-featured-card' : ''}">
       <div class="flex items-start gap-3">
-        <div class="discover-avatar" aria-hidden="true">${discoverCategoryIcon(channel.category)}</div>
+        ${channelAvatarMarkup(channel, 'phase2-discover-avatar')}
         <div class="min-w-0 flex-1">
           <div class="flex flex-wrap items-center gap-2">
             <h4 class="font-bold text-white text-base leading-tight">${name}</h4>
             ${channel.is_verified ? '<span class="verified-pill" title="Verified channel">✓ Verified</span>' : ''}
+            ${featured ? '<span class="phase2-featured-pill">✦ Featured</span>' : ''}
           </div>
           <p class="text-[11px] text-cyan-300 mt-1 uppercase tracking-wide">${category}</p>
         </div>
@@ -643,7 +670,7 @@ function renderDiscoverCard(channel) {
       <p class="text-sm text-slate-400 leading-relaxed mt-3 discover-description">${description}</p>
       <div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs mt-4">
         <span class="text-amber-300">${ratingLabel}</span>
-        <span class="text-slate-400">${subscribers.toLocaleString()} active subscribers</span>
+        <span class="text-slate-400">${subscribers.toLocaleString()} subscribers</span>
         <span class="text-slate-500">${durationLabel}</span>
       </div>
       <div class="flex items-end justify-between gap-3 border-t border-slate-700/70 mt-4 pt-4">
@@ -652,7 +679,7 @@ function renderDiscoverCard(channel) {
           <p class="text-xl font-extrabold text-emerald-400 font-mono">${Number.isFinite(price) ? formatTon(price) : '—'} TON</p>
           <p class="text-[11px] text-slate-500">per ${durationLabel}</p>
         </div>
-        <button type="button" onclick="openChannelDetails('${id}')" class="btn-primary min-h-11 px-4 py-2.5 rounded-xl text-xs sm:text-sm text-white font-semibold">View channel</button>
+        <button type="button" onclick="openChannelDetails('${id}')" class="btn-primary min-h-11 px-4 py-2.5 rounded-xl text-xs sm:text-sm text-white font-semibold">View details</button>
       </div>
     </article>`;
 }
@@ -692,7 +719,7 @@ window.loadDiscoverChannels = async function(reset = true) {
       limit: String(DISCOVER_PAGE_SIZE),
       offset: String(requestOffset)
     });
-    const result = await apiFetch(`/api/channels/discover?${params}`);
+    const result = await apiFetch(`/api/channels/discover-v2?${params}`);
     if (requestId !== discoverRequestSequence) return;
     if (result.error) {
       if (reset) channelsContainer.innerHTML = `<div class="glass-card p-6 text-center text-red-300">${escapeHtml(result.error)}<button type="button" onclick="loadDiscoverChannels(true)" class="block mx-auto mt-3 btn-secondary px-4 py-2 rounded-lg text-xs">Retry</button></div>`;
@@ -731,9 +758,159 @@ window.loadMoreDiscoverChannels = function() {
   return window.loadDiscoverChannels(false);
 };
 
+function renderChannelReviews(reviews, channelId, total) {
+  const rows = Array.isArray(reviews) ? reviews : [];
+  if (!rows.length) {
+    return `<div class="phase2-empty-review"><span>✦</span><p>No reviews yet</p><small>Be one of the first subscribers to share feedback.</small></div>`;
+  }
+  const list = rows.map(review => {
+    const author = escapeHtml(review.reviewer_name || 'Subscriber');
+    const username = review.reviewer_username ? `@${escapeHtml(review.reviewer_username)}` : '';
+    const rating = Math.max(1, Math.min(5, Number(review.rating || 0)));
+    const comment = escapeHtml(review.comment || 'No written comment.');
+    const date = review.created_at ? new Date(review.created_at).toLocaleDateString() : '';
+    return `<article class="phase2-review-item">
+      <div class="flex items-start justify-between gap-3">
+        <div><p class="text-sm font-semibold text-white">${author}</p><p class="text-[11px] text-slate-500">${username}</p></div>
+        <div class="text-right"><p class="text-amber-300 text-sm" aria-label="${rating} out of 5 stars">${'★'.repeat(rating)}${'☆'.repeat(5-rating)}</p><time class="text-[10px] text-slate-500">${escapeHtml(date)}</time></div>
+      </div>
+      ${review.comment ? `<p class="mt-3 text-sm text-slate-300 leading-relaxed">${comment}</p>` : ''}
+    </article>`;
+  }).join('');
+  const nextOffset = rows.length;
+  return `<div class="space-y-2">${list}</div>
+    ${nextOffset < total ? `<button type="button" class="btn-secondary w-full mt-3 px-4 py-3 rounded-xl text-xs" onclick="loadMoreChannelReviews('${channelId}')">Load more reviews (${Math.max(0, total-nextOffset)} remaining)</button>` : ''}`;
+}
+
+function renderChannelDetail(channel) {
+  const container = document.getElementById('channel-detail-card');
+  if (!container) return;
+  const id = String(channel.id || '');
+  const imageUrl = safePublicImageUrl(channel.image_url);
+  const name = escapeHtml(channel.channel_name || 'Community');
+  const description = escapeHtml(channel.description || 'The creator has not added a description yet.');
+  const creatorName = escapeHtml(channel.creator?.display_name || 'Independent creator');
+  const username = channel.creator?.username ? String(channel.creator.username).replace(/^@/, '') : '';
+  const duration = Number(channel.duration_days || 30);
+  const durationLabel = `${duration.toLocaleString()} days`;
+  const reviewTotal = Number(channel.review_total ?? channel.total_reviews ?? 0);
+  const rating = Number(channel.avg_rating || 0);
+  const subscribers = Number(channel.active_subscribers || 0);
+  const price = Number(channel.subscription_price || 0);
+  const creatorLink = username ? `https://t.me/${encodeURIComponent(username)}` : '';
+  const reviews = Array.isArray(channel.reviews) ? channel.reviews : [];
+  channelReviewState = { channelId: id, offset: reviews.length, total: reviewTotal, loading: false };
+
+  container.innerHTML = `
+    <button type="button" onclick="switchPage('discover')" class="phase2-back-link mb-4">← Back to discovery</button>
+    <article class="phase2-detail-shell">
+      <div class="phase2-detail-cover">
+        ${imageUrl ? `<img src="${escapeHtml(imageUrl)}" alt="${name}" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.remove()">` : `<div class="phase2-detail-cover-fallback">${discoverCategoryIcon(channel.category)}</div>`}
+        ${channel.is_featured ? '<span class="phase2-featured-pill phase2-cover-badge">✦ Featured</span>' : ''}
+      </div>
+      <div class="phase2-detail-content">
+        <div class="flex items-start gap-3 -mt-11 relative z-10">
+          ${channelAvatarMarkup(channel, 'phase2-detail-avatar')}
+          <div class="flex-1 min-w-0 pt-12">
+            <div class="flex flex-wrap items-center gap-2"><h1 class="text-xl sm:text-2xl font-extrabold text-white">${name}</h1>${channel.is_verified ? '<span class="verified-pill">✓ Verified</span>' : ''}</div>
+            <p class="text-xs uppercase tracking-wide text-cyan-300 mt-1">${escapeHtml(channel.category || 'other')}</p>
+          </div>
+        </div>
+        <div class="phase2-detail-stats mt-5">
+          <div><strong>${rating > 0 ? rating.toFixed(1) : '—'}</strong><span>Rating</span></div>
+          <div><strong>${reviewTotal.toLocaleString()}</strong><span>Reviews</span></div>
+          <div><strong>${subscribers.toLocaleString()}</strong><span>Subscribers</span></div>
+        </div>
+        <section class="mt-6">
+          <h2 class="phase2-section-heading">About this community</h2>
+          <p class="text-sm text-slate-300 leading-7 whitespace-pre-line">${description}</p>
+        </section>
+        <section class="phase2-creator-card mt-5">
+          <div class="phase2-creator-avatar">${escapeHtml((channel.creator?.display_name || 'C').trim().slice(0,1).toUpperCase())}</div>
+          <div class="min-w-0 flex-1"><p class="text-[10px] uppercase tracking-wider text-slate-500">Created by</p><p class="text-sm font-semibold text-white">${creatorName}</p>${username ? `<p class="text-xs text-slate-400">@${escapeHtml(username)}</p>` : '<p class="text-xs text-slate-500">Telegram creator</p>'}</div>
+          ${creatorLink ? `<a class="btn-secondary px-3 py-2 rounded-lg text-xs" href="${escapeHtml(creatorLink)}" target="_blank" rel="noopener noreferrer">View profile</a>` : ''}
+        </section>
+        <section class="mt-6">
+          <h2 class="phase2-section-heading">Subscription</h2>
+          <div class="phase2-price-panel">
+            <div><p class="text-xs text-slate-400">Price per ${escapeHtml(durationLabel)}</p><p class="text-2xl font-extrabold text-emerald-300 font-mono">${formatTon(price)} TON</p></div>
+            <span class="phase2-duration-pill">${escapeHtml(durationLabel)}</span>
+          </div>
+          <p class="text-[11px] text-slate-500 mt-2">The checkout screen shows the platform fee and any credits you choose to apply.</p>
+        </section>
+        <section class="mt-6">
+          <div class="flex items-center justify-between gap-3 mb-3"><h2 class="phase2-section-heading">Subscriber reviews</h2><span class="text-xs text-slate-500">${reviewTotal.toLocaleString()} total</span></div>
+          <div id="channel-detail-reviews">${renderChannelReviews(reviews, id, reviewTotal)}</div>
+        </section>
+        <div class="phase2-detail-actions mt-6">
+          <button type="button" onclick="openCheckoutFromDetails('${id}')" class="btn-primary flex-1 min-h-12 rounded-xl text-sm font-bold text-white">Subscribe · ${formatTon(price)} TON</button>
+          <button type="button" onclick="showChannelShare('${id}')" class="btn-secondary min-h-12 px-4 rounded-xl text-sm" aria-label="Share channel">↗ Share</button>
+        </div>
+        <p class="text-[10px] text-slate-500 text-center mt-3">Access is granted after payment is verified. Membership expires according to the selected period.</p>
+      </div>
+    </article>`;
+}
+
 window.openChannelDetails = async function(channelId) {
-  await window.loadPurchasePage(channelId);
+  if (!/^[0-9a-f-]{36}$/i.test(String(channelId || ''))) {
+    Toast.error('Invalid channel');
+    return;
+  }
+  const container = document.getElementById('channel-detail-card');
+  if (container) container.innerHTML = '<div class="glass-card p-10 text-center text-slate-400"><span class="animate-pulse">Loading channel details…</span></div>';
+  window.switchPage('channel-detail');
+  const channel = await apiFetch(`/api/channels/${encodeURIComponent(channelId)}`);
+  if (channel?.error || !channel?.id) {
+    if (container) container.innerHTML = `<div class="glass-card p-6 text-center"><p class="text-red-300">${escapeHtml(channel?.error || 'Channel not found')}</p><button type="button" onclick="switchPage('discover')" class="btn-primary mt-4 px-4 py-2 rounded-lg text-sm text-white">Back to discovery</button></div>`;
+    return;
+  }
+  window.currentChannelDetails = channel;
+  renderChannelDetail(channel);
+};
+
+window.openCheckoutFromDetails = async function(channelId) {
+  const channel = window.currentChannelDetails?.id === channelId ? window.currentChannelDetails : null;
+  await window.loadPurchasePage(channelId, channel);
   window.switchPage('purchase');
+};
+
+window.loadMoreChannelReviews = async function(channelId) {
+  if (channelReviewState.loading || channelReviewState.channelId !== channelId || channelReviewState.offset >= channelReviewState.total) return;
+  channelReviewState.loading = true;
+  const target = document.getElementById('channel-detail-reviews');
+  const result = await apiFetch(`/api/reviews/${encodeURIComponent(channelId)}?limit=5&offset=${channelReviewState.offset}`, { noCache: true });
+  channelReviewState.loading = false;
+  if (result?.error) { Toast.error(result.error); return; }
+  const rows = Array.isArray(result?.reviews) ? result.reviews : [];
+  const merged = (window.currentChannelDetails?.reviews || []).concat(rows);
+  if (window.currentChannelDetails) window.currentChannelDetails.reviews = merged;
+  channelReviewState.offset = merged.length;
+  channelReviewState.total = Number(result.total || channelReviewState.total);
+  if (target) target.innerHTML = renderChannelReviews(merged, channelId, channelReviewState.total);
+};
+
+window.showChannelShare = function(channelId) {
+  if (!/^[0-9a-f-]{36}$/i.test(String(channelId || ''))) return;
+  const channel = window.currentChannelDetails?.id === channelId
+    ? window.currentChannelDetails
+    : (window.ownerChannels || []).find(item => String(item.id) === String(channelId));
+  const title = channel?.channel_name || 'MySubHub channel';
+  const link = `https://t.me/${BOT_USERNAME}?start=${encodeURIComponent(channelId)}`;
+  let modal = document.getElementById('phase2-share-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'phase2-share-modal';
+    modal.className = 'fixed inset-0 z-[10000] bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4';
+    document.body.appendChild(modal);
+  }
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&format=png&margin=10&data=${encodeURIComponent(link)}`;
+  modal.innerHTML = `<div class="glass-card w-full max-w-sm p-5">
+    <div class="flex items-center justify-between gap-3 mb-4"><h2 class="text-lg font-bold text-white">Share ${escapeHtml(title)}</h2><button type="button" onclick="document.getElementById('phase2-share-modal')?.remove()" class="btn-secondary w-9 h-9 rounded-lg">×</button></div>
+    <div class="bg-white rounded-2xl p-3 w-fit mx-auto"><img src="${escapeHtml(qrUrl)}" alt="QR code for ${escapeHtml(title)}" width="220" height="220" loading="lazy" referrerpolicy="no-referrer" onerror="this.closest('.bg-white').innerHTML='<p class=\\'text-slate-700 text-sm p-6\\'>QR image unavailable. Copy the link below instead.</p>'"></div>
+    <p class="text-[11px] text-slate-400 text-center mt-3">QR image is generated by an external service from this public share link. No Supabase storage is used.</p>
+    <div class="bg-slate-950/70 rounded-lg p-3 mt-4 break-all text-xs text-cyan-200">${escapeHtml(link)}</div>
+    <div class="grid grid-cols-2 gap-2 mt-3"><button type="button" onclick="copyToClipboard('${link}', 'Share link copied')" class="btn-primary py-3 rounded-xl text-sm text-white">Copy link</button><button type="button" onclick="forwardChannelLink('${channelId}')" class="btn-secondary py-3 rounded-xl text-sm text-white">Share in Telegram</button></div>
+  </div>`;
 };
 
 // ================== NOTIFICATIONS (Phase 2) ==================
@@ -937,13 +1114,13 @@ window.joinChannel = function(link) {
 };
 
 // ================== PURCHASE PAGE ==================
-window.loadPurchasePage = async function(channelId) {
+window.loadPurchasePage = async function(channelId, preloadedChannel = null) {
   const card = document.getElementById('purchase-card');
   if (!card) return;
   card.innerHTML = '<div class="text-center py-8 text-slate-400"><div class="animate-pulse">Loading...</div></div>';
 
   try {
-    const channel = await apiFetch(`/api/channels/${channelId}`);
+    const channel = preloadedChannel?.id === channelId ? preloadedChannel : await apiFetch(`/api/channels/${channelId}`);
     if (channel.error || !channel.id) {
       card.innerHTML = `<div class="text-center py-8"><p class="text-red-400 mb-3">${t('errors.channel_not_found')}</p><button onclick="switchPage('subscriptions')" class="btn-primary px-4 py-2 rounded-xl text-sm text-white">${t('common.close')}</button></div>`;
       return;
@@ -1249,17 +1426,20 @@ window.loadOwnerDashboard = async function() {
       return `
         <article class="glass-card p-4 sm:p-5 mb-3">
           <div class="flex items-start justify-between gap-3">
-            <div class="min-w-0 flex-1">
-              <div class="flex flex-wrap items-center gap-2"><h3 class="font-bold text-white text-base">${name}</h3><span class="text-[10px] px-2 py-1 rounded-full ${active ? 'bg-emerald-500/10 text-emerald-300' : 'bg-amber-500/10 text-amber-300'}">${active ? 'Published' : 'Setup incomplete'}</span></div>
-              <p class="text-xs text-slate-400 mt-1">${formatTon(price)} TON · ${durationLabel}</p>
-              <p class="text-xs text-slate-500 mt-2 line-clamp-2">${description}</p>
+            <div class="flex items-start gap-3 min-w-0 flex-1">
+              ${channelAvatarMarkup(channel, 'phase2-owner-avatar')}
+              <div class="min-w-0 flex-1">
+                <div class="flex flex-wrap items-center gap-2"><h3 class="font-bold text-white text-base">${name}</h3><span class="text-[10px] px-2 py-1 rounded-full ${active ? 'bg-emerald-500/10 text-emerald-300' : 'bg-amber-500/10 text-amber-300'}">${active ? 'Published' : 'Setup incomplete'}</span>${channel.is_featured ? '<span class="phase2-featured-pill">✦ Featured</span>' : ''}</div>
+                <p class="text-xs text-slate-400 mt-1">${formatTon(price)} TON · ${durationLabel}</p>
+                <p class="text-xs text-slate-500 mt-2 line-clamp-2">${description}</p>
+              </div>
             </div>
             <div class="text-right shrink-0"><p class="text-lg font-bold text-cyan-300">${subscribersCount.toLocaleString()}</p><p class="text-[10px] text-slate-500">subscribers</p></div>
           </div>
           <div class="flex items-center justify-between gap-3 mt-3 pt-3 border-t border-slate-700/70">
-            <span class="text-xs text-amber-300">${reviews > 0 ? `⭐ ${rating.toFixed(1)} · ${reviews} reviews` : 'No reviews yet'}</span>
+            <span class="text-xs text-amber-300">${reviews > 0 ? `★ ${rating.toFixed(1)} · ${reviews} reviews` : 'No reviews yet'}</span>
             <div class="flex flex-wrap justify-end gap-2">
-              ${active ? `<button type="button" onclick="copyShareLink('${id}')" class="btn-secondary px-3 py-2 rounded-lg text-xs">Copy link</button>` : `<button type="button" onclick="openAddChannelModal('${id}')" class="btn-primary px-3 py-2 rounded-lg text-xs text-white">Finish setup</button>`}
+              ${active ? `<button type="button" onclick="showChannelShare('${id}')" class="btn-secondary px-3 py-2 rounded-lg text-xs">Share / QR</button><button type="button" onclick="openChannelAnalytics('${id}')" class="btn-secondary px-3 py-2 rounded-lg text-xs">Analytics</button>` : `<button type="button" onclick="openAddChannelModal('${id}')" class="btn-primary px-3 py-2 rounded-lg text-xs text-white">Finish setup</button>`}
               <button type="button" onclick="openEditModal('${id}')" class="btn-secondary px-3 py-2 rounded-lg text-xs">Manage</button>
             </div>
           </div>
@@ -1375,6 +1555,11 @@ window.openAddChannelModal = function(channelId = '') {
           <p class="text-[11px] text-slate-500 mt-1">Up to 1,000 characters. A clear description helps visitors decide to subscribe.</p>
         </div>
         <div>
+          <label class="text-sm text-slate-400 mb-2 block" for="add-channel-image">Channel image URL (optional)</label>
+          <input type="url" id="add-channel-image" maxlength="2048" value="${escapeHtml(existing?.image_url || '')}" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white" placeholder="https://example.com/channel-image.webp" />
+          <p class="text-[11px] text-slate-500 mt-1">Use a public HTTPS image URL. Images are hosted elsewhere; MySubHub does not use Supabase Storage for them.</p>
+        </div>
+        <div>
           <label class="text-sm text-slate-400 mb-2 block">Category</label>
           <select id="add-channel-category" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white">
             <option value="crypto" ${existing?.category === 'crypto' ? 'selected' : ''}>💰 Cryptocurrency</option>
@@ -1427,6 +1612,7 @@ window.submitAddChannel = async function() {
   const duration = document.getElementById('add-channel-duration')?.value;
   const category = document.getElementById('add-channel-category')?.value;
   const description = document.getElementById('add-channel-description')?.value?.trim() || '';
+  const imageUrl = document.getElementById('add-channel-image')?.value?.trim() || '';
 
   if (!name || !link || !price) {
     Toast.error('Please fill all fields');
@@ -1441,7 +1627,8 @@ window.submitAddChannel = async function() {
       subscription_price: parseFloat(price),
       duration_days: parseInt(duration),
       category: category,
-      description: description
+      description: description,
+      image_url: imageUrl
     })
   }, 0);
 
@@ -1545,6 +1732,11 @@ window.openEditModal = async function(channelId) {
           <textarea id="edit-description" maxlength="1000" rows="3" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white">${escapeHtml(channel.description || '')}</textarea>
         </div>
         <div>
+          <label class="text-sm text-slate-400 mb-2 block" for="edit-image-url">Channel image URL (optional)</label>
+          <input type="url" id="edit-image-url" maxlength="2048" value="${escapeHtml(channel.image_url || '')}" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white" placeholder="https://example.com/channel-image.webp" />
+          <p class="text-[11px] text-slate-500 mt-1">Public HTTPS URL only. The image is loaded from its external host.</p>
+        </div>
+        <div>
           <label class="text-sm text-slate-400 mb-3 block">Subscription Duration</label>
           <div class="grid grid-cols-3 gap-2">
             <button onclick="selectEditDuration(7)" class="edit-duration-btn bg-slate-800 border-2 border-slate-700 rounded-xl px-3 py-3 text-xs text-white hover:border-cyan-500 transition-all" data-days="7">1 Week</button>
@@ -1640,6 +1832,7 @@ window.submitEditChannel = async function() {
   const priceInput = document.getElementById('edit-price');
   const durationInput = document.getElementById('edit-duration');
   const descriptionInput = document.getElementById('edit-description');
+  const imageInput = document.getElementById('edit-image-url');
   
   if (!priceInput || !durationInput) {
     Toast.error('Form elements not found');
@@ -1680,7 +1873,8 @@ window.submitEditChannel = async function() {
     body: JSON.stringify({ 
       subscription_price: price, 
       duration_days: duration,
-      description: descriptionInput?.value?.trim() || ''
+      description: descriptionInput?.value?.trim() || '',
+      image_url: imageInput?.value?.trim() || ''
     })
   }, 0);
   
@@ -1713,11 +1907,15 @@ window.deleteChannel = async function(channelId) {
 
 // ================== SHARE & FORWARD ==================
 window.copyShareLink = function(channelId) {
-  copyToClipboard(`https://t.me/${BOT_USERNAME}?start=${channelId}`, 'Link copied!');
+  copyToClipboard(`https://t.me/${BOT_USERNAME}?start=${encodeURIComponent(channelId)}`, 'Link copied!');
 };
 
-window.forwardChannelLink = function(channelId, channelName) {
-  const link = `https://t.me/${BOT_USERNAME}?start=${channelId}`;
+window.forwardChannelLink = function(channelId) {
+  const channel = window.currentChannelDetails?.id === channelId
+    ? window.currentChannelDetails
+    : (window.ownerChannels || []).find(item => String(item.id) === String(channelId));
+  const channelName = channel?.channel_name || 'a premium community';
+  const link = `https://t.me/${BOT_USERNAME}?start=${encodeURIComponent(channelId)}`;
   const message = `🎯 Subscribe to "${channelName}" on MySubHub!\n\n💎 Get premium content with TON payments\n🔒 Secure and private\n✨ Easy subscription management\n\nClick here to subscribe: ${link}`;
   
   const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(message)}`;
@@ -1844,6 +2042,46 @@ window.reviewAdminReport = async function(reportId, action) {
   await window.loadAdminDashboard();
 };
 
+// ================== CREATOR ANALYTICS ==================
+window.closeChannelAnalytics = function() {
+  document.getElementById('phase2-analytics-modal')?.remove();
+};
+
+window.openChannelAnalytics = async function(channelId, days = 30) {
+  if (!/^[0-9a-f-]{36}$/i.test(String(channelId || ''))) return;
+  const modal = document.createElement('div');
+  modal.id = 'phase2-analytics-modal';
+  modal.className = 'fixed inset-0 z-[10000] bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4';
+  modal.innerHTML = `<div class="glass-card w-full max-w-xl max-h-[90vh] overflow-y-auto p-5"><div class="flex items-center justify-between gap-3 mb-4"><div><h2 class="text-lg font-bold text-white">Channel analytics</h2><p class="text-xs text-slate-500">Aggregated statistics · ${Number(days)} days</p></div><button type="button" onclick="closeChannelAnalytics()" class="btn-secondary w-9 h-9 rounded-lg">×</button></div><div id="phase2-analytics-body" class="py-8 text-center text-slate-400">Loading analytics…</div></div>`;
+  document.body.appendChild(modal);
+  const result = await apiFetch(`/api/channels/${encodeURIComponent(channelId)}/analytics?days=${Number(days)}`, { noCache: true });
+  const body = document.getElementById('phase2-analytics-body');
+  if (!body) return;
+  if (result?.error) {
+    body.innerHTML = `<p class="text-red-300">${escapeHtml(result.error)}</p><button type="button" onclick="closeChannelAnalytics()" class="btn-secondary mt-4 px-4 py-2 rounded-lg">Close</button>`;
+    return;
+  }
+  const daily = Array.isArray(result.daily) ? result.daily : [];
+  const maxRevenue = Math.max(0.000000001, ...daily.map(item => Number(item.revenue || 0)));
+  const bars = daily.map(item => {
+    const value = Number(item.revenue || 0);
+    const height = Math.max(3, Math.round((value / maxRevenue) * 100));
+    const date = new Date(`${item.date}T00:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    return `<div class="phase2-chart-column" title="${escapeHtml(date)} · ${formatTon(value)} TON · ${Number(item.new_subscriptions || 0)} subscriptions"><div class="phase2-chart-value" style="height:${height}%"></div><span>${escapeHtml(date)}</span></div>`;
+  }).join('');
+  body.innerHTML = `<h3 class="text-base font-bold text-white mb-4">${escapeHtml(result.channel_name || 'Channel')}</h3>
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-5">
+      <div class="phase2-metric"><span>Active subscribers</span><strong>${Number(result.active_subscribers || 0).toLocaleString()}</strong></div>
+      <div class="phase2-metric"><span>Revenue (${Number(result.period_days || days)}d)</span><strong>${formatTon(result.period_revenue || 0)} TON</strong></div>
+      <div class="phase2-metric"><span>New subscriptions</span><strong>${Number(result.new_subscriptions || 0).toLocaleString()}</strong></div>
+      <div class="phase2-metric"><span>Rating / reviews</span><strong>${Number(result.avg_rating || 0).toFixed(1)} / 5 · ${Number(result.review_count || 0).toLocaleString()}</strong></div>
+    </div>
+    <p class="text-[11px] text-slate-500 mb-4">Lifetime recorded revenue: ${formatTon(result.lifetime_revenue || 0)} TON</p>
+    <div class="flex items-center justify-between gap-2 mb-3"><h4 class="text-sm font-semibold text-white">Daily revenue</h4><div class="flex gap-1"><button type="button" onclick="openChannelAnalytics('${channelId}',7)" class="btn-secondary px-2.5 py-1.5 rounded-lg text-[11px] ${days===7?'border-cyan-500 text-cyan-300':''}">7d</button><button type="button" onclick="openChannelAnalytics('${channelId}',30)" class="btn-secondary px-2.5 py-1.5 rounded-lg text-[11px] ${days===30?'border-cyan-500 text-cyan-300':''}">30d</button><button type="button" onclick="openChannelAnalytics('${channelId}',90)" class="btn-secondary px-2.5 py-1.5 rounded-lg text-[11px] ${days===90?'border-cyan-500 text-cyan-300':''}">90d</button></div></div>
+    <div class="phase2-chart">${bars || '<p class="text-xs text-slate-500">No activity in this period.</p>'}</div>
+    <p class="text-[11px] text-slate-500 mt-3">Daily totals are calculated from recorded subscriptions and platform transactions. Values are historical and may include transactions later adjusted through reconciliation.</p>`;
+};
+
 // ================== ADMIN CHANNELS LIST ==================
 window.loadAdminChannels = async function() {
   if (!window.isAdmin) { Toast.error('Admin only'); return; }
@@ -1881,12 +2119,24 @@ window.loadAdminChannels = async function() {
           </div>
           <span class="badge ${ch.is_active ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'} px-3 py-1 rounded-full text-xs font-bold">${ch.is_active ? `● ${t('channels.active')}` : `○ ${t('channels.inactive')}`}</span>
         </div>
-        <div class="flex gap-2">
-          ${ch.channel_invite_link ? `<a href="${escapeHtml(ch.channel_invite_link)}" target="_blank" class="btn-secondary px-4 py-2 rounded-xl text-xs">🔗 View</a>` : ''}
+        <div class="flex flex-wrap gap-2">
+          ${ch.channel_invite_link ? `<a href="${escapeHtml(ch.channel_invite_link)}" target="_blank" rel="noopener noreferrer" class="btn-secondary px-4 py-2 rounded-xl text-xs">🔗 View</a>` : ''}
+          <button type="button" onclick="toggleFeaturedChannel('${escapeHtml(String(ch.id))}', ${ch.is_featured === true ? 'false' : 'true'})" class="btn-secondary px-4 py-2 rounded-xl text-xs">${ch.is_featured ? 'Remove featured' : '✦ Feature listing'}</button>
         </div>
       </div>
     `;
   }).join('');
+};
+
+window.toggleFeaturedChannel = async function(channelId, featured) {
+  if (!window.isAdmin || !/^[0-9a-f-]{36}$/i.test(String(channelId || ''))) return;
+  const result = await apiFetch(`/api/admin/channels/${encodeURIComponent(channelId)}/featured`, {
+    method: 'POST',
+    body: JSON.stringify({ is_featured: featured === true })
+  }, 0);
+  if (result?.error) { Toast.error(result.error); return; }
+  Toast.success(featured ? 'Listing featured.' : 'Featured status removed.');
+  await window.loadAdminChannels();
 };
 
 // ================== MODALS ==================
@@ -2238,8 +2488,7 @@ async function init() {
     const startParam = TG.initDataUnsafe?.start_param || urlStart;
 
     if (startParam && /^[0-9a-fA-F-]{36}$/.test(startParam)) {
-      await loadPurchasePage(startParam);
-      window.switchPage('purchase');
+      await window.openChannelDetails(startParam);
     } else if (startParam === 'help-subscriber') {
       showSubscriberGuide();
     } else if (startParam === 'help-owner') {
@@ -2268,5 +2517,5 @@ document.addEventListener('visibilitychange', () => {
 });
 window.addEventListener('focus', () => window.loadNotifications?.(false));
 window.addEventListener('load', () => { init(); }, { once: true });
-console.log('MySubHub app.js v3.5.1 - low-resource marketplace UX release');
+console.log('MySubHub app.js v3.6.0 - marketplace detail and creator experience');
 console.log('Language:', currentLanguage);
