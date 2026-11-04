@@ -1,5 +1,5 @@
-// MySubHub Frontend v3.4.1 - Coordinated security and UX repair
-// Phase 1: Channel Discovery
+// MySubHub Frontend v3.5.1 - Low-resource marketplace UX and API optimization
+// Phase 1: Channel Discovery and resource optimization
 // Phase 2: Notification System
 // Phase 3: Security Hardening
 // Phase 4: Visual Hierarchy
@@ -11,6 +11,17 @@ function escapeHtml(str) {
   const div = document.createElement('div');
   div.textContent = String(str);
   return div.innerHTML;
+}
+
+// TON uses nanoton precision (1e-9). Never display a valid small price as 0.000 TON.
+function formatTon(value) {
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return '—';
+  return new Intl.NumberFormat('en-US', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 9,
+    useGrouping: true
+  }).format(amount);
 }
 
 // Input sanitization
@@ -182,19 +193,42 @@ function t(key) {
   return value;
 }
 
-function setLanguage(lang) {
-  if (mySubHubTranslationsV331[lang]) {
-    currentLanguage = lang;
-    localStorage.setItem('mysubhub_language', lang);
-    // Refresh UI
-    if (window.currentPage) {
-      window.switchPage(window.currentPage);
-    }
-  }
+function applyStaticTranslations() {
+  document.documentElement.lang = currentLanguage;
+  document.documentElement.dir = ['fa', 'ar'].includes(currentLanguage) ? 'rtl' : 'ltr';
+  document.querySelectorAll('[data-i18n]').forEach(element => {
+    const value = t(element.getAttribute('data-i18n'));
+    if (value && value !== element.getAttribute('data-i18n')) element.textContent = value;
+  });
 }
+
+function setLanguage(lang) {
+  if (!mySubHubTranslationsV331[lang]) return;
+  currentLanguage = lang;
+  try { localStorage.setItem('mysubhub_language', lang); } catch {}
+  applyStaticTranslations();
+  const modal = document.getElementById('language-modal');
+  if (modal) modal.classList.add('hidden');
+  if (window.currentPage === 'discover') {
+    document.getElementById('discover-container')?.removeAttribute('data-initialized');
+  }
+  if (window.currentPage) window.switchPage(window.currentPage);
+}
+
+window.openLanguageModal = function() {
+  document.getElementById('language-modal')?.classList.remove('hidden');
+};
+window.closeLanguageModal = function() {
+  document.getElementById('language-modal')?.classList.add('hidden');
+};
+window.selectLanguage = function(lang) {
+  const normalized = lang === 'pt-BR' ? 'pt' : lang;
+  setLanguage(normalized);
+};
 
 // Initialize language
 currentLanguage = detectLanguage();
+applyStaticTranslations();
 
 // ================== TOAST (Phase 4 - Enhanced) ==================
 const Toast = {
@@ -227,41 +261,151 @@ const toastStyle = document.createElement('style');
 toastStyle.textContent = `@keyframes slideIn{from{opacity:0;transform:translateX(100%)}to{opacity:1;transform:translateX(0)}}@keyframes slideOut{from{opacity:1;transform:translateX(0)}to{opacity:0;transform:translateX(100%)}}`;
 document.head.appendChild(toastStyle);
 
-// ================== API HELPER ==================
-async function apiFetch(url, options = {}, retries = 1) {
+// ================== API CLIENT / LOW-RESOURCE MODE ==================
+// Cache is memory-only: it is scoped to this WebView session and never stores tokens.
+const API_RESPONSE_CACHE = new Map();
+const API_IN_FLIGHT = new Map();
+const API_CACHE_MAX_ENTRIES = 48;
+
+function apiCacheTtl(url) {
+  const path = String(url).split('?')[0];
+  if (path === '/api/channels/discover') return 45_000;
+  if (path === '/api/channels/my') return 20_000;
+  if (path === '/api/owner/dashboard') return 15_000;
+  if (path === '/api/subscriptions/my') return 15_000;
+  if (path === '/api/withdrawals/my') return 15_000;
+  if (path === '/api/referrals/stats') return 30_000;
+  if (path === '/api/notifications/my') return 45_000;
+  if (path === '/api/admin/withdrawals' || path === '/api/admin/reports') return 10_000;
+  if (/^\/api\/channels\/[0-9a-f-]{36}$/i.test(path)) return 60_000;
+  if (path === '/api/admin/channels') return 30_000;
+  return 0;
+}
+
+function invalidateApiCacheForMutation(url) {
+  const path = String(url).split('?')[0];
+  const invalidationGroups = [];
+  if (path.startsWith('/api/channels')) invalidationGroups.push('/api/channels', '/api/owner/dashboard');
+  if (path.startsWith('/api/subscriptions')) invalidationGroups.push('/api/subscriptions', '/api/channels/discover', '/api/channels/', '/api/referrals/stats', '/api/notifications/my');
+  if (path.startsWith('/api/withdrawals')) invalidationGroups.push('/api/withdrawals', '/api/admin/withdrawals', '/api/owner/dashboard');
+  if (path.startsWith('/api/reviews')) invalidationGroups.push('/api/channels/discover', '/api/channels/', '/api/owner/dashboard', '/api/admin/channels');
+  if (path.startsWith('/api/reports')) invalidationGroups.push('/api/admin/reports');
+  if (path.startsWith('/api/admin/reports')) invalidationGroups.push('/api/admin/reports', '/api/admin/channels', '/api/channels/discover');
+  if (path.startsWith('/api/admin/withdrawals')) invalidationGroups.push('/api/admin/withdrawals', '/api/owner/dashboard');
+  if (path.startsWith('/api/notifications')) invalidationGroups.push('/api/notifications/my');
+  if (path.startsWith('/api/auth/wallet')) invalidationGroups.push('/api/auth/validate', '/api/withdrawals/my');
+
+  if (!invalidationGroups.length) return;
+  for (const key of API_RESPONSE_CACHE.keys()) {
+    if (invalidationGroups.some(prefix => key.includes(`:${prefix}`))) {
+      API_RESPONSE_CACHE.delete(key);
+    }
+  }
+}
+
+function cacheApiResponse(key, data, ttl) {
+  if (!ttl || data?.error) return;
+  API_RESPONSE_CACHE.delete(key);
+  API_RESPONSE_CACHE.set(key, { data, expiresAt: Date.now() + ttl });
+  while (API_RESPONSE_CACHE.size > API_CACHE_MAX_ENTRIES) {
+    const oldestKey = API_RESPONSE_CACHE.keys().next().value;
+    API_RESPONSE_CACHE.delete(oldestKey);
+  }
+}
+
+async function apiFetch(url, options = {}, retries) {
   const TG = window.Telegram?.WebApp || {};
   const initData = TG.initData || '';
-  const headers = { 'x-telegram-initdata': initData, 'Content-Type': 'application/json', ...options.headers };
+  const method = String(options.method || 'GET').toUpperCase();
+  const isGet = method === 'GET';
 
   if (!initData) {
-    if (url === '/api/auth/validate') return { user: null, error: 'Not in Telegram' };
-    if (['/api/subscriptions/my', '/api/channels/my', '/api/referrals/stats'].includes(url)) return { error: 'Open via Telegram bot' };
-    return { success: true };
+    if (url === '/api/auth/validate') return { user: null, error: 'Open MySubHub inside Telegram.' };
+    return { error: 'Open MySubHub inside Telegram to continue.' };
   }
 
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    try {
-      const res = await fetch(`${API_BASE}${url}`, { ...options, headers });
+  const {
+    cacheTtlMs,
+    noCache = false,
+    idempotent = false,
+    ...fetchOptions
+  } = options;
+  const telegramUserId = String(TG.initDataUnsafe?.user?.id || 'telegram-session');
+  const cacheKey = `${telegramUserId}:${url}`;
+  const ttl = isGet && !noCache ? (Number.isFinite(cacheTtlMs) ? cacheTtlMs : apiCacheTtl(url)) : 0;
 
-      if (res.status === 401 || res.status === 403) {
-        if (url === '/api/auth/validate') return { user: null };
-        return { error: 'Unauthorized' };
+  if (ttl) {
+    const cached = API_RESPONSE_CACHE.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) return cached.data;
+    if (cached) API_RESPONSE_CACHE.delete(cacheKey);
+  }
+
+  if (isGet && API_IN_FLIGHT.has(cacheKey)) return API_IN_FLIGHT.get(cacheKey);
+
+  // Never retry non-idempotent writes automatically. This is important for payment,
+  // referral, channel registration and withdrawal requests.
+  const maxRetries = (isGet || idempotent) ? Math.max(0, retries === undefined ? 1 : retries) : 0;
+  const requestPromise = (async () => {
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 25_000);
+      try {
+        const headers = {
+          'x-telegram-initdata': initData,
+          ...(fetchOptions.headers || {})
+        };
+        if (fetchOptions.body !== undefined && !Object.keys(headers).some(k => k.toLowerCase() === 'content-type')) {
+          headers['Content-Type'] = 'application/json';
+        }
+
+        const response = await fetch(`${API_BASE}${url}`, {
+          ...fetchOptions,
+          method,
+          headers,
+          signal: controller.signal,
+          cache: 'no-store',
+          credentials: 'omit'
+        });
+
+        let payload = {};
+        if (response.status !== 204) {
+          payload = await response.json().catch(() => ({ error: `Invalid server response (${response.status})` }));
+        }
+
+        if (response.status === 401 || response.status === 403) {
+          if (url === '/api/auth/validate') return { user: null, error: 'Unauthorized' };
+          return { error: payload.error || 'Unauthorized' };
+        }
+        if (response.status === 429) return { error: payload.error || 'Too many requests. Please wait and try again.' };
+        if (response.status === 409) return payload;
+        if (!response.ok) return { ...payload, error: payload.error || `HTTP ${response.status}` };
+
+        if (isGet) cacheApiResponse(cacheKey, payload, ttl);
+        else invalidateApiCacheForMutation(url);
+        return payload;
+      } catch (error) {
+        const isLastAttempt = attempt >= maxRetries;
+        if (!isLastAttempt) {
+          await new Promise(resolve => setTimeout(resolve, 400 * (attempt + 1)));
+          continue;
+        }
+        const message = error?.name === 'AbortError'
+          ? 'The request timed out. Please try again.'
+          : (isGet ? 'Network error. Please try again.' : 'Network error. The request may have reached the server; check its status before submitting again.');
+        console.error(`API error [${method} ${url}]:`, error);
+        return { error: message };
+      } finally {
+        clearTimeout(timeoutId);
       }
-      if (res.status === 429) return { error: 'Too many requests' };
-      if (res.status === 409) return await res.json();
-      if (!res.ok) {
-        const payload = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
-        return { ...payload, error: payload.error || `HTTP ${res.status}` || 'Request failed' };
-      }
-      return await res.json();
-    } catch (err) {
-      if (attempt < retries) {
-        await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
-        continue;
-      }
-      console.error('API error:', err);
-      return { error: 'Network error' };
     }
+    return { error: 'Request failed' };
+  })();
+
+  if (isGet) API_IN_FLIGHT.set(cacheKey, requestPromise);
+  try {
+    return await requestPromise;
+  } finally {
+    if (isGet && API_IN_FLIGHT.get(cacheKey) === requestPromise) API_IN_FLIGHT.delete(cacheKey);
   }
 }
 
@@ -277,11 +421,27 @@ let tonConnectUI = null;
 let userWallet = null;
 
 // ================== AUTH ==================
+function updateNotificationBadge(unreadValue) {
+  const badge = document.getElementById('notification-badge');
+  if (!badge) return;
+  const unread = Math.max(0, Number(unreadValue || 0));
+  if (unread > 0) {
+    badge.textContent = unread > 99 ? '99+' : String(unread);
+    badge.style.display = 'flex';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
 async function authenticateUser() {
   const auth = await apiFetch('/api/auth/validate');
   if (auth && auth.user) {
     window.currentUser = auth.user;
     window.isAdmin = auth.isAdmin === true;
+    if (auth.unread_count !== undefined) {
+      updateNotificationBadge(auth.unread_count);
+      lastNotificationBadgeRefresh = Date.now();
+    }
     
     if (window.isAdmin) {
       const adminTab = document.getElementById('nav-admin');
@@ -331,180 +491,265 @@ window.switchPage = function(pageId) {
     'admin-channels': loadAdminChannels,
     discover: loadDiscoverPage
   };
-  if (loaders[pageId]) loaders[pageId]();
+  const pageChanged = window.currentPage !== pageId;
   window.currentPage = pageId;
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  if (loaders[pageId]) Promise.resolve(loaders[pageId]()).catch(error => console.error(`Page load failed [${pageId}]:`, error));
+  if (pageChanged) window.scrollTo({ top: 0, behavior: 'auto' });
 };
 
-// ================== DISCOVER PAGE (Phase 1) ==================
+// ================== DISCOVER PAGE ==================
+const DISCOVER_CATEGORIES = [
+  { id: '', name: 'All', icon: '✦' },
+  { id: 'crypto', name: 'Cryptocurrency', icon: '💰' },
+  { id: 'news', name: 'News', icon: '📰' },
+  { id: 'education', name: 'Education', icon: '📚' },
+  { id: 'entertainment', name: 'Entertainment', icon: '🎬' },
+  { id: 'sports', name: 'Sports', icon: '⚽' },
+  { id: 'technology', name: 'Technology', icon: '💻' },
+  { id: 'business', name: 'Business', icon: '💼' },
+  { id: 'lifestyle', name: 'Lifestyle', icon: '🌟' },
+  { id: 'gaming', name: 'Gaming', icon: '🎮' },
+  { id: 'music', name: 'Music', icon: '🎵' },
+  { id: 'other', name: 'Other', icon: '✨' }
+];
+const DISCOVER_PAGE_SIZE = 12;
+let currentCategory = '';
+let searchTimeout = null;
+let discoverRequestSequence = 0;
+let discoverState = { offset: 0, total: 0, loading: false, hasMore: false, channels: [] };
+
 window.loadDiscoverPage = async function() {
   const container = document.getElementById('discover-container');
   if (!container) return;
-  
-  container.innerHTML = `
-    <div class="glass-card p-5 mb-5">
-      <div class="flex items-center justify-between mb-4">
-        <h2 class="text-xl font-bold text-white">${t('discover.title')}</h2>
-        <div class="flex gap-2">
-          <select id="discover-sort" onchange="loadDiscoverChannels()" class="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white">
-            <option value="popular">${t('discover.popular')}</option>
-            <option value="recent">${t('discover.recent')}</option>
-            <option value="rating">${t('discover.rating')}</option>
-            <option value="price_low">${t('discover.price_low')}</option>
-            <option value="price_high">${t('discover.price_high')}</option>
-          </select>
+  const previousSearch = document.getElementById('discover-search')?.value || '';
+  const previousSort = document.getElementById('discover-sort')?.value || 'popular';
+
+  if (!container.dataset.initialized) {
+    container.innerHTML = `
+      <section class="mb-5">
+        <div class="mb-4">
+          <p class="text-[11px] font-bold uppercase tracking-[0.18em] text-cyan-400 mb-2">Premium Telegram communities</p>
+          <h2 class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">${t('discover.title')}</h2>
+          <p class="text-sm text-slate-400 mt-2">Find communities worth joining. Compare content, ratings and subscription terms before you pay.</p>
         </div>
-      </div>
-      
-      <div class="mb-4">
-        <input type="text" id="discover-search" placeholder="${t('discover.search')}" 
-               class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500"
-               oninput="debounceSearch()" />
-      </div>
-      
-      <div id="discover-categories" class="flex gap-2 overflow-x-auto pb-2 mb-4"></div>
-      
-      <div id="discover-channels" class="space-y-3">
-        <div class="text-center py-8 text-slate-400"><div class="animate-pulse">${t('common.loading')}</div></div>
-      </div>
-    </div>
-  `;
-  
-  // Load categories
-  await loadCategories();
-  // Load channels
-  await loadDiscoverChannels();
+        <div class="glass-card p-3 sm:p-4 mb-4">
+          <label for="discover-search" class="sr-only">${t('discover.search')}</label>
+          <div class="flex items-center gap-3 bg-slate-950/70 border border-slate-700/80 rounded-xl px-3 py-2.5">
+            <span aria-hidden="true" class="text-slate-400">⌕</span>
+            <input type="search" id="discover-search" autocomplete="off" placeholder="${t('discover.search')}" class="w-full bg-transparent text-sm text-white placeholder-slate-500 outline-none" oninput="debounceSearch()" />
+            <button type="button" onclick="clearDiscoverSearch()" class="text-xs text-cyan-400 whitespace-nowrap">Clear</button>
+          </div>
+          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mt-4">
+            <div class="min-w-0 flex-1">
+              <p class="text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-2">${t('discover.categories')}</p>
+              <div id="discover-categories" class="flex gap-2 overflow-x-auto pb-1" role="group" aria-label="Channel categories"></div>
+            </div>
+            <div class="sm:w-44">
+              <label for="discover-sort" class="block text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-2">${t('discover.sort')}</label>
+              <select id="discover-sort" onchange="sortDiscoverChannels()" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2.5 text-xs text-white">
+                <option value="popular">${t('discover.popular')}</option>
+                <option value="recent">${t('discover.recent')}</option>
+                <option value="rating">${t('discover.rating')}</option>
+                <option value="price_low">${t('discover.price_low')}</option>
+                <option value="price_high">${t('discover.price_high')}</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="flex items-center justify-between gap-3 mb-3">
+          <h3 class="text-base font-bold text-white">Available communities</h3>
+          <span id="discover-result-count" class="text-xs text-slate-500"></span>
+        </div>
+        <div id="discover-channels" class="grid grid-cols-1 gap-3" aria-live="polite">
+          <div class="glass-card p-8 text-center text-slate-400"><span class="animate-pulse">${t('common.loading')}</span></div>
+        </div>
+        <div id="discover-load-more-wrap" class="hidden text-center mt-5">
+          <button id="discover-load-more" type="button" onclick="loadMoreDiscoverChannels()" class="btn-secondary px-6 py-3 rounded-xl text-sm font-semibold text-white">Load more channels</button>
+        </div>
+      </section>`;
+    container.dataset.initialized = 'true';
+    const searchInput = document.getElementById('discover-search');
+    const sortInput = document.getElementById('discover-sort');
+    if (searchInput) searchInput.value = previousSearch;
+    if (sortInput) sortInput.value = previousSort;
+    renderDiscoverCategories();
+  }
+
+  await loadDiscoverChannels(true);
 };
 
-let searchTimeout;
-window.debounceSearch = function() {
-  clearTimeout(searchTimeout);
-  searchTimeout = setTimeout(() => loadDiscoverChannels(), 300);
-};
-
-async function loadCategories() {
+function renderDiscoverCategories() {
   const categoriesContainer = document.getElementById('discover-categories');
   if (!categoriesContainer) return;
-  
-  try {
-    const categories = await apiFetch('/api/categories');
-    if (categories.error) return;
-    
-    categoriesContainer.innerHTML = `
-      <button onclick="filterByCategory('', this)" class="category-btn bg-cyan-500/20 border border-cyan-500/30 text-cyan-400 px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap">
-        All
-      </button>
-      ${categories.map(cat => `
-        <button onclick="filterByCategory('${cat.id}', this)" class="category-btn bg-slate-800 border border-slate-700 text-slate-300 px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap hover:border-cyan-500/50">
-          ${cat.icon} ${cat.name}
-        </button>
-      `).join('')}
-    `;
-  } catch (e) {
-    console.error('Failed to load categories:', e);
-  }
+  categoriesContainer.innerHTML = DISCOVER_CATEGORIES.map(category => {
+    const active = category.id === currentCategory;
+    return `<button type="button" data-category="${escapeHtml(category.id)}" aria-pressed="${active ? 'true' : 'false'}" onclick="filterByCategory('${escapeHtml(category.id)}', this)" class="category-chip ${active ? 'category-chip-active' : ''}">${category.icon} ${escapeHtml(category.name)}</button>`;
+  }).join('');
 }
 
-let currentCategory = '';
-window.filterByCategory = function(category, button) {
-  currentCategory = category;
-  // Update button styles
-  document.querySelectorAll('.category-btn').forEach(btn => {
-    btn.classList.remove('bg-cyan-500/20', 'border-cyan-500/30', 'text-cyan-400');
-    btn.classList.add('bg-slate-800', 'border-slate-700', 'text-slate-300');
-  });
-  if (button) {
-    button.classList.remove('bg-slate-800', 'border-slate-700', 'text-slate-300');
-    button.classList.add('bg-cyan-500/20', 'border-cyan-500/30', 'text-cyan-400');
-  }
-  
-  loadDiscoverChannels();
+window.debounceSearch = function() {
+  if (searchTimeout) clearTimeout(searchTimeout);
+  searchTimeout = setTimeout(() => loadDiscoverChannels(true), 450);
+};
+window.sortDiscoverChannels = function() {
+  if (searchTimeout) clearTimeout(searchTimeout);
+  return loadDiscoverChannels(true);
 };
 
-async function loadDiscoverChannels() {
-  const channelsContainer = document.getElementById('discover-channels');
-  if (!channelsContainer) return;
-  
-  const search = document.getElementById('discover-search')?.value || '';
-  const sort = document.getElementById('discover-sort')?.value || 'popular';
-  
-  channelsContainer.innerHTML = '<div class="text-center py-8 text-slate-400"><div class="animate-pulse">Loading...</div></div>';
-  
-  try {
-    const params = new URLSearchParams({
-      search: search,
-      category: currentCategory,
-      sort: sort,
-      limit: '20',
-      offset: '0'
-    });
-    
-    const result = await apiFetch(`/api/channels/discover?${params}`);
-    
-    if (result.error) {
-      channelsContainer.innerHTML = `<div class="text-center py-8 text-red-400">${escapeHtml(result.error)}</div>`;
-      return;
-    }
-    
-    if (!result.channels || result.channels.length === 0) {
-      channelsContainer.innerHTML = `<div class="text-center py-8 text-slate-400">${t('discover.no_results')}</div>`;
-      return;
-    }
-    
-    channelsContainer.innerHTML = result.channels.map(ch => {
-      const name = escapeHtml(ch.channel_name || 'Unknown');
-      const price = parseFloat(ch.subscription_price || 0).toFixed(2);
-      const days = ch.duration_days || 30;
-      const rating = ch.avg_rating || 0;
-      const subs = ch.active_subscribers || 0;
-      
-      return `
-        <div class="glass-card p-4 hover:border-cyan-500/50 transition-all cursor-pointer" onclick="loadPurchasePage('${ch.id}'); switchPage('purchase');">
-          <div class="flex justify-between items-start mb-3">
-            <div class="flex-1">
-              <h3 class="font-semibold text-white text-base mb-1">${name}</h3>
-              ${ch.category ? `<span class="text-xs text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded">${ch.category}</span>` : ''}
-            </div>
-            <div class="text-right">
-              <div class="text-lg font-bold text-emerald-400 font-mono">${price} TON</div>
-              <div class="text-xs text-slate-400">${days} ${t('purchase.days')}</div>
-            </div>
-          </div>
-          <div class="flex items-center justify-between text-xs">
-            <div class="flex items-center gap-3">
-              ${rating > 0 ? `<span class="text-yellow-400">⭐ ${rating.toFixed(1)} (${ch.review_count || 0})</span>` : ''}
-              <span class="text-slate-400">${subs} subscribers</span>
-            </div>
-            <button class="btn-primary px-4 py-1.5 rounded-lg text-xs text-white font-semibold">
-              ${t('discover.subscribe')}
-            </button>
-          </div>
-        </div>
-      `;
-    }).join('');
-  } catch (e) {
-    channelsContainer.innerHTML = `<div class="text-center py-8 text-red-400">Failed to load channels</div>`;
-    console.error('Failed to load discover channels:', e);
-  }
+window.clearDiscoverSearch = function() {
+  if (searchTimeout) clearTimeout(searchTimeout);
+  const input = document.getElementById('discover-search');
+  if (input) input.value = '';
+  loadDiscoverChannels(true);
+};
+
+window.filterByCategory = function(category) {
+  if (searchTimeout) clearTimeout(searchTimeout);
+  currentCategory = DISCOVER_CATEGORIES.some(item => item.id === category) ? category : '';
+  renderDiscoverCategories();
+  loadDiscoverChannels(true);
+};
+
+function discoverCategoryIcon(categoryId) {
+  return DISCOVER_CATEGORIES.find(item => item.id === categoryId)?.icon || '✨';
 }
 
+function renderDiscoverCard(channel) {
+  const id = String(channel.id || '');
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return '';
+  const name = escapeHtml(channel.channel_name || 'Untitled channel');
+  const description = escapeHtml(channel.description || 'The creator has not added a description yet.');
+  const category = escapeHtml(channel.category || 'other');
+  const price = Number(channel.subscription_price || 0);
+  const duration = Number(channel.duration_days || 30);
+  const rating = Number(channel.avg_rating || 0);
+  const reviews = Number(channel.review_count || 0);
+  const subscribers = Number(channel.active_subscribers || 0);
+  const durationLabel = duration === 9999 ? '9,999 days' : `${duration} days`;
+  const ratingLabel = reviews > 0 ? `⭐ ${rating.toFixed(1)} <span class="text-slate-500">(${reviews})</span>` : '<span class="text-slate-500">New listing</span>';
+
+  return `
+    <article class="glass-card p-4 sm:p-5 discover-card">
+      <div class="flex items-start gap-3">
+        <div class="discover-avatar" aria-hidden="true">${discoverCategoryIcon(channel.category)}</div>
+        <div class="min-w-0 flex-1">
+          <div class="flex flex-wrap items-center gap-2">
+            <h4 class="font-bold text-white text-base leading-tight">${name}</h4>
+            ${channel.is_verified ? '<span class="verified-pill" title="Verified channel">✓ Verified</span>' : ''}
+          </div>
+          <p class="text-[11px] text-cyan-300 mt-1 uppercase tracking-wide">${category}</p>
+        </div>
+      </div>
+      <p class="text-sm text-slate-400 leading-relaxed mt-3 discover-description">${description}</p>
+      <div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs mt-4">
+        <span class="text-amber-300">${ratingLabel}</span>
+        <span class="text-slate-400">${subscribers.toLocaleString()} active subscribers</span>
+        <span class="text-slate-500">${durationLabel}</span>
+      </div>
+      <div class="flex items-end justify-between gap-3 border-t border-slate-700/70 mt-4 pt-4">
+        <div>
+          <p class="text-[10px] uppercase tracking-wider text-slate-500">Subscription</p>
+          <p class="text-xl font-extrabold text-emerald-400 font-mono">${Number.isFinite(price) ? formatTon(price) : '—'} TON</p>
+          <p class="text-[11px] text-slate-500">per ${durationLabel}</p>
+        </div>
+        <button type="button" onclick="openChannelDetails('${id}')" class="btn-primary min-h-11 px-4 py-2.5 rounded-xl text-xs sm:text-sm text-white font-semibold">View channel</button>
+      </div>
+    </article>`;
+}
+
+window.loadDiscoverChannels = async function(reset = true) {
+  const channelsContainer = document.getElementById('discover-channels');
+  if (!channelsContainer) return;
+  // A reset (new search/category/sort) supersedes any older in-flight request.
+  // A Load More action is ignored while another request is already active.
+  if (!reset && discoverState.loading) return;
+  if (reset) {
+    discoverState.offset = 0;
+    discoverState.total = 0;
+    discoverState.channels = [];
+    discoverState.hasMore = false;
+  }
+
+  const search = document.getElementById('discover-search')?.value?.trim() || '';
+  const sort = document.getElementById('discover-sort')?.value || 'popular';
+  const requestOffset = discoverState.offset;
+  const requestId = ++discoverRequestSequence;
+  discoverState.loading = true;
+  const moreWrap = document.getElementById('discover-load-more-wrap');
+  const moreButton = document.getElementById('discover-load-more');
+  if (moreButton) moreButton.disabled = true;
+  if (reset) {
+    channelsContainer.innerHTML = '<div class="glass-card p-8 text-center text-slate-400"><span class="animate-pulse">Loading channels…</span></div>';
+  } else if (moreButton) {
+    moreButton.textContent = 'Loading…';
+  }
+
+  try {
+    const params = new URLSearchParams({
+      search,
+      category: currentCategory,
+      sort,
+      limit: String(DISCOVER_PAGE_SIZE),
+      offset: String(requestOffset)
+    });
+    const result = await apiFetch(`/api/channels/discover?${params}`);
+    if (requestId !== discoverRequestSequence) return;
+    if (result.error) {
+      if (reset) channelsContainer.innerHTML = `<div class="glass-card p-6 text-center text-red-300">${escapeHtml(result.error)}<button type="button" onclick="loadDiscoverChannels(true)" class="block mx-auto mt-3 btn-secondary px-4 py-2 rounded-lg text-xs">Retry</button></div>`;
+      else Toast.error(result.error);
+      return;
+    }
+
+    const rows = Array.isArray(result.channels) ? result.channels : [];
+    discoverState.channels = reset ? rows : discoverState.channels.concat(rows);
+    discoverState.total = Number(result.total || 0);
+    discoverState.offset = requestOffset + rows.length;
+    discoverState.hasMore = discoverState.offset < discoverState.total && rows.length > 0;
+
+    if (!discoverState.channels.length) {
+      channelsContainer.innerHTML = `<div class="glass-card p-10 text-center"><div class="text-3xl mb-3">⌕</div><p class="text-white font-semibold">${t('discover.no_results')}</p><p class="text-xs text-slate-500 mt-2">Try another keyword or category.</p></div>`;
+    } else {
+      channelsContainer.innerHTML = discoverState.channels.map(renderDiscoverCard).join('');
+    }
+
+    const count = document.getElementById('discover-result-count');
+    if (count) count.textContent = discoverState.total ? `${discoverState.total.toLocaleString()} listings` : `${discoverState.channels.length} listings`;
+    if (moreWrap) moreWrap.classList.toggle('hidden', !discoverState.hasMore);
+    if (moreButton) moreButton.textContent = `Load more (${Math.max(0, discoverState.total - discoverState.offset)} remaining)`;
+  } catch (error) {
+    console.error('Discover request failed:', error);
+    if (reset) channelsContainer.innerHTML = '<div class="glass-card p-6 text-center text-red-300">Could not load channels. Please try again.</div>';
+  } finally {
+    if (requestId === discoverRequestSequence) {
+      discoverState.loading = false;
+      if (moreButton) moreButton.disabled = false;
+    }
+  }
+};
+
+window.loadMoreDiscoverChannels = function() {
+  return window.loadDiscoverChannels(false);
+};
+
+window.openChannelDetails = async function(channelId) {
+  await window.loadPurchasePage(channelId);
+  window.switchPage('purchase');
+};
+
 // ================== NOTIFICATIONS (Phase 2) ==================
-window.loadNotifications = async function() {
+let lastNotificationBadgeRefresh = 0;
+window.loadNotifications = async function(force = false) {
   const badge = document.getElementById('notification-badge');
   if (!badge) return;
-  
+  if (!force && Date.now() - lastNotificationBadgeRefresh < 45_000) return;
+
   try {
-    const result = await apiFetch('/api/notifications/my');
+    const result = await apiFetch('/api/notifications/my', { noCache: force });
     if (result.error) return;
-    
-    if (result.unread_count > 0) {
-      badge.textContent = result.unread_count;
-      badge.style.display = 'flex';
-    } else {
-      badge.style.display = 'none';
-    }
+    lastNotificationBadgeRefresh = Date.now();
+    updateNotificationBadge(result.unread_count);
   } catch (e) {
-    console.error('Failed to load notifications:', e);
+    console.error('Failed to load notification count:', e);
   }
 };
 
@@ -532,7 +777,7 @@ window.showNotifications = async function() {
   document.body.appendChild(modal);
   
   // Load notifications
-  const result = await apiFetch('/api/notifications/my');
+  const result = await apiFetch('/api/notifications/my', { noCache: true });
   const list = document.getElementById('notifications-list');
   
   if (result.error || !result.notifications || result.notifications.length === 0) {
@@ -552,12 +797,14 @@ window.showNotifications = async function() {
 };
 
 window.markAllNotificationsRead = async function() {
-  await apiFetch('/api/notifications/read', { method: 'POST' });
+  const result = await apiFetch('/api/notifications/read', { method: 'POST', body: JSON.stringify({}) });
+  if (result?.error) { Toast.error(result.error); return; }
   document.getElementById('notifications-modal')?.remove();
   const badge = document.getElementById('notification-badge');
   if (badge) badge.style.display = 'none';
+  lastNotificationBadgeRefresh = Date.now();
   Toast.success('All notifications marked as read');
-  showNotifications(); // Refresh
+  window.showNotifications();
 };
 
 // ================== SUBSCRIPTIONS ==================
@@ -609,7 +856,7 @@ window.loadSubscriptions = async function() {
             </span>
           </div>
           <p class="text-slate-500 text-sm mb-4">
-            ${t('subscriptions.expired')}: ${endDate.toLocaleDateString()} • ${parseFloat(s.amount || 0).toFixed(4)} TON
+            ${t('subscriptions.expired')}: ${endDate.toLocaleDateString()} • ${formatTon(s.amount || 0)} TON
           </p>
           <div class="flex gap-2 flex-wrap">
             <button onclick="renewSubscription('${channelId}')" class="btn-primary px-5 py-2.5 rounded-xl text-sm text-white font-semibold flex-1">
@@ -634,7 +881,7 @@ window.loadSubscriptions = async function() {
             ${isExpiring ? `⚠️ ${daysLeft}d ${t('subscriptions.expiring')}` : `✓ ${t('subscriptions.active')}`}
           </span>
         </div>
-        <p class="text-slate-400 text-sm mb-4">${t('subscriptions.expired')}: ${endDate.toLocaleDateString()} • ${parseFloat(s.amount || 0).toFixed(4)} TON</p>
+        <p class="text-slate-400 text-sm mb-4">${t('subscriptions.expired')}: ${endDate.toLocaleDateString()} • ${formatTon(s.amount || 0)} TON</p>
         <div class="flex gap-2 flex-wrap">
           ${inviteLink ? `<button onclick="joinChannel('${inviteLink}')" class="btn-primary px-4 py-2 rounded-xl text-xs text-white">📺 ${t('subscriptions.open')}</button>` : `<button onclick="requestSubscriptionAccessLink('${escapeHtml(s.id)}')" class="btn-primary px-4 py-2 rounded-xl text-xs text-white">🔗 Get access link</button>`}
           <button onclick="event.stopPropagation();renewSubscription('${channelId}')" class="btn-secondary px-4 py-2 rounded-xl text-xs">🔄 ${t('subscriptions.renew')}</button>
@@ -651,7 +898,7 @@ window.loadSubscriptions = async function() {
 function updateSubStats(active, expiring, spent) {
   const a = document.getElementById('stat-active'); if (a) a.textContent = active;
   const e = document.getElementById('stat-expiring'); if (e) e.textContent = expiring;
-  const s = document.getElementById('stat-spent'); if (s) s.textContent = spent.toFixed(2);
+  const s = document.getElementById('stat-spent'); if (s) s.textContent = formatTon(spent);
 }
 
 window.requestSubscriptionAccessLink = async function(subscriptionId) {
@@ -718,6 +965,14 @@ window.loadPurchasePage = async function(channelId) {
         <h2 class="text-2xl font-bold text-white mb-2">${name}</h2>
         ${channel.is_verified ? '<span class="text-sm text-blue-400">✓ Verified</span>' : ''}
       </div>
+
+      <div class="bg-slate-800/40 border border-slate-700/70 rounded-xl p-4 mb-5">
+        <div class="flex flex-wrap items-center gap-2 mb-2">
+          ${channel.category ? `<span class="text-[11px] font-semibold uppercase tracking-wide text-cyan-300">${escapeHtml(channel.category)}</span>` : ''}
+          ${Number(channel.total_reviews || reviews.length || 0) > 0 ? `<span class="text-xs text-amber-300">⭐ ${Number(channel.avg_rating || avgRating).toFixed(1)} · ${Number(channel.total_reviews || reviews.length)} reviews</span>` : '<span class="text-xs text-slate-500">New listing</span>'}
+        </div>
+        <p class="text-sm text-slate-300 leading-relaxed">${escapeHtml(channel.description || 'The creator has not added a channel description yet.')}</p>
+      </div>
       
       ${reviews.length > 0 ? `
         <div class="bg-slate-800/50 rounded-xl p-5 mb-5">
@@ -743,15 +998,15 @@ window.loadPurchasePage = async function(channelId) {
       <div class="bg-slate-800/50 rounded-xl p-5 mb-5 space-y-4">
         <div class="flex justify-between items-center">
           <span class="text-base text-slate-400">${t('purchase.channel_price')}</span>
-          <span class="text-xl font-bold text-white font-mono">${channelPrice.toFixed(4)} TON</span>
+          <span class="text-xl font-bold text-white font-mono">${formatTon(channelPrice)} TON</span>
         </div>
         <div class="flex justify-between items-center">
           <span class="text-base text-slate-400">${t('purchase.platform_fee')}</span>
-          <span class="text-base text-slate-400 font-mono">${platformFee.toFixed(4)} TON</span>
+          <span class="text-base text-slate-400 font-mono">${formatTon(platformFee)} TON</span>
         </div>
         <div class="border-t border-slate-700 pt-4 flex justify-between items-center">
           <span class="text-lg font-bold text-white">${t('purchase.total_to_pay')}</span>
-          <span class="text-2xl font-bold text-emerald-400 font-mono">${totalPrice.toFixed(4)} TON</span>
+          <span class="text-2xl font-bold text-emerald-400 font-mono">${formatTon(totalPrice)} TON</span>
         </div>
         <div class="flex justify-between items-center">
           <span class="text-base text-slate-400">${t('purchase.duration')}</span>
@@ -765,28 +1020,31 @@ window.loadPurchasePage = async function(channelId) {
       <div id="purchase-status" class="mt-4"></div>
     `;
 
-    loadCreditsForPurchase(channelId, totalPrice);
+    loadCreditsForPurchase(channelId, totalPrice, Number(channel.current_credit_balance || 0));
   } catch (e) {
     card.innerHTML = `<div class="text-center py-8"><p class="text-red-400 mb-3">${t('errors.network_error')}</p><button onclick="switchPage('subscriptions')" class="btn-primary px-4 py-2 rounded-xl text-sm text-white">${t('common.close')}</button></div>`;
   }
 };
 
-async function loadCreditsForPurchase(channelId, totalPrice) {
+function loadCreditsForPurchase(channelId, totalPrice, currentBalance = 0) {
   const section = document.getElementById('purchase-credits-section');
   if (!section) return;
-  const stats = await apiFetch('/api/referrals/stats');
-  if (stats.currentBalance > 0) {
-    section.innerHTML = `
-      <div class="bg-purple-500/10 border-2 border-purple-500/30 rounded-xl p-4">
-        <p class="text-sm text-purple-300 mb-3">💰 ${t('purchase.you_have')} <strong>${parseFloat(stats.currentBalance).toFixed(4)} TON</strong> ${t('purchase.in_credits')}</p>
-        <label class="flex items-center gap-3 cursor-pointer">
-          <input type="checkbox" id="use-credits-check" onchange="toggleCreditsUsage()" class="rounded w-5 h-5">
-          <span class="text-sm text-slate-300">${t('purchase.use_credits')}</span>
-        </label>
-        <input type="number" id="credits-amount" step="0.0001" min="0" max="${Math.min(stats.currentBalance, totalPrice)}" placeholder="0.0000" class="w-full mt-3 bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-sm text-white font-mono hidden" />
-      </div>
-    `;
+  const balance = Number(currentBalance);
+  if (!Number.isFinite(balance) || balance <= 0) {
+    section.innerHTML = '';
+    return;
   }
+
+  section.innerHTML = `
+    <div class="bg-purple-500/10 border-2 border-purple-500/30 rounded-xl p-4">
+      <p class="text-sm text-purple-300 mb-3">💰 ${t('purchase.you_have')} <strong>${formatTon(balance)} TON</strong> ${t('purchase.in_credits')}</p>
+      <label class="flex items-center gap-3 cursor-pointer">
+        <input type="checkbox" id="use-credits-check" onchange="toggleCreditsUsage()" class="rounded w-5 h-5">
+        <span class="text-sm text-slate-300">${t('purchase.use_credits')}</span>
+      </label>
+      <input type="number" id="credits-amount" step="0.000000001" min="0" max="${Math.min(balance, totalPrice)}" placeholder="0.000000000" class="w-full mt-3 bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-sm text-white font-mono hidden" />
+    </div>
+  `;
 }
 
 window.toggleCreditsUsage = function() {
@@ -922,63 +1180,90 @@ window.retrySubscriptionConfirmation = async function(channelId, nonce) {
 
 // ================== OWNER DASHBOARD ==================
 window.loadOwnerDashboard = async function() {
-  const container = document.getElementById('channels-list') || document.getElementById('owner-dashboard');
+  const container = document.getElementById('channels-list');
+  const summary = document.getElementById('owner-summary');
   if (!container) return;
-  container.innerHTML = '<div class="glass-card p-10 text-center text-slate-400"><div class="animate-pulse">Loading...</div></div>';
+  container.innerHTML = '<div class="glass-card p-8 text-center text-slate-400"><span class="animate-pulse">Loading your creator studio…</span></div>';
 
-  const [channels, withdrawalData] = await Promise.all([
-    apiFetch('/api/channels/my'),
-    apiFetch('/api/withdrawals/my')
-  ]);
+  const dashboard = await apiFetch('/api/owner/dashboard');
+
+  if (dashboard?.error) {
+    if (summary) summary.innerHTML = '';
+    container.innerHTML = `<div class="glass-card p-6 text-center"><p class="text-red-300 mb-3">${escapeHtml(dashboard.error)}</p><button type="button" onclick="loadOwnerDashboard()" class="btn-primary px-4 py-2 rounded-lg text-xs text-white">${t('common.retry')}</button></div>`;
+    return;
+  }
+
+  const safeChannels = Array.isArray(dashboard?.channels) ? dashboard.channels : [];
+  const withdrawalData = dashboard?.withdrawals || { pendingEarnings: 0, reservedWithdrawals: 0, withdrawals: [] };
+  window.ownerChannels = safeChannels;
+  const activeChannels = safeChannels.filter(channel => channel.is_active === true).length;
+  const subscribers = safeChannels.reduce((total, channel) => total + Number(channel.active_subscribers || 0), 0);
+  const ratedChannels = safeChannels.filter(channel => Number(channel.review_count || 0) > 0);
+  const averageRating = ratedChannels.length
+    ? ratedChannels.reduce((total, channel) => total + Number(channel.avg_rating || 0), 0) / ratedChannels.length
+    : 0;
+
+  if (summary) {
+    summary.innerHTML = `
+      <div class="grid grid-cols-3 gap-2 mb-4">
+        <div class="glass-card p-3 text-center"><p class="text-[10px] uppercase text-slate-500 font-bold">Channels</p><p class="text-xl font-extrabold text-white mt-1">${safeChannels.length}</p></div>
+        <div class="glass-card p-3 text-center"><p class="text-[10px] uppercase text-slate-500 font-bold">Subscribers</p><p class="text-xl font-extrabold text-cyan-300 mt-1">${subscribers.toLocaleString()}</p></div>
+        <div class="glass-card p-3 text-center"><p class="text-[10px] uppercase text-slate-500 font-bold">Avg. rating</p><p class="text-xl font-extrabold text-amber-300 mt-1">${averageRating ? averageRating.toFixed(1) : '—'}</p></div>
+      </div>
+      <div class="flex items-center justify-between gap-2 mb-3">
+        <div><p class="text-sm font-bold text-white">Your listings</p><p class="text-xs text-slate-500">${activeChannels} published · ${safeChannels.length - activeChannels} need setup</p></div>
+        <button type="button" onclick="openAddChannelModal()" class="btn-primary px-3 py-2 rounded-xl text-xs text-white font-semibold">＋ Add channel</button>
+      </div>`;
+  }
 
   let channelsMarkup = '';
-  if (channels?.error) {
-    channelsMarkup = `<div class="glass-card p-6 text-center mb-4"><p class="text-red-400 mb-2">${escapeHtml(channels.error)}</p><button onclick="loadOwnerDashboard()" class="btn-primary px-4 py-2 rounded-lg text-xs text-white">${t('common.retry')}</button></div>`;
-  } else if (!Array.isArray(channels) || channels.length === 0) {
+  if (safeChannels.length === 0) {
     channelsMarkup = `
-      <div class="glass-card p-8 mb-4">
-        <div class="text-center mb-6">
-          <div class="w-20 h-20 rounded-2xl bg-blue-500/20 border-2 border-blue-500/30 flex items-center justify-center mx-auto mb-4"><span class="text-4xl">🤖</span></div>
-          <h3 class="text-xl font-bold text-white mb-2">${t('channels.add_first')}</h3>
-          <p class="text-sm text-slate-400 mb-4">${t('channels.bot_admin_instructions')}</p>
+      <div class="glass-card p-6 sm:p-8 mb-4">
+        <div class="text-center mb-5">
+          <div class="w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center mx-auto mb-4 text-3xl">📣</div>
+          <h3 class="text-xl font-bold text-white mb-2">Start earning from your community</h3>
+          <p class="text-sm text-slate-400 max-w-sm mx-auto">Add the MySubHub bot as a channel administrator. It will send you a private setup link. Use that link here to configure your subscription.</p>
         </div>
-        <div class="bg-slate-800/50 rounded-xl p-5 mb-5">
-          <h4 class="text-base font-bold text-white mb-3">How to add the bot:</h4>
-          <ol class="text-sm text-slate-300 space-y-2 list-decimal list-inside">
-            <li>Open your Telegram channel</li>
-            <li>Go to Channel Settings → Administrators</li>
-            <li>Click "Add Administrator"</li>
-            <li>Search for <strong class="text-blue-400">@MySubsHub_bot</strong></li>
-            <li>Select the bot and grant the required permissions</li>
-            <li>Click "Save" or "Done", then return here</li>
-          </ol>
-        </div>
-        <div class="bg-amber-500/10 border-2 border-amber-500/30 rounded-xl p-4">
-          <p class="text-sm text-amber-300">⚠️ The bot must be an administrator to manage subscribers automatically.</p>
-        </div>
+        <ol class="text-sm text-slate-300 space-y-2 list-decimal list-inside bg-slate-900/60 rounded-xl p-4 mb-4">
+          <li>Open your Telegram channel or group settings.</li>
+          <li>Add <strong class="text-cyan-300">@${escapeHtml(BOT_USERNAME)}</strong> as an administrator.</li>
+          <li>Grant only the permissions required to manage members and invite links.</li>
+          <li>Return to MySubHub and paste the setup link sent by the bot.</li>
+        </ol>
+        <button type="button" onclick="openAddChannelModal()" class="btn-primary w-full min-h-11 rounded-xl px-4 py-3 text-sm font-semibold text-white">Configure a channel</button>
       </div>`;
   } else {
-    channelsMarkup = channels.map(ch => {
-      const name = escapeHtml(ch.channel_name || 'Unknown');
-      const price = parseFloat(ch.subscription_price || 0).toFixed(2);
-      const days = ch.duration_days || 30;
-      const id = escapeHtml(ch.id || '');
+    channelsMarkup = safeChannels.map(channel => {
+      const id = String(channel.id || '');
+      if (!/^[0-9a-f-]{36}$/i.test(id)) return '';
+      const name = escapeHtml(channel.channel_name || 'Untitled channel');
+      const description = escapeHtml(channel.description || 'No description added yet.');
+      const price = Number(channel.subscription_price || 0);
+      const duration = Number(channel.duration_days || 30);
+      const subscribersCount = Number(channel.active_subscribers || 0);
+      const rating = Number(channel.avg_rating || 0);
+      const reviews = Number(channel.review_count || 0);
+      const active = channel.is_active === true;
+      const durationLabel = duration === 9999 ? '9,999 days' : `${duration} days`;
       return `
-        <div class="glass-card p-5 mb-3">
-          <div class="flex justify-between items-start mb-4">
-            <div>
-              <h3 class="font-semibold text-white text-lg">${name}</h3>
-              <p class="text-slate-400 text-sm mt-1">${price} TON / ${days} days</p>
+        <article class="glass-card p-4 sm:p-5 mb-3">
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0 flex-1">
+              <div class="flex flex-wrap items-center gap-2"><h3 class="font-bold text-white text-base">${name}</h3><span class="text-[10px] px-2 py-1 rounded-full ${active ? 'bg-emerald-500/10 text-emerald-300' : 'bg-amber-500/10 text-amber-300'}">${active ? 'Published' : 'Setup incomplete'}</span></div>
+              <p class="text-xs text-slate-400 mt-1">${formatTon(price)} TON · ${durationLabel}</p>
+              <p class="text-xs text-slate-500 mt-2 line-clamp-2">${description}</p>
             </div>
-            <span class="badge ${ch.is_active ? 'bg-emerald-500/10 text-emerald-400' : 'bg-slate-500/10 text-slate-400'} px-3 py-1 rounded-full text-xs font-bold">${ch.is_active ? `● ${t('channels.active')}` : `○ ${t('channels.inactive')}`}</span>
+            <div class="text-right shrink-0"><p class="text-lg font-bold text-cyan-300">${subscribersCount.toLocaleString()}</p><p class="text-[10px] text-slate-500">subscribers</p></div>
           </div>
-          <div class="flex flex-wrap gap-2">
-            <button onclick="openEditModal('${id}')" class="btn-secondary px-4 py-2 rounded-xl text-xs">⚙️ ${t('channels.edit')}</button>
-            <button onclick="copyShareLink('${id}')" class="btn-secondary px-4 py-2 rounded-xl text-xs">📋 ${t('channels.copy')}</button>
-            <button onclick="forwardChannelLink('${id}', '${escapeHtml(ch.channel_name || '')}')" class="btn-secondary px-4 py-2 rounded-xl text-xs">📤 ${t('channels.forward')}</button>
-            <button onclick="deleteChannel('${id}')" class="bg-red-500/20 hover:bg-red-500/30 text-red-400 px-4 py-2 rounded-xl text-xs">⏸ Deactivate</button>
+          <div class="flex items-center justify-between gap-3 mt-3 pt-3 border-t border-slate-700/70">
+            <span class="text-xs text-amber-300">${reviews > 0 ? `⭐ ${rating.toFixed(1)} · ${reviews} reviews` : 'No reviews yet'}</span>
+            <div class="flex flex-wrap justify-end gap-2">
+              ${active ? `<button type="button" onclick="copyShareLink('${id}')" class="btn-secondary px-3 py-2 rounded-lg text-xs">Copy link</button>` : `<button type="button" onclick="openAddChannelModal('${id}')" class="btn-primary px-3 py-2 rounded-lg text-xs text-white">Finish setup</button>`}
+              <button type="button" onclick="openEditModal('${id}')" class="btn-secondary px-3 py-2 rounded-lg text-xs">Manage</button>
+            </div>
           </div>
-        </div>`;
+        </article>`;
     }).join('');
   }
 
@@ -1003,7 +1288,7 @@ function renderOwnerWithdrawalCard(data) {
         </div>
         <div class="text-right">
           <p class="text-xs text-slate-400">Available</p>
-          <p class="text-xl font-bold text-emerald-400 font-mono">${balance.toFixed(4)} TON</p>
+          <p class="text-xl font-bold text-emerald-400 font-mono">${formatTon(balance)} TON</p>
         </div>
       </div>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
@@ -1018,7 +1303,7 @@ function renderOwnerWithdrawalCard(data) {
       </div>
       <button onclick="requestOwnerWithdrawal()" ${balance < 1 ? 'disabled' : ''} class="btn-primary w-full px-4 py-3 rounded-xl text-sm font-semibold text-white disabled:opacity-40">Request withdrawal</button>
       <div id="withdrawal-request-status" class="text-xs mt-3"></div>
-      ${history.length ? `<div class="mt-4 border-t border-slate-700 pt-3"><h4 class="text-sm font-semibold text-white mb-2">Recent requests</h4><div class="space-y-2">${history.map(w => `<div class="flex justify-between gap-3 text-xs bg-slate-900/50 rounded-lg p-3"><span class="text-slate-300">${Number(w.amount || 0).toFixed(4)} TON</span><span class="text-slate-400">${escapeHtml(String(w.status || 'unknown'))}</span></div>`).join('')}</div></div>` : ''}
+      ${history.length ? `<div class="mt-4 border-t border-slate-700 pt-3"><h4 class="text-sm font-semibold text-white mb-2">Recent requests</h4><div class="space-y-2">${history.map(w => `<div class="flex justify-between gap-3 text-xs bg-slate-900/50 rounded-lg p-3"><span class="text-slate-300">${formatTon(w.amount || 0)} TON</span><span class="text-slate-400">${escapeHtml(String(w.status || 'unknown'))}</span></div>`).join('')}</div></div>` : ''}
     </div>`;
 }
 
@@ -1049,25 +1334,28 @@ window.requestOwnerWithdrawal = async function() {
 };
 
 // ================== ADD CHANNEL MODAL ==================
-window.openAddChannelModal = function() {
+window.openAddChannelModal = function(channelId = '') {
   const modal = document.getElementById('add-channel-modal');
   if (!modal) return;
+  const existing = channelId ? (window.ownerChannels || []).find(item => String(item.id) === String(channelId)) : null;
+  window.currentRegisterChannelId = existing?.id || null;
   
   modal.innerHTML = `
-    <div class="glass-card p-6 w-full max-w-md">
-      <h2 class="text-xl font-bold text-white mb-5">${t('channels.add')}</h2>
+    <div class="glass-card p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+      <h2 class="text-xl font-bold text-white mb-2">${existing ? 'Finish channel setup' : t('channels.add')}</h2>
+      <p class="text-xs text-slate-400 mb-5">Paste the private setup invite link sent by @${escapeHtml(BOT_USERNAME)} after you added the bot as an administrator.</p>
       <div class="space-y-4">
         <div>
           <label class="text-sm text-slate-400 mb-2 block">Channel Name</label>
-          <input type="text" id="add-channel-name" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white" placeholder="My Channel" />
+          <input type="text" id="add-channel-name" maxlength="100" value="${escapeHtml(existing?.channel_name || '')}" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white" placeholder="My Channel" />
         </div>
         <div>
           <label class="text-sm text-slate-400 mb-2 block">Invite Link</label>
-          <input type="text" id="add-channel-link" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white" placeholder="https://t.me/..." />
+          <input type="text" id="add-channel-link" maxlength="256" value="${escapeHtml(existing?.channel_invite_link || '')}" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white" placeholder="https://t.me/..." />
         </div>
         <div>
           <label class="text-sm text-slate-400 mb-2 block">Subscription Price (TON)</label>
-          <input type="number" id="add-channel-price" step="0.01" min="0.01" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white" placeholder="1.0" />
+          <input type="number" id="add-channel-price" step="0.000000001" min="0.000000001" max="1000000" value="${existing?.subscription_price ?? '0.1'}" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white" placeholder="1.0" />
         </div>
         <div>
           <label class="text-sm text-slate-400 mb-3 block">Subscription Duration</label>
@@ -1077,23 +1365,29 @@ window.openAddChannelModal = function() {
             <button onclick="selectDuration(90)" class="duration-btn bg-slate-800 border-2 border-slate-700 rounded-xl px-3 py-3 text-xs text-white hover:border-cyan-500 transition-all" data-days="90">3 Months</button>
             <button onclick="selectDuration(180)" class="duration-btn bg-slate-800 border-2 border-slate-700 rounded-xl px-3 py-3 text-xs text-white hover:border-cyan-500 transition-all" data-days="180">6 Months</button>
             <button onclick="selectDuration(365)" class="duration-btn bg-slate-800 border-2 border-slate-700 rounded-xl px-3 py-3 text-xs text-white hover:border-cyan-500 transition-all" data-days="365">1 Year</button>
-            <button onclick="selectDuration(9999)" class="duration-btn bg-slate-800 border-2 border-slate-700 rounded-xl px-3 py-3 text-xs text-white hover:border-cyan-500 transition-all" data-days="9999">Unlimited</button>
+            <button onclick="selectDuration(9999)" class="duration-btn bg-slate-800 border-2 border-slate-700 rounded-xl px-3 py-3 text-xs text-white hover:border-cyan-500 transition-all" data-days="9999">9,999 days</button>
           </div>
-          <input type="hidden" id="add-channel-duration" value="30" />
+          <input type="hidden" id="add-channel-duration" value="${Number(existing?.duration_days || 30)}" />
+        </div>
+        <div>
+          <label class="text-sm text-slate-400 mb-2 block" for="add-channel-description">Description</label>
+          <textarea id="add-channel-description" maxlength="1000" rows="3" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white" placeholder="Describe what subscribers receive, how often you post, and who this community is for.">${escapeHtml(existing?.description || '')}</textarea>
+          <p class="text-[11px] text-slate-500 mt-1">Up to 1,000 characters. A clear description helps visitors decide to subscribe.</p>
         </div>
         <div>
           <label class="text-sm text-slate-400 mb-2 block">Category</label>
           <select id="add-channel-category" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white">
-            <option value="crypto">💰 Cryptocurrency</option>
-            <option value="news">📰 News</option>
-            <option value="education">📚 Education</option>
-            <option value="entertainment">🎬 Entertainment</option>
-            <option value="sports">⚽ Sports</option>
-            <option value="technology">💻 Technology</option>
-            <option value="business">💼 Business</option>
-            <option value="lifestyle">🌟 Lifestyle</option>
-            <option value="gaming">🎮 Gaming</option>
-            <option value="music">🎵 Music</option>
+            <option value="crypto" ${existing?.category === 'crypto' ? 'selected' : ''}>💰 Cryptocurrency</option>
+            <option value="news" ${existing?.category === 'news' ? 'selected' : ''}>📰 News</option>
+            <option value="education" ${existing?.category === 'education' ? 'selected' : ''}>📚 Education</option>
+            <option value="entertainment" ${existing?.category === 'entertainment' ? 'selected' : ''}>🎬 Entertainment</option>
+            <option value="sports" ${existing?.category === 'sports' ? 'selected' : ''}>⚽ Sports</option>
+            <option value="technology" ${existing?.category === 'technology' ? 'selected' : ''}>💻 Technology</option>
+            <option value="business" ${existing?.category === 'business' ? 'selected' : ''}>💼 Business</option>
+            <option value="lifestyle" ${existing?.category === 'lifestyle' ? 'selected' : ''}>🌟 Lifestyle</option>
+            <option value="gaming" ${existing?.category === 'gaming' ? 'selected' : ''}>🎮 Gaming</option>
+            <option value="music" ${existing?.category === 'music' ? 'selected' : ''}>🎵 Music</option>
+            <option value="other" ${!existing?.category || existing?.category === 'other' ? 'selected' : ''}>✨ Other</option>
           </select>
         </div>
       </div>
@@ -1105,6 +1399,7 @@ window.openAddChannelModal = function() {
   `;
   
   modal.classList.remove('hidden');
+  window.selectDuration(Number(existing?.duration_days || 30));
 };
 
 window.selectDuration = function(days) {
@@ -1122,6 +1417,7 @@ window.selectDuration = function(days) {
 
 window.closeAddChannelModal = function() {
   document.getElementById('add-channel-modal')?.classList.add('hidden');
+  window.currentRegisterChannelId = null;
 };
 
 window.submitAddChannel = async function() {
@@ -1130,6 +1426,7 @@ window.submitAddChannel = async function() {
   const price = document.getElementById('add-channel-price')?.value;
   const duration = document.getElementById('add-channel-duration')?.value;
   const category = document.getElementById('add-channel-category')?.value;
+  const description = document.getElementById('add-channel-description')?.value?.trim() || '';
 
   if (!name || !link || !price) {
     Toast.error('Please fill all fields');
@@ -1143,9 +1440,10 @@ window.submitAddChannel = async function() {
       channel_invite_link: link,
       subscription_price: parseFloat(price),
       duration_days: parseInt(duration),
-      category: category
+      category: category,
+      description: description
     })
-  });
+  }, 0);
 
   if (res.error) {
     if (res.error.includes('administrator') || res.error.includes('admin')) {
@@ -1243,6 +1541,10 @@ window.openEditModal = async function(channelId) {
           <p class="text-xs text-cyan-400 mt-1" id="price-debug">Current value: 0</p>
         </div>
         <div>
+          <label class="text-sm text-slate-400 mb-2 block" for="edit-description">Channel description</label>
+          <textarea id="edit-description" maxlength="1000" rows="3" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white">${escapeHtml(channel.description || '')}</textarea>
+        </div>
+        <div>
           <label class="text-sm text-slate-400 mb-3 block">Subscription Duration</label>
           <div class="grid grid-cols-3 gap-2">
             <button onclick="selectEditDuration(7)" class="edit-duration-btn bg-slate-800 border-2 border-slate-700 rounded-xl px-3 py-3 text-xs text-white hover:border-cyan-500 transition-all" data-days="7">1 Week</button>
@@ -1250,7 +1552,7 @@ window.openEditModal = async function(channelId) {
             <button onclick="selectEditDuration(90)" class="edit-duration-btn bg-slate-800 border-2 border-slate-700 rounded-xl px-3 py-3 text-xs text-white hover:border-cyan-500 transition-all" data-days="90">3 Months</button>
             <button onclick="selectEditDuration(180)" class="edit-duration-btn bg-slate-800 border-2 border-slate-700 rounded-xl px-3 py-3 text-xs text-white hover:border-cyan-500 transition-all" data-days="180">6 Months</button>
             <button onclick="selectEditDuration(365)" class="edit-duration-btn bg-slate-800 border-2 border-slate-700 rounded-xl px-3 py-3 text-xs text-white hover:border-cyan-500 transition-all" data-days="365">1 Year</button>
-            <button onclick="selectEditDuration(9999)" class="edit-duration-btn bg-slate-800 border-2 border-slate-700 rounded-xl px-3 py-3 text-xs text-white hover:border-cyan-500 transition-all" data-days="9999">Unlimited</button>
+            <button onclick="selectEditDuration(9999)" class="edit-duration-btn bg-slate-800 border-2 border-slate-700 rounded-xl px-3 py-3 text-xs text-white hover:border-cyan-500 transition-all" data-days="9999">9,999 days</button>
           </div>
           <input type="hidden" id="edit-duration" value="30" />
         </div>
@@ -1266,6 +1568,7 @@ window.openEditModal = async function(channelId) {
   
   const priceInput = document.getElementById('edit-price');
   const durationInput = document.getElementById('edit-duration');
+  const descriptionInput = document.getElementById('edit-description');
   const channelNameInput = document.getElementById('edit-channel-name');
   const priceDebug = document.getElementById('price-debug');
   
@@ -1336,6 +1639,7 @@ window.closeEditModal = function() {
 window.submitEditChannel = async function() {
   const priceInput = document.getElementById('edit-price');
   const durationInput = document.getElementById('edit-duration');
+  const descriptionInput = document.getElementById('edit-description');
   
   if (!priceInput || !durationInput) {
     Toast.error('Form elements not found');
@@ -1375,9 +1679,10 @@ window.submitEditChannel = async function() {
     method: 'PUT',
     body: JSON.stringify({ 
       subscription_price: price, 
-      duration_days: duration 
+      duration_days: duration,
+      description: descriptionInput?.value?.trim() || ''
     })
-  });
+  }, 0);
   
   if (res.error) {
     Toast.error(res.error);
@@ -1445,7 +1750,7 @@ window.loadReferralDashboard = async function() {
       <div class="grid grid-cols-3 gap-3 mb-5">
         <div class="bg-slate-800/50 rounded-xl p-4 text-center">
           <p class="text-xs text-slate-400 mb-1">${t('referrals.balance')}</p>
-          <p class="text-xl font-bold text-emerald-400">${(stats.currentBalance || 0).toFixed(4)} TON</p>
+          <p class="text-xl font-bold text-emerald-400">${formatTon(stats.currentBalance || 0)} TON</p>
         </div>
         <div class="bg-slate-800/50 rounded-xl p-4 text-center">
           <p class="text-xs text-slate-400 mb-1">${t('referrals.referrals')}</p>
@@ -1453,7 +1758,7 @@ window.loadReferralDashboard = async function() {
         </div>
         <div class="bg-slate-800/50 rounded-xl p-4 text-center">
           <p class="text-xs text-slate-400 mb-1">${t('referrals.earned')}</p>
-          <p class="text-xl font-bold text-white">${(stats.totalCreditsEarned || 0).toFixed(4)} TON</p>
+          <p class="text-xl font-bold text-white">${formatTon(stats.totalCreditsEarned || 0)} TON</p>
         </div>
       </div>
       <div class="bg-gradient-to-r from-cyan-600/20 to-purple-600/20 border-2 border-cyan-500/30 rounded-xl p-5">
@@ -1477,64 +1782,65 @@ window.copyReferralLink = function() {
 // ================== ADMIN DASHBOARD ==================
 window.loadAdminDashboard = async function() {
   if (!window.isAdmin) { Toast.error('Admin only'); return; }
-  const container = document.getElementById('admin-dashboard');
-  if (!container) return;
-  container.innerHTML = '<div class="glass-card p-10 text-center text-slate-400 animate-pulse">Loading admin dashboard...</div>';
-  const requests = await apiFetch('/api/admin/withdrawals');
-  if (requests.error) {
-    container.innerHTML = `<div class="glass-card p-6"><p class="text-red-300">${escapeHtml(requests.error)}</p></div>`;
-    return;
+  const reportsContainer = document.getElementById('admin-reports');
+  const withdrawalsContainer = document.getElementById('admin-withdrawals');
+  if (!reportsContainer && !withdrawalsContainer) return;
+  if (reportsContainer) reportsContainer.innerHTML = '<div class="text-xs text-slate-500 animate-pulse">Loading reports…</div>';
+  if (withdrawalsContainer) withdrawalsContainer.innerHTML = '<div class="text-xs text-slate-500 animate-pulse">Loading withdrawals…</div>';
+
+  const [reports, withdrawals] = await Promise.all([
+    apiFetch('/api/admin/reports'),
+    apiFetch('/api/admin/withdrawals')
+  ]);
+
+  if (reportsContainer) {
+    if (reports?.error) {
+      reportsContainer.innerHTML = `<p class="text-sm text-red-300">${escapeHtml(reports.error)}</p>`;
+    } else {
+      const pendingReports = (Array.isArray(reports) ? reports : []).filter(report => !report.status || report.status === 'pending');
+      reportsContainer.innerHTML = pendingReports.length ? pendingReports.map(report => {
+        const id = String(report.id || '');
+        if (!/^[0-9a-f-]{36}$/i.test(id)) return '';
+        return `<article class="bg-slate-900/60 border border-slate-700 rounded-xl p-4 mb-3">
+          <div class="flex items-start justify-between gap-3"><div class="min-w-0"><p class="text-sm font-semibold text-white">${escapeHtml(report.channel?.channel_name || 'Unknown channel')}</p><p class="text-xs text-slate-500 mt-1">Reported by ${escapeHtml(report.reporter?.first_name || 'User')} · ${escapeHtml(report.reason || 'Other')}</p></div><span class="text-[10px] text-amber-300 bg-amber-500/10 px-2 py-1 rounded-full">Pending</span></div>
+          ${report.description ? `<p class="text-xs text-slate-300 mt-3">${escapeHtml(report.description)}</p>` : ''}
+          <div class="flex gap-2 mt-3"><button type="button" onclick="reviewAdminReport('${id}','dismiss')" class="btn-secondary px-3 py-2 rounded-lg text-xs">Dismiss</button><button type="button" onclick="reviewAdminReport('${id}','ban')" class="bg-red-500/15 text-red-300 px-3 py-2 rounded-lg text-xs">Ban channel & owner</button></div>
+        </article>`;
+      }).join('') : '<p class="text-sm text-slate-500">No pending reports.</p>';
+    }
   }
-  const items = Array.isArray(requests) ? requests : [];
-  container.innerHTML = `
-    <div class="glass-card p-5">
-      <div class="flex items-center justify-between mb-4">
-        <h3 class="text-lg font-bold text-white">💸 Escrow withdrawals</h3>
-        <button onclick="loadAdminDashboard()" class="btn-secondary px-3 py-2 rounded-lg text-xs">Refresh</button>
-      </div>
-      ${items.length ? items.map(w => {
-        const status = String(w.status || 'pending');
-        const id = String(w.id || '');
-        return `<div class="bg-slate-900/60 border border-slate-700 rounded-xl p-4 mb-3">
-          <div class="flex flex-wrap justify-between gap-3 mb-2">
-            <div>
-              <p class="text-white font-semibold">${Number(w.amount || 0).toFixed(4)} TON</p>
-              <p class="text-xs text-slate-400 break-all">${escapeHtml(String(w.wallet_address || ''))}</p>
-              <p class="text-[10px] text-slate-500 mt-1">Request ${escapeHtml(id)}</p>
-            </div>
-            <span class="text-xs rounded-full px-3 py-1 ${status === 'approved' ? 'bg-amber-500/10 text-amber-300' : 'bg-blue-500/10 text-blue-300'}">${escapeHtml(status)}</span>
-          </div>
-          ${status === 'pending' ? `<button onclick="approveOwnerWithdrawal('${escapeHtml(id)}')" class="btn-primary px-4 py-2 rounded-lg text-xs text-white">Approve / show transfer instructions</button>` : ''}
-          ${status === 'approved' ? `<p class="text-xs text-amber-300 mb-2">Approved. After sending exactly ${Number(w.amount || 0).toFixed(9)} TON to this wallet, enter the outgoing TON Center transaction hash below.</p>
-            <div class="flex gap-2"><input id="payout-hash-${escapeHtml(id)}" type="text" placeholder="Outgoing transaction hash" class="flex-1 min-w-0 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-mono"><button onclick="completeOwnerWithdrawal('${escapeHtml(id)}')" class="btn-primary px-3 py-2 rounded-lg text-xs text-white">Verify payout</button></div>` : ''}
-        </div>`;
-      }).join('') : '<p class="text-sm text-slate-400">No pending or approved withdrawals.</p>'}
-    </div>`;
+
+  if (withdrawalsContainer) {
+    if (withdrawals?.error) {
+      withdrawalsContainer.innerHTML = `<p class="text-sm text-red-300">${escapeHtml(withdrawals.error)}</p>`;
+    } else {
+      const items = Array.isArray(withdrawals) ? withdrawals : [];
+      withdrawalsContainer.innerHTML = items.length ? items.map(withdrawal => {
+        const status = String(withdrawal.status || 'pending');
+        const id = String(withdrawal.id || '');
+        if (!/^[0-9a-f-]{36}$/i.test(id)) return '';
+        return `<article class="bg-slate-900/60 border border-slate-700 rounded-xl p-4 mb-3">
+          <div class="flex flex-wrap justify-between gap-3 mb-2"><div><p class="text-white font-semibold">${formatTon(withdrawal.amount || 0)} TON</p><p class="text-xs text-slate-400 break-all">${escapeHtml(String(withdrawal.wallet_address || ''))}</p><p class="text-[10px] text-slate-500 mt-1">Request ${escapeHtml(id)}</p></div><span class="text-xs rounded-full px-3 py-1 ${status === 'approved' ? 'bg-amber-500/10 text-amber-300' : 'bg-blue-500/10 text-blue-300'}">${escapeHtml(status)}</span></div>
+          ${status === 'pending' ? `<button type="button" onclick="approveOwnerWithdrawal('${id}')" class="btn-primary px-4 py-2 rounded-lg text-xs text-white">Approve / show transfer instructions</button>` : ''}
+          ${status === 'approved' ? `<p class="text-xs text-amber-300 mb-2">Approved. After sending exactly ${Number(withdrawal.amount || 0).toFixed(9)} TON, enter the outgoing TON Center transaction hash below.</p><div class="flex gap-2"><input id="payout-hash-${id}" type="text" placeholder="Outgoing transaction hash" class="flex-1 min-w-0 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-mono"><button type="button" onclick="completeOwnerWithdrawal('${id}')" class="btn-primary px-3 py-2 rounded-lg text-xs text-white">Verify payout</button></div>` : ''}
+        </article>`;
+      }).join('') : '<p class="text-sm text-slate-500">No pending or approved withdrawals.</p>';
+    }
+  }
 };
 
-window.approveOwnerWithdrawal = async function(withdrawalId) {
-  const result = await apiFetch(`/api/admin/withdrawals/${encodeURIComponent(withdrawalId)}/approve`, {
+window.reviewAdminReport = async function(reportId, action) {
+  if (!window.isAdmin || !['ban', 'dismiss'].includes(action)) return;
+  const confirmation = action === 'ban'
+    ? 'Ban this channel and its owner? This deactivates the channel and suspends the owner.'
+    : 'Dismiss this report?';
+  if (!window.confirm(confirmation)) return;
+  const result = await apiFetch(`/api/admin/reports/${encodeURIComponent(reportId)}/review`, {
     method: 'POST',
-    body: JSON.stringify({})
+    body: JSON.stringify({ action })
   }, 0);
   if (result.error) { Toast.error(result.error); return; }
-  const instruction = result.transfer_instructions;
-  if (instruction) {
-    alert(`Send ${instruction.amount} TON\nFrom: ${instruction.from}\nTo: ${instruction.to}\nThen return here and submit the outgoing transaction hash.`);
-  }
-  Toast.success('Withdrawal approved; payout is not yet marked complete.');
-  await window.loadAdminDashboard();
-};
-
-window.completeOwnerWithdrawal = async function(withdrawalId) {
-  const hash = document.getElementById(`payout-hash-${withdrawalId}`)?.value?.trim();
-  if (!hash) { Toast.error('Enter the outgoing transaction hash.'); return; }
-  const result = await apiFetch(`/api/admin/withdrawals/${encodeURIComponent(withdrawalId)}/complete`, {
-    method: 'POST',
-    body: JSON.stringify({ transaction_hash: hash })
-  }, 0);
-  if (result.error) { Toast.error(result.error); return; }
-  Toast.success('Outgoing payment verified and withdrawal recorded.');
+  Toast.success(action === 'ban' ? 'Channel and owner action completed.' : 'Report dismissed.');
   await window.loadAdminDashboard();
 };
 
@@ -1559,7 +1865,7 @@ window.loadAdminChannels = async function() {
   container.innerHTML = channels.map(ch => {
     const name = escapeHtml(ch.channel_name || 'Unknown');
     const ownerName = escapeHtml(ch.owner_name || 'Unknown');
-    const price = parseFloat(ch.subscription_price || 0).toFixed(2);
+    const price = formatTon(ch.subscription_price || 0);
     const days = ch.duration_days || 30;
     const subs = ch.active_subscribers || 0;
     const rating = ch.avg_rating || 0;
@@ -1586,7 +1892,26 @@ window.loadAdminChannels = async function() {
 // ================== MODALS ==================
 window.openRating = function(channelId) {
   window.currentRatingChannelId = channelId;
+  window.currentRating = 0;
+  const stars = document.getElementById('star-rating');
+  if (stars) {
+    stars.innerHTML = [1,2,3,4,5].map(value => `<button type="button" class="rating-star text-3xl text-slate-600 hover:text-amber-300 transition" data-rating="${value}" aria-label="Rate ${value} out of 5" aria-pressed="false" onclick="selectRating(${value})">★</button>`).join('');
+  }
+  const comment = document.getElementById('rating-comment');
+  if (comment) comment.value = '';
   document.getElementById('rating-modal')?.classList.remove('hidden');
+};
+
+window.selectRating = function(value) {
+  const rating = Number(value);
+  if (!Number.isInteger(rating) || rating < 1 || rating > 5) return;
+  window.currentRating = rating;
+  document.querySelectorAll('.rating-star').forEach(button => {
+    const selected = Number(button.dataset.rating) <= rating;
+    button.classList.toggle('text-amber-300', selected);
+    button.classList.toggle('text-slate-600', !selected);
+    button.setAttribute('aria-pressed', String(Number(button.dataset.rating) === rating));
+  });
 };
 
 window.closeRating = function() {
@@ -1595,10 +1920,14 @@ window.closeRating = function() {
 
 window.submitRating = async function() {
   if (!window.currentRating || !window.currentRatingChannelId) { Toast.error('Select a rating'); return; }
-  const comment = document.getElementById('rating-comment')?.value || '';
-  const res = await apiFetch('/api/reviews', { method: 'POST', body: JSON.stringify({ channel_id: window.currentRatingChannelId, rating: window.currentRating, comment }) });
+  const comment = document.getElementById('rating-comment')?.value?.trim() || '';
+  if (comment.length > 1000) { Toast.error('Review must be 1,000 characters or fewer.'); return; }
+  const buttons = document.querySelectorAll('#rating-modal button');
+  buttons.forEach(button => button.disabled = true);
+  const res = await apiFetch('/api/reviews', { method: 'POST', body: JSON.stringify({ channel_id: window.currentRatingChannelId, rating: window.currentRating, comment }) }, 0);
+  buttons.forEach(button => button.disabled = false);
   if (res.error) Toast.error(res.error);
-  else { Toast.success('Rating submitted!'); window.closeRating(); }
+  else { Toast.success('Rating submitted!'); window.closeRating(); await window.loadSubscriptions(); }
 };
 
 window.openReport = function(channelId) {
@@ -1902,10 +2231,8 @@ async function init() {
     const discoverTab = document.getElementById('nav-discover');
     if (discoverTab) discoverTab.style.setProperty('display', 'flex', 'important');
 
-    // Load notifications
-    loadNotifications();
-    // Refresh notifications every 30 seconds
-    setInterval(loadNotifications, 30000);
+    // Initial unread count is included in /api/auth/validate, avoiding a separate
+    // Edge Function invocation at startup. Refresh only when returning to foreground.
 
     const urlStart = new URLSearchParams(window.location.search).get('startapp') || new URLSearchParams(window.location.search).get('start');
     const startParam = TG.initDataUnsafe?.start_param || urlStart;
@@ -1936,6 +2263,10 @@ async function init() {
   }
 }
 
-window.onload = function() { init(); };
-console.log('MySubHub app.js v3.4.1 - coordinated access and referral repairs');
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) window.loadNotifications?.(false);
+});
+window.addEventListener('focus', () => window.loadNotifications?.(false));
+window.addEventListener('load', () => { init(); }, { once: true });
+console.log('MySubHub app.js v3.5.1 - low-resource marketplace UX release');
 console.log('Language:', currentLanguage);
