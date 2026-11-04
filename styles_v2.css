@@ -546,3 +546,10 @@ button:disabled {
 @media(prefers-reduced-motion:reduce){.phase2-featured-card,.phase2-detail-shell{transition:none}}
 
 .phase2-avatar-wrap{position:relative;padding:0;overflow:hidden}.phase2-avatar-wrap>img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}.phase2-avatar-wrap>.phase2-avatar-fallback{position:absolute;inset:0}
+
+
+/* Phase 3: creator profile, conversion funnel and promotional sharing */
+.phase3-creator-profile{background:linear-gradient(120deg,rgba(6,78,99,.16),rgba(30,41,59,.75));border-color:rgba(34,211,238,.18)}
+.phase3-creator-avatar-img,.phase3-creator-avatar-fallback{width:48px;height:48px;flex:0 0 48px;border-radius:50%;object-fit:cover;border:1px solid rgba(103,232,249,.28);background:linear-gradient(135deg,#0e7490,#4338ca);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:19px}
+.phase3-funnel-panel{border:1px solid rgba(34,211,238,.18);border-radius:1rem;padding:1rem;background:linear-gradient(135deg,rgba(8,47,73,.28),rgba(15,23,42,.7))}
+.phase3-creator-profile textarea{resize:vertical;min-height:100px}
