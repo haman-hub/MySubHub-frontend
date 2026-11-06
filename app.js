@@ -1105,24 +1105,66 @@ window.loadSubscriptions = async function() {
     return;
   }
 
+  // A renewal is stored as a linked subscription period. Render one card per
+  // channel, while retaining the full payment amount and the effective end date.
+  const now = Date.now();
+  const byChannel = new Map();
+  for (const row of subs) {
+    const key = String(row.channel_id || '');
+    if (!byChannel.has(key)) byChannel.set(key, []);
+    byChannel.get(key).push(row);
+  }
+
+  const displayRows = Array.from(byChannel.values()).map(rows => {
+    rows.sort((a, b) => Date.parse(a.start_date || a.created_at || 0) - Date.parse(b.start_date || b.created_at || 0));
+    const activeRows = rows.filter(row => row.status === 'active' && Date.parse(row.end_date || '') > now);
+    const currentRows = activeRows.filter(row => !row.start_date || Date.parse(row.start_date) <= now);
+    const futureRows = activeRows.filter(row => row.start_date && Date.parse(row.start_date) > now);
+    const latestActive = [...activeRows].sort((a, b) => Date.parse(b.end_date || '') - Date.parse(a.end_date || ''))[0];
+    const latestHistory = [...rows].sort((a, b) => Date.parse(b.end_date || '') - Date.parse(a.end_date || ''))[0];
+    const primary = latestActive || latestHistory;
+    const current = currentRows.sort((a, b) => Date.parse(b.end_date || '') - Date.parse(a.end_date || ''))[0] || null;
+    const latestLink = [...activeRows].sort((a, b) => Date.parse(b.end_date || '') - Date.parse(a.end_date || ''))
+      .find(row => typeof row.access_invite_link === 'string' && row.access_invite_link);
+    const totalPaid = rows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+    return {
+      ...primary,
+      channel: primary.channel || rows.find(row => row.channel)?.channel || {},
+      id: (latestLink || primary).id,
+      access_invite_link: latestLink?.access_invite_link || null,
+      amount: totalPaid,
+      end_date: latestActive ? latestActive.end_date : latestHistory.end_date,
+      status: latestActive ? 'active' : latestHistory.status,
+      is_expired: activeRows.length === 0,
+      is_active_now: currentRows.length > 0,
+      has_scheduled_renewal: Boolean(current && futureRows.length),
+      current_period_end_date: current?.end_date || null,
+      scheduled_start_date: futureRows.length ? futureRows[0].start_date : null,
+      scheduled_end_date: latestActive?.end_date || null,
+      payment_period_count: rows.length,
+      channel_id: primary.channel_id,
+    };
+  }).sort((a, b) => Date.parse(b.end_date || '') - Date.parse(a.end_date || ''));
+
   let active = 0, expiring = 0, spent = 0;
-  
-  list.innerHTML = subs.map(s => {
+  list.innerHTML = displayRows.map(s => {
     const ch = s.channel || {};
     const endDate = new Date(s.end_date);
-    const daysLeft = Math.ceil((endDate - Date.now()) / 86400000);
+    const daysLeft = Math.ceil((endDate - now) / 86400000);
     const isExpired = s.is_expired || s.status === 'expired' || daysLeft < 0;
-    const isExpiring = !isExpired && daysLeft >= 0 && daysLeft <= 7;
-    
-    if (!isExpired) {
+    const isUpcoming = !isExpired && !s.is_active_now;
+    const isExpiring = !isExpired && !isUpcoming && daysLeft >= 0 && daysLeft <= 7;
+
+    if (!isExpired && !isUpcoming) {
       active++;
       if (isExpiring) expiring++;
     }
-    spent += parseFloat(s.amount || 0);
-    
+    spent += Number(s.amount || 0);
+
     const inviteLink = escapeHtml(s.access_invite_link || '');
     const name = escapeHtml(ch.channel_name || 'Unknown');
     const channelId = s.channel_id;
+    const finalDate = Number.isFinite(endDate.getTime()) ? endDate.toLocaleDateString() : '—';
 
     if (isExpired) {
       return `
@@ -1132,24 +1174,36 @@ window.loadSubscriptions = async function() {
               <h3 class="font-semibold text-slate-400 text-lg">${name}</h3>
               ${ch.is_verified ? '<span class="text-blue-400 text-sm" title="Verified">✓</span>' : ''}
             </div>
-            <span class="badge bg-red-500/20 text-red-400 border border-red-500/30 px-3 py-1 rounded-full text-xs font-bold">
-              ⚠️ ${t('subscriptions.expired')}
-            </span>
+            <span class="badge bg-red-500/20 text-red-400 border border-red-500/30 px-3 py-1 rounded-full text-xs font-bold">⚠️ ${t('subscriptions.expired')}</span>
           </div>
-          <p class="text-slate-500 text-sm mb-4">
-            ${t('subscriptions.expired')}: ${endDate.toLocaleDateString()} • ${formatTon(s.amount || 0)} TON
-          </p>
+          <p class="text-slate-500 text-sm mb-4">${t('subscriptions.expired')}: ${finalDate} · Total paid: ${formatTon(s.amount || 0)} TON</p>
           <div class="flex gap-2 flex-wrap">
-            <button onclick="renewSubscription('${channelId}')" class="btn-primary px-5 py-2.5 rounded-xl text-sm text-white font-semibold flex-1">
-              🔄 ${t('subscriptions.renew')}
-            </button>
-            <button onclick="openReport('${channelId}')" class="btn-secondary px-4 py-2.5 rounded-xl text-sm">
-              🚩 ${t('subscriptions.report')}
-            </button>
+            <button onclick="renewSubscription('${channelId}')" class="btn-primary px-5 py-2.5 rounded-xl text-sm text-white font-semibold flex-1">🔄 ${t('subscriptions.renew')}</button>
+            <button onclick="openReport('${channelId}')" class="btn-secondary px-4 py-2.5 rounded-xl text-sm">🚩 ${t('subscriptions.report')}</button>
           </div>
-        </div>
-      `;
+        </div>`;
     }
+
+    if (isUpcoming) {
+      return `
+        <div class="glass-card p-5 mb-3 border border-sky-500/30">
+          <div class="flex justify-between items-start mb-3">
+            <h3 class="font-semibold text-white text-lg">${name}</h3>
+            <span class="badge bg-sky-500/10 text-sky-300 px-3 py-1 rounded-full text-xs font-bold">Upcoming</span>
+          </div>
+          <p class="text-slate-300 text-sm mb-2">Your paid period begins ${new Date(s.scheduled_start_date || s.start_date).toLocaleDateString()} and runs through ${finalDate}.</p>
+          <p class="text-slate-500 text-xs">Total paid: ${formatTon(s.amount || 0)} TON</p>
+          <div class="flex gap-2 mt-3">
+            ${inviteLink ? `<button onclick="joinChannel('${inviteLink}')" class="btn-secondary px-4 py-2 rounded-xl text-xs">🔗 Personal invite link</button>` : ''}
+            <button onclick="openReport('${channelId}')" class="btn-secondary px-4 py-2 rounded-xl text-xs">🚩 ${t('subscriptions.report')}</button>
+          </div>
+        </div>`;
+    }
+
+    const currentEnd = s.current_period_end_date ? new Date(s.current_period_end_date).toLocaleDateString() : null;
+    const accessText = s.has_scheduled_renewal
+      ? `Current access through ${currentEnd}; renewal scheduled through ${finalDate}.`
+      : `Expires: ${finalDate} · ${formatTon(s.amount || 0)} TON total paid`;
 
     return `
       <div class="glass-card p-5 mb-3 hover:border-blue-500/50 transition-all">
@@ -1158,21 +1212,20 @@ window.loadSubscriptions = async function() {
             <h3 class="font-semibold text-white text-lg">${name}</h3>
             ${ch.is_verified ? '<span class="text-blue-400 text-sm" title="Verified">✓</span>' : ''}
           </div>
-          <span class="badge ${isExpiring ? 'bg-amber-500/10 text-amber-400' : 'bg-emerald-500/10 text-emerald-400'} px-3 py-1 rounded-full text-xs font-bold">
-            ${isExpiring ? `⚠️ ${daysLeft}d ${t('subscriptions.expiring')}` : `✓ ${t('subscriptions.active')}`}
+          <span class="badge ${s.has_scheduled_renewal ? 'bg-sky-500/10 text-sky-300' : isExpiring ? 'bg-amber-500/10 text-amber-400' : 'bg-emerald-500/10 text-emerald-400'} px-3 py-1 rounded-full text-xs font-bold">
+            ${s.has_scheduled_renewal ? '✓ Renewal scheduled' : isExpiring ? `⚠️ ${daysLeft}d ${t('subscriptions.expiring')}` : `✓ ${t('subscriptions.active')}`}
           </span>
         </div>
-        <p class="text-slate-400 text-sm mb-4">${t('subscriptions.expired')}: ${endDate.toLocaleDateString()} • ${formatTon(s.amount || 0)} TON</p>
+        <p class="text-slate-400 text-sm mb-4">${accessText}</p>
         <div class="flex gap-2 flex-wrap">
           ${inviteLink ? `<button onclick="joinChannel('${inviteLink}')" class="btn-primary px-4 py-2 rounded-xl text-xs text-white">📺 ${t('subscriptions.open')}</button>` : `<button onclick="requestSubscriptionAccessLink('${escapeHtml(s.id)}')" class="btn-primary px-4 py-2 rounded-xl text-xs text-white">🔗 Get access link</button>`}
-          <button onclick="event.stopPropagation();renewSubscription('${channelId}')" class="btn-secondary px-4 py-2 rounded-xl text-xs">🔄 ${t('subscriptions.renew')}</button>
-          <button onclick="event.stopPropagation();openRating('${channelId}')" class="btn-secondary px-4 py-2 rounded-xl text-xs">⭐ ${t('subscriptions.rate')}</button>
-          <button onclick="event.stopPropagation();openReport('${channelId}')" class="btn-secondary px-4 py-2 rounded-xl text-xs">🚩 ${t('subscriptions.report')}</button>
+          <button onclick="renewSubscription('${channelId}')" class="btn-secondary px-4 py-2 rounded-xl text-xs">🔄 Extend</button>
+          <button onclick="openRating('${channelId}')" class="btn-secondary px-4 py-2 rounded-xl text-xs">⭐ ${t('subscriptions.rate')}</button>
+          <button onclick="openReport('${channelId}')" class="btn-secondary px-4 py-2 rounded-xl text-xs">🚩 ${t('subscriptions.report')}</button>
         </div>
-      </div>
-    `;
+      </div>`;
   }).join('');
-  
+
   updateSubStats(active, expiring, spent);
 };
 
@@ -1294,6 +1347,7 @@ window.loadPurchasePage = async function(channelId, preloadedChannel = null) {
           <span class="text-base font-semibold text-white">${days} ${t('purchase.days')}</span>
         </div>
       </div>
+      <p class="text-xs text-slate-400 mb-4">Renewing early? Your existing access remains active. The new paid period starts when your current period ends, so you do not lose any remaining time.</p>
       <div id="purchase-credits-section" class="mb-5"></div>
       <button onclick="initiatePurchase('${channelId}')" id="purchase-btn" class="btn-primary w-full py-4 rounded-xl text-white font-bold text-base">
         💎 ${t('purchase.pay_with_ton')}
@@ -1369,7 +1423,7 @@ window.initiatePurchase = async function(channelId) {
           status.innerHTML = `<p class="text-emerald-400 text-sm text-center">✅ Subscription activated. Referral credit is still being finalized.</p>
             <button class="btn-secondary w-full px-4 py-3 rounded-xl text-sm mt-3" onclick="retrySubscriptionConfirmation('${escapeHtml(channelId)}','${escapeHtml(initiation.nonce)}')">🔄 Retry referral confirmation</button>`;
         } else {
-          status.innerHTML = '<p class="text-emerald-400 text-sm text-center">✅ Subscription activated with credits!</p>';
+          status.innerHTML = confirm.renewal_scheduled ? '<p class="text-emerald-400 text-sm text-center">✅ Renewal confirmed. Your current access continues and the new period is scheduled.</p>' : '<p class="text-emerald-400 text-sm text-center">✅ Subscription activated with credits!</p>';
           Toast.success('Subscription activated!');
           setTimeout(() => switchPage('subscriptions'), 2000);
         }
@@ -1423,7 +1477,7 @@ window.initiatePurchase = async function(channelId) {
         status.innerHTML = `<p class="text-emerald-400 text-sm text-center">✅ Subscription activated. Referral credit is still being finalized.</p>
           <button class="btn-secondary w-full px-4 py-3 rounded-xl text-sm mt-3" onclick="retrySubscriptionConfirmation('${escapeHtml(channelId)}','${escapeHtml(initiation.nonce)}')">🔄 Retry referral confirmation</button>`;
       } else {
-        status.innerHTML = '<p class="text-emerald-400 text-sm text-center">✅ Subscription activated!</p>';
+        status.innerHTML = confirmation.renewal_scheduled ? '<p class="text-emerald-400 text-sm text-center">✅ Renewal confirmed. Your current access continues and the new period is scheduled.</p>' : '<p class="text-emerald-400 text-sm text-center">✅ Subscription activated!</p>';
         Toast.success('Subscription activated!');
         setTimeout(() => switchPage('subscriptions'), 2000);
       }
@@ -1450,7 +1504,7 @@ window.retrySubscriptionConfirmation = async function(channelId, nonce) {
     if (status) status.innerHTML = `<p class="text-emerald-400 text-sm text-center">✅ Subscription is active. Referral credit is still pending; retrying does not charge you again.</p>
       <button class="btn-secondary w-full px-4 py-3 rounded-xl text-sm mt-3" onclick="retrySubscriptionConfirmation('${escapeHtml(channelId)}','${escapeHtml(nonce)}')">🔄 Retry referral confirmation</button>`;
   } else if (result.success) {
-    if (status) status.innerHTML = '<p class="text-emerald-400 text-sm text-center">✅ Subscription activated!</p>';
+    if (status) status.innerHTML = result.renewal_scheduled ? '<p class="text-emerald-400 text-sm text-center">✅ Renewal confirmed. Your current access continues and the new period is scheduled.</p>' : '<p class="text-emerald-400 text-sm text-center">✅ Subscription activated!</p>';
     Toast.success('Subscription activated!');
     setTimeout(() => switchPage('subscriptions'), 1500);
   } else {
