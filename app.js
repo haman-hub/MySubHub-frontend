@@ -2191,14 +2191,64 @@ window.loadAdminDashboard = async function() {
   if (!window.isAdmin) { Toast.error('Admin only'); return; }
   const reportsContainer = document.getElementById('admin-reports');
   const withdrawalsContainer = document.getElementById('admin-withdrawals');
-  if (!reportsContainer && !withdrawalsContainer) return;
+  const financialContainer = document.getElementById('admin-financial-summary');
+  if (!reportsContainer && !withdrawalsContainer && !financialContainer) return;
   if (reportsContainer) reportsContainer.innerHTML = '<div class="text-xs text-slate-500 animate-pulse">Loading reports…</div>';
   if (withdrawalsContainer) withdrawalsContainer.innerHTML = '<div class="text-xs text-slate-500 animate-pulse">Loading withdrawals…</div>';
+  if (financialContainer) financialContainer.innerHTML = '<div class="text-xs text-slate-500 animate-pulse">Loading financials…</div>';
 
-  const [reports, withdrawals] = await Promise.all([
+  const [reports, withdrawals, financialResponse] = await Promise.all([
     apiFetch('/api/admin/reports'),
-    apiFetch('/api/admin/withdrawals')
+    apiFetch('/api/admin/withdrawals'),
+    apiFetch('/api/admin/financials')
   ]);
+
+  if (financialContainer) {
+    if (financialResponse?.error) {
+      financialContainer.innerHTML = `<p class="text-sm text-red-300">${escapeHtml(financialResponse.error)}</p>`;
+    } else {
+      const f = financialResponse?.financials || {};
+      const tx = f.transactions || {};
+      const wd = f.withdrawals || {};
+      const cr = f.credits || {};
+      const rec = f.reconciliation || {};
+      const flags = Number(rec.total_flags || 0);
+      const wallet = financialResponse?.wallet_balance;
+      const metric = (label, value, note = '') => `<div class="bg-slate-900/60 border border-slate-700/80 rounded-xl p-3 min-w-0"><p class="text-[10px] uppercase tracking-wide text-slate-500">${label}</p><p class="text-lg font-bold text-white mt-1 break-words">${value}</p>${note ? `<p class="text-[10px] text-slate-500 mt-1">${note}</p>` : ''}</div>`;
+      const detail = (label, value) => `<div class="flex justify-between gap-3 text-xs py-1.5 border-b border-slate-800 last:border-0"><span class="text-slate-400">${label}</span><strong class="text-slate-200 tabular-nums">${Number(value || 0).toLocaleString()}</strong></div>`;
+      const walletMetric = wallet
+        ? metric('Platform wallet balance', `${formatTon(wallet.balance_ton)} TON`, `${escapeHtml(String(financialResponse.network || '').toUpperCase())} · live on-chain snapshot`)
+        : metric('Platform wallet balance', 'Unavailable', escapeHtml(financialResponse.wallet_balance_error || 'TON Center balance lookup failed'));
+
+      financialContainer.innerHTML = `
+        <div class="grid grid-cols-2 lg:grid-cols-3 gap-2">
+          ${metric('Gross value booked', `${formatTon(tx.gross_value_ton || 0)} TON`, `${Number(tx.count || 0).toLocaleString()} recorded payments`)}
+          ${metric('Cash received on-chain', `${formatTon(tx.cash_received_ton || 0)} TON`, `Credits redeemed: ${formatTon(tx.credits_redeemed_ton || 0)} TON`)}
+          ${metric('Platform fees booked', `${formatTon(tx.platform_fees_ton || 0)} TON`, '1% fee recorded at checkout')}
+          ${metric('Creator earnings booked', `${formatTon(tx.creator_earnings_ton || 0)} TON`)}
+          ${metric('Creator payouts completed', `${formatTon(tx.creator_paid_ton || 0)} TON`)}
+          ${metric('Unpaid creator liability', `${formatTon(tx.creator_unpaid_ton || 0)} TON`, 'Includes pending and approved withdrawal reservations')}
+          ${metric('Referral credit liability', `${formatTon(cr.outstanding_liability_ton || 0)} TON`, 'Outstanding redeemable credits')}
+          ${metric('Pending withdrawals', `${formatTon(wd.pending_amount_ton || 0)} TON`, `${Number(wd.pending_count || 0)} requests`)}
+          ${metric('Approved withdrawals', `${formatTon(wd.approved_amount_ton || 0)} TON`, `${Number(wd.approved_count || 0)} awaiting payout verification`)}
+          ${walletMetric}
+        </div>
+        <div class="mt-4 rounded-xl border ${flags > 0 ? 'border-amber-500/40 bg-amber-500/5' : 'border-emerald-500/30 bg-emerald-500/5'} p-3">
+          <div class="flex flex-wrap justify-between gap-2 items-center mb-2"><strong class="text-sm ${flags > 0 ? 'text-amber-300' : 'text-emerald-300'}">${flags > 0 ? 'Reconciliation needs review' : 'No counted reconciliation exceptions'}</strong><span class="text-xs text-slate-300">${flags.toLocaleString()} flagged checks</span></div>
+          ${detail('Fee split mismatches', rec.platform_split_mismatches)}
+          ${detail('Cash + credits mismatches', rec.cash_credit_mismatches)}
+          ${detail('Paid amount vs allocation ledger', rec.paid_allocation_mismatches)}
+          ${detail('Processed withdrawal allocation mismatches', rec.processed_withdrawal_mismatches)}
+          ${detail('Open withdrawals with allocations', rec.open_withdrawal_allocation_errors)}
+          ${detail('Referral ledger gaps', rec.referral_ledger_missing)}
+          ${detail('Duplicate open withdrawal owners', rec.duplicate_open_withdrawal_owners)}
+          ${detail('Negative credit lots', cr.negative_lot_count)}
+          <p class="text-[10px] leading-relaxed text-slate-500 mt-2">Pending referral jobs: ${Number(rec.referral_jobs_pending || 0).toLocaleString()} · Failed referral jobs: ${Number(rec.referral_jobs_failed || 0).toLocaleString()} · Historical referred subscriptions without a referral-history row: ${Number(rec.subscriptions_without_referral_history || 0).toLocaleString()}.</p>
+        </div>
+        <p class="text-[10px] leading-relaxed text-slate-500 mt-3">These are lifetime database totals. The live wallet balance is a point-in-time blockchain balance, not a reconciled statement. Pending and approved withdrawals are already included in unpaid creator liability and must not be subtracted twice.</p>
+      `;
+    }
+  }
 
   if (reportsContainer) {
     if (reports?.error) {
