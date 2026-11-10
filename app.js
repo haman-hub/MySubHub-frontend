@@ -1856,7 +1856,7 @@ function showBotAdminRequiredDialog(errorMessage) {
           <li>Open your Telegram channel</li>
           <li>Go to Channel Settings → Administrators</li>
           <li>Click "Add Administrator"</li>
-          <li>Search for your bot and select it</li>
+          <li>Search for @MySubsHub_bot bot and select it</li>
           <li>Grant necessary permissions</li>
           <li>Click "Save" or "Done"</li>
           <li>Try adding the channel again</li>
