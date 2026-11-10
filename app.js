@@ -1,4 +1,4 @@
-// MySubHub Frontend v3.7.0 - Phase 3 creator growth and retention
+// MySubHub Frontend v3.9.0 - Phase 5.1 creator payouts, Discovery visibility, and responsive layout
 // Phase 1: Low-resource API and discovery optimization
 // Phase 2: Channel detail pages, creator analytics, and marketplace sharing
 
@@ -298,7 +298,7 @@ function apiCacheTtl(url) {
   if (path === '/api/withdrawals/my') return 15_000;
   if (path === '/api/referrals/stats') return 30_000;
   if (path === '/api/notifications/my') return 45_000;
-  if (path === '/api/admin/withdrawals' || path === '/api/admin/reports') return 10_000;
+  if (path === '/api/admin/withdrawals' || path === '/api/admin/creator-payouts' || path === '/api/admin/reports') return 10_000;
   if (/^\/api\/channels\/[0-9a-f-]{36}$/i.test(path)) return 60_000;
   if (path === '/api/admin/channels') return 30_000;
   return 0;
@@ -313,7 +313,7 @@ function invalidateApiCacheForMutation(url) {
   if (path.startsWith('/api/reviews')) invalidationGroups.push('/api/channels/discover', '/api/channels/discover-v2', '/api/channels/', '/api/owner/dashboard', '/api/admin/channels');
   if (path.startsWith('/api/reports')) invalidationGroups.push('/api/admin/reports');
   if (path.startsWith('/api/admin/reports')) invalidationGroups.push('/api/admin/reports', '/api/admin/channels', '/api/channels/discover');
-  if (path.startsWith('/api/admin/withdrawals')) invalidationGroups.push('/api/admin/withdrawals', '/api/owner/dashboard');
+  if (path.startsWith('/api/admin/withdrawals') || path.startsWith('/api/admin/creator-payouts')) invalidationGroups.push('/api/admin/withdrawals', '/api/admin/creator-payouts', '/api/owner/dashboard');
   if (path.startsWith('/api/admin/channels')) invalidationGroups.push('/api/admin/channels', '/api/channels/discover-v2');
   if (path.startsWith('/api/notifications')) invalidationGroups.push('/api/notifications/my');
   if (path.startsWith('/api/auth/wallet')) invalidationGroups.push('/api/auth/validate', '/api/withdrawals/my');
@@ -1529,7 +1529,7 @@ window.loadOwnerDashboard = async function() {
   }
 
   const safeChannels = Array.isArray(dashboard?.channels) ? dashboard.channels : [];
-  const withdrawalData = dashboard?.withdrawals || { pendingEarnings: 0, reservedWithdrawals: 0, withdrawals: [] };
+  const earningsData = dashboard?.earnings || { unpaid_ton: 0, reserved_ton: 0, wallet_address: null };
   window.ownerCreatorProfile = dashboard?.creatorProfile || {};
   window.ownerChannels = safeChannels;
   const activeChannels = safeChannels.filter(channel => channel.is_active === true).length;
@@ -1596,7 +1596,7 @@ window.loadOwnerDashboard = async function() {
             <div class="flex items-start gap-3 min-w-0 flex-1">
               ${channelAvatarMarkup(channel, 'phase2-owner-avatar')}
               <div class="min-w-0 flex-1">
-                <div class="flex flex-wrap items-center gap-2"><h3 class="font-bold text-white text-base">${name}</h3><span class="text-[10px] px-2 py-1 rounded-full ${active ? 'bg-emerald-500/10 text-emerald-300' : 'bg-amber-500/10 text-amber-300'}">${active ? 'Published' : 'Setup incomplete'}</span>${channel.is_featured ? '<span class="phase2-featured-pill">✦ Featured</span>' : ''}</div>
+                <div class="flex flex-wrap items-center gap-2"><h3 class="font-bold text-white text-base">${name}</h3><span class="text-[10px] px-2 py-1 rounded-full ${active ? 'bg-emerald-500/10 text-emerald-300' : 'bg-amber-500/10 text-amber-300'}">${active ? 'Published' : 'Setup incomplete'}</span>${channel.is_featured ? '<span class="phase2-featured-pill">✦ Featured</span>' : ''}<span class="text-[10px] px-2 py-1 rounded-full ${channel.is_discoverable === false ? 'bg-slate-700/70 text-slate-300' : 'bg-cyan-500/10 text-cyan-300'}">${channel.is_discoverable === false ? 'Hidden from Discovery' : 'Visible in Discovery'}</span></div>
                 <p class="text-xs text-slate-400 mt-1">${formatTon(price)} TON · ${durationLabel}</p>
                 <p class="text-xs text-slate-500 mt-2 line-clamp-2">${description}</p>
               </div>
@@ -1614,7 +1614,7 @@ window.loadOwnerDashboard = async function() {
     }).join('');
   }
 
-  container.innerHTML = channelsMarkup + renderOwnerWithdrawalCard(withdrawalData);
+  container.innerHTML = channelsMarkup + renderOwnerEarningsCard(earningsData);
 };
 
 window.openCreatorProfileEditor = function() {
@@ -1659,68 +1659,46 @@ window.saveCreatorProfile = async function() {
   await window.loadOwnerDashboard();
 };
 
-function renderOwnerWithdrawalCard(data) {
+function renderOwnerEarningsCard(data) {
   if (!data || data.error) {
-    return `<div class="glass-card p-4 mt-4"><p class="text-sm text-amber-300">${escapeHtml(data?.error || 'Could not load withdrawal balance.')}</p></div>`;
+    return `<div class="glass-card p-4 mt-4"><p class="text-sm text-amber-300">${escapeHtml(data?.error || 'Could not load creator earnings.')}</p></div>`;
   }
-  const balance = Number(data.pendingEarnings || 0);
-  const wallet = window.currentUser?.wallet_address || '';
-  const history = Array.isArray(data.withdrawals)
-    ? data.withdrawals.slice().sort((a, b) => new Date(b.request_date || 0) - new Date(a.request_date || 0)).slice(0, 5)
-    : [];
+  const unpaid = Math.max(0, Number(data.unpaid_ton || 0));
+  const reserved = Math.max(0, Number(data.reserved_ton || 0));
+  const wallet = data.wallet_address || window.ownerCreatorProfile?.wallet_address || window.currentUser?.wallet_address || userWallet?.account?.address || '';
+  const shortWallet = wallet ? `${String(wallet).slice(0, 8)}…${String(wallet).slice(-6)}` : '';
   return `
-    <div class="glass-card p-5 mt-4">
-      <div class="flex items-start justify-between gap-3 mb-4">
-        <div>
-          <h3 class="text-lg font-bold text-white">💰 Earnings & withdrawals</h3>
-          <p class="text-xs text-slate-400 mt-1">Withdrawal requests reserve your balance. Payout is complete only after an admin verifies the outgoing TON transfer.</p>
+    <section class="glass-card p-5 mt-4 creator-earnings-card">
+      <div class="flex flex-wrap items-start justify-between gap-3 mb-4">
+        <div class="min-w-0">
+          <h3 class="text-lg font-bold text-white">Creator earnings</h3>
+          <p class="text-xs text-slate-400 mt-1">Your unpaid earnings are tracked automatically after each confirmed subscription.</p>
         </div>
-        <div class="text-right">
-          <p class="text-xs text-slate-400">Available</p>
-          <p class="text-xl font-bold text-emerald-400 font-mono">${formatTon(balance)} TON</p>
-        </div>
-      </div>
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
-        <div>
-          <label class="block text-xs text-slate-400 mb-1" for="withdrawal-amount">Amount (minimum 1 TON)</label>
-          <input id="withdrawal-amount" type="number" min="1" max="${Math.max(0, balance).toFixed(9)}" step="0.000000001" placeholder="1.000000000" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm" />
-        </div>
-        <div>
-          <label class="block text-xs text-slate-400 mb-1" for="withdrawal-wallet">Destination TON wallet</label>
-          <input id="withdrawal-wallet" type="text" maxlength="128" value="${escapeHtml(wallet)}" placeholder="UQ... or EQ..." class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-xs font-mono" />
+        <div class="text-right shrink-0">
+          <p class="text-xs text-slate-400">Unpaid earnings</p>
+          <p class="text-xl sm:text-2xl font-bold text-emerald-400 font-mono">${formatTon(unpaid)} TON</p>
         </div>
       </div>
-      <button onclick="requestOwnerWithdrawal()" ${balance < 1 ? 'disabled' : ''} class="btn-primary w-full px-4 py-3 rounded-xl text-sm font-semibold text-white disabled:opacity-40">Request withdrawal</button>
-      <div id="withdrawal-request-status" class="text-xs mt-3"></div>
-      ${history.length ? `<div class="mt-4 border-t border-slate-700 pt-3"><h4 class="text-sm font-semibold text-white mb-2">Recent requests</h4><div class="space-y-2">${history.map(w => `<div class="flex justify-between gap-3 text-xs bg-slate-900/50 rounded-lg p-3"><span class="text-slate-300">${formatTon(w.amount || 0)} TON</span><span class="text-slate-400">${escapeHtml(String(w.status || 'unknown'))}</span></div>`).join('')}</div></div>` : ''}
-    </div>`;
+      <div class="grid grid-cols-2 gap-2 mb-4">
+        <div class="bg-slate-900/60 border border-slate-700/70 rounded-xl p-3 min-w-0">
+          <p class="text-[10px] uppercase tracking-wide text-slate-500">Reserved for payout</p>
+          <p class="text-base font-bold text-amber-300 mt-1 break-words">${formatTon(reserved)} TON</p>
+        </div>
+        <div class="bg-slate-900/60 border border-slate-700/70 rounded-xl p-3 min-w-0">
+          <p class="text-[10px] uppercase tracking-wide text-slate-500">Payout wallet</p>
+          <p class="text-xs font-mono text-slate-200 mt-2 break-all">${wallet ? escapeHtml(shortWallet) : 'Not connected'}</p>
+        </div>
+      </div>
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-slate-700/70 bg-slate-900/40 p-3">
+        <div class="min-w-0">
+          <p class="text-xs font-semibold ${wallet ? 'text-emerald-300' : 'text-amber-300'}">${wallet ? 'TON payout wallet saved' : 'Connect a TON payout wallet'}</p>
+          <p class="text-[11px] leading-relaxed text-slate-400 mt-1">MySubHub administrators send creator payouts directly to this saved wallet. Check that it belongs to you and is on the correct TON network.</p>
+        </div>
+        <button type="button" onclick="connectWallet()" class="btn-secondary shrink-0 px-4 py-2.5 rounded-lg text-xs font-semibold">${wallet ? 'Change wallet' : 'Connect wallet'}</button>
+      </div>
+      <p class="text-[10px] leading-relaxed text-slate-500 mt-3">Creator payouts are processed by the platform. There is no withdrawal request form in the creator dashboard.</p>
+    </section>`;
 }
-
-window.requestOwnerWithdrawal = async function() {
-  const amount = Number(document.getElementById('withdrawal-amount')?.value);
-  const wallet_address = document.getElementById('withdrawal-wallet')?.value?.trim() || '';
-  const status = document.getElementById('withdrawal-request-status');
-  if (!Number.isFinite(amount) || amount < 1) {
-    if (status) status.textContent = 'Minimum withdrawal is 1 TON.';
-    return;
-  }
-  if (!wallet_address) {
-    if (status) status.textContent = 'Enter the destination TON wallet.';
-    return;
-  }
-  if (status) status.textContent = 'Submitting withdrawal request...';
-  const result = await apiFetch('/api/withdrawals/request', {
-    method: 'POST',
-    body: JSON.stringify({ amount, wallet_address })
-  }, 0);
-  if (result.error) {
-    if (status) status.textContent = result.error;
-    Toast.error(result.error);
-    return;
-  }
-  Toast.success('Withdrawal request submitted.');
-  await window.loadOwnerDashboard();
-};
 
 // ================== ADD CHANNEL MODAL ==================
 window.openAddChannelModal = function(channelId = '') {
@@ -1784,6 +1762,10 @@ window.openAddChannelModal = function(channelId = '') {
             <option value="other" ${!existing?.category || existing?.category === 'other' ? 'selected' : ''}>✨ Other</option>
           </select>
         </div>
+        <label class="flex items-start gap-3 rounded-xl border border-slate-700 bg-slate-900/50 p-3 cursor-pointer">
+          <input id="add-channel-discoverable" type="checkbox" class="mt-1 h-4 w-4 shrink-0 accent-cyan-500" ${existing?.is_discoverable !== false ? 'checked' : ''} />
+          <span class="min-w-0"><span class="block text-sm font-semibold text-white">Show this channel in Discovery</span><span class="block text-xs text-slate-400 mt-1">When disabled, the channel is hidden from public Discovery and search. People with its direct link can still open its listing.</span></span>
+        </label>
       </div>
       <div class="flex gap-3 mt-6">
         <button onclick="closeAddChannelModal()" class="flex-1 btn-secondary px-4 py-3 rounded-xl text-sm">${t('common.cancel')}</button>
@@ -1837,7 +1819,8 @@ window.submitAddChannel = async function() {
       duration_days: parseInt(duration),
       category: category,
       description: description,
-      image_url: imageUrl
+      image_url: imageUrl,
+      is_discoverable: document.getElementById('add-channel-discoverable')?.checked === true
     })
   }, 0);
 
@@ -1957,6 +1940,10 @@ window.openEditModal = async function(channelId) {
           </div>
           <input type="hidden" id="edit-duration" value="30" />
         </div>
+        <label class="flex items-start gap-3 rounded-xl border border-slate-700 bg-slate-900/50 p-3 cursor-pointer">
+          <input id="edit-discoverable" type="checkbox" class="mt-1 h-4 w-4 shrink-0 accent-cyan-500" ${channel.is_discoverable !== false ? 'checked' : ''} />
+          <span class="min-w-0"><span class="block text-sm font-semibold text-white">Show this channel in Discovery</span><span class="block text-xs text-slate-400 mt-1">Turn this off to hide the listing from public Discovery and search. Direct links continue to work.</span></span>
+        </label>
       </div>
       <div class="flex gap-3 mt-6">
         <button onclick="closeEditModal()" class="flex-1 btn-secondary px-4 py-3 rounded-xl text-sm">${t('common.cancel')}</button>
@@ -2083,7 +2070,8 @@ window.submitEditChannel = async function() {
       subscription_price: price, 
       duration_days: duration,
       description: descriptionInput?.value?.trim() || '',
-      image_url: imageInput?.value?.trim() || ''
+      image_url: imageInput?.value?.trim() || '',
+      is_discoverable: document.getElementById('edit-discoverable')?.checked === true
     })
   }, 0);
   
@@ -2190,16 +2178,17 @@ window.copyReferralLink = function() {
 window.loadAdminDashboard = async function() {
   if (!window.isAdmin) { Toast.error('Admin only'); return; }
   const reportsContainer = document.getElementById('admin-reports');
-  const withdrawalsContainer = document.getElementById('admin-withdrawals');
+  const payoutsContainer = document.getElementById('admin-creator-payouts');
+  const payoutWalletStatus = document.getElementById('admin-payout-wallet-status');
   const financialContainer = document.getElementById('admin-financial-summary');
-  if (!reportsContainer && !withdrawalsContainer && !financialContainer) return;
+  if (!reportsContainer && !payoutsContainer && !financialContainer) return;
   if (reportsContainer) reportsContainer.innerHTML = '<div class="text-xs text-slate-500 animate-pulse">Loading reports…</div>';
-  if (withdrawalsContainer) withdrawalsContainer.innerHTML = '<div class="text-xs text-slate-500 animate-pulse">Loading withdrawals…</div>';
+  if (payoutsContainer) payoutsContainer.innerHTML = '<div class="text-xs text-slate-500 animate-pulse">Loading creator payout queue…</div>';
   if (financialContainer) financialContainer.innerHTML = '<div class="text-xs text-slate-500 animate-pulse">Loading financials…</div>';
 
-  const [reports, withdrawals, financialResponse] = await Promise.all([
+  const [reports, payoutResponse, financialResponse] = await Promise.all([
     apiFetch('/api/admin/reports'),
-    apiFetch('/api/admin/withdrawals'),
+    apiFetch('/api/admin/creator-payouts', { noCache: true }, 0),
     apiFetch('/api/admin/financials')
   ]);
 
@@ -2229,8 +2218,8 @@ window.loadAdminDashboard = async function() {
           ${metric('Creator payouts completed', `${formatTon(tx.creator_paid_ton || 0)} TON`)}
           ${metric('Unpaid creator liability', `${formatTon(tx.creator_unpaid_ton || 0)} TON`, 'Includes pending and approved withdrawal reservations')}
           ${metric('Referral credit liability', `${formatTon(cr.outstanding_liability_ton || 0)} TON`, 'Outstanding redeemable credits')}
-          ${metric('Pending withdrawals', `${formatTon(wd.pending_amount_ton || 0)} TON`, `${Number(wd.pending_count || 0)} requests`)}
-          ${metric('Approved withdrawals', `${formatTon(wd.approved_amount_ton || 0)} TON`, `${Number(wd.approved_count || 0)} awaiting payout verification`)}
+          ${metric('Pending creator payouts', `${formatTon(wd.pending_amount_ton || 0)} TON`, `${Number(wd.pending_count || 0)} reserved payouts`)}
+          ${metric('Approved creator payouts', `${formatTon(wd.approved_amount_ton || 0)} TON`, `${Number(wd.approved_count || 0)} awaiting verification`)}
           ${walletMetric}
         </div>
         <div class="mt-4 rounded-xl border ${flags > 0 ? 'border-amber-500/40 bg-amber-500/5' : 'border-emerald-500/30 bg-emerald-500/5'} p-3">
@@ -2267,23 +2256,201 @@ window.loadAdminDashboard = async function() {
     }
   }
 
-  if (withdrawalsContainer) {
-    if (withdrawals?.error) {
-      withdrawalsContainer.innerHTML = `<p class="text-sm text-red-300">${escapeHtml(withdrawals.error)}</p>`;
+  window.adminPayoutQueue = Array.isArray(payoutResponse?.payouts) ? payoutResponse.payouts : [];
+  window.adminPayoutConfig = {
+    platform_wallet_address: payoutResponse?.platform_wallet_address || null,
+    network: payoutResponse?.network || null,
+    network_id: payoutResponse?.network_id || null,
+  };
+
+  if (payoutWalletStatus) {
+    const expected = window.adminPayoutConfig.platform_wallet_address;
+    const chain = userWallet?.account?.chain ? String(userWallet.account.chain) : '';
+    const expectedChain = String(window.adminPayoutConfig.network_id || '');
+    const connected = Boolean(userWallet?.account?.address);
+    const networkMatches = connected && chain === expectedChain;
+    payoutWalletStatus.innerHTML = `
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-slate-700 bg-slate-900/50 p-3 min-w-0">
+        <div class="min-w-0">
+          <p class="text-xs font-semibold ${networkMatches ? 'text-emerald-300' : 'text-amber-300'}">${networkMatches ? 'TON wallet connected on expected network' : connected ? 'Connected wallet network mismatch' : 'Platform payout wallet not connected'}</p>
+          <p class="text-[11px] text-slate-400 mt-1 break-all">Configured platform wallet: ${escapeHtml(expected || 'Not configured')}</p>
+          <p class="text-[10px] text-slate-500 mt-1">Network: ${escapeHtml(String(window.adminPayoutConfig.network || 'unknown').toUpperCase())}. Transfers are accepted only from the configured platform wallet; the backend checks the connected address before reserving a payout.</p>
+        </div>
+        <button type="button" onclick="connectAdminPayoutWallet()" class="btn-secondary shrink-0 px-4 py-2.5 rounded-lg text-xs font-semibold">${connected ? 'Change wallet' : 'Connect platform wallet'}</button>
+      </div>`;
+  }
+
+  if (payoutsContainer) {
+    if (payoutResponse?.error) {
+      payoutsContainer.innerHTML = `<p class="text-sm text-red-300">${escapeHtml(payoutResponse.error)}</p>`;
     } else {
-      const items = Array.isArray(withdrawals) ? withdrawals : [];
-      withdrawalsContainer.innerHTML = items.length ? items.map(withdrawal => {
-        const status = String(withdrawal.status || 'pending');
-        const id = String(withdrawal.id || '');
-        if (!/^[0-9a-f-]{36}$/i.test(id)) return '';
-        return `<article class="bg-slate-900/60 border border-slate-700 rounded-xl p-4 mb-3">
-          <div class="flex flex-wrap justify-between gap-3 mb-2"><div><p class="text-white font-semibold">${formatTon(withdrawal.amount || 0)} TON</p><p class="text-xs text-slate-400 break-all">${escapeHtml(String(withdrawal.wallet_address || ''))}</p><p class="text-[10px] text-slate-500 mt-1">Request ${escapeHtml(id)}</p></div><span class="text-xs rounded-full px-3 py-1 ${status === 'approved' ? 'bg-amber-500/10 text-amber-300' : 'bg-blue-500/10 text-blue-300'}">${escapeHtml(status)}</span></div>
-          ${status === 'pending' ? `<button type="button" onclick="approveOwnerWithdrawal('${id}')" class="btn-primary px-4 py-2 rounded-lg text-xs text-white">Approve / show transfer instructions</button>` : ''}
-          ${status === 'approved' ? `<p class="text-xs text-amber-300 mb-2">Approved. After sending exactly ${Number(withdrawal.amount || 0).toFixed(9)} TON, enter the outgoing TON Center transaction hash below.</p><div class="flex gap-2"><input id="payout-hash-${id}" type="text" placeholder="Outgoing transaction hash" class="flex-1 min-w-0 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-mono"><button type="button" onclick="completeOwnerWithdrawal('${id}')" class="btn-primary px-3 py-2 rounded-lg text-xs text-white">Verify payout</button></div>` : ''}
+      const items = window.adminPayoutQueue;
+      payoutsContainer.innerHTML = items.length ? items.map(item => {
+        const ownerId = Number(item.channel_owner_id || 0);
+        if (!Number.isSafeInteger(ownerId) || ownerId <= 0) return '';
+        const pending = Math.max(0, Number(item.pending_amount || 0));
+        const reserved = Math.max(0, Number(item.active_withdrawal_amount || 0));
+        const withdrawalId = String(item.active_withdrawal_id || '');
+        const status = String(item.active_withdrawal_status || 'unreserved');
+        const approvedAt = Date.parse(String(item.active_withdrawal_approved_at || '')) || 0;
+        const canRelease = status === 'approved' && approvedAt > 0 && Date.now() - approvedAt >= 30 * 60 * 1000;
+        const wallet = String(item.wallet_address || '');
+        const locked = status === 'approved';
+        const ownerLabel = escapeHtml(item.display_name || `Creator ${ownerId}`);
+        const username = item.username ? `@${escapeHtml(item.username)}` : `Telegram ID ${ownerId}`;
+        const walletLabel = wallet ? escapeHtml(wallet) : 'Creator has not connected a TON wallet';
+        const action = locked && /^[0-9a-f-]{36}$/i.test(withdrawalId)
+          ? `<div class="flex flex-wrap gap-2 mt-3"><button type="button" onclick="verifyAdminCreatorPayout('${withdrawalId}')" class="btn-primary px-4 py-2.5 rounded-lg text-xs font-semibold text-white">Verify transfer</button>${canRelease ? `<button type="button" onclick="releaseAdminCreatorPayout('${withdrawalId}')" class="btn-secondary px-4 py-2.5 rounded-lg text-xs">Release reservation</button>` : `<span class="text-[10px] text-slate-500 self-center">${approvedAt ? 'Release available after 30 minutes if no transfer was sent' : 'Approved payout is reserved'}</span>`}</div>`
+          : wallet
+            ? `<button type="button" onclick="sendAdminCreatorPayout(${ownerId})" class="btn-primary mt-3 px-4 py-2.5 rounded-lg text-xs font-semibold text-white">Prepare & send payout</button>`
+            : `<p class="text-xs text-amber-300 mt-3">Waiting for the creator to connect a TON wallet in their creator dashboard.</p>`;
+        return `<article class="creator-payout-row bg-slate-900/60 border border-slate-700 rounded-xl p-4 min-w-0">
+          <div class="flex flex-wrap items-start justify-between gap-3">
+            <div class="min-w-0 flex-1">
+              <p class="text-sm font-bold text-white break-words">${ownerLabel}</p>
+              <p class="text-[11px] text-slate-400 mt-1 break-words">${username}</p>
+            </div>
+            <div class="text-right shrink-0">
+              <p class="text-[10px] uppercase tracking-wide text-slate-500">Unpaid creator earnings</p>
+              <p class="text-lg font-bold text-emerald-300 font-mono">${formatTon(pending)} TON</p>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-3">
+            <div class="bg-slate-950/60 rounded-lg p-2 min-w-0"><p class="text-[10px] text-slate-500">Channels</p><p class="text-sm text-slate-200 font-semibold">${Number(item.channel_count || 0).toLocaleString()}</p></div>
+            <div class="bg-slate-950/60 rounded-lg p-2 min-w-0"><p class="text-[10px] text-slate-500">Unpaid records</p><p class="text-sm text-slate-200 font-semibold">${Number(item.unpaid_transaction_count || 0).toLocaleString()}</p></div>
+            <div class="bg-slate-950/60 rounded-lg p-2 min-w-0"><p class="text-[10px] text-slate-500">Reserved</p><p class="text-sm text-amber-300 font-semibold">${formatTon(reserved)} TON</p></div>
+          </div>
+          <div class="mt-3 rounded-lg border border-slate-800 bg-slate-950/50 p-3 min-w-0">
+            <p class="text-[10px] uppercase tracking-wide text-slate-500 mb-1">Saved payout wallet</p>
+            <p class="text-xs font-mono text-slate-300 break-all">${walletLabel}</p>
+          </div>
+          <div class="flex items-center justify-between gap-2 mt-3 flex-wrap">
+            <span class="text-[10px] rounded-full px-2.5 py-1 ${status === 'approved' ? 'bg-amber-500/10 text-amber-300' : status === 'pending' ? 'bg-blue-500/10 text-blue-300' : 'bg-slate-700/60 text-slate-300'}">${status === 'unreserved' ? 'Not reserved' : `Payout ${escapeHtml(status)}`}</span>
+            <span class="text-[10px] text-slate-500">${item.oldest_unpaid_at ? `Unpaid since ${escapeHtml(new Date(item.oldest_unpaid_at).toLocaleDateString())}` : ''}</span>
+          </div>
+          ${action}
         </article>`;
-      }).join('') : '<p class="text-sm text-slate-500">No pending or approved withdrawals.</p>';
+      }).join('') : '<div class="rounded-xl border border-slate-700 bg-slate-900/40 p-4"><p class="text-sm text-slate-300">No creator earnings are currently pending.</p></div>';
     }
   }
+};
+
+window.connectAdminPayoutWallet = async function() {
+  if (!tonConnectUI) { Toast.error('TON Connect is not ready yet.'); return; }
+  try { await tonConnectUI.openModal(); }
+  catch (error) { Toast.error('Could not open TON Connect.'); }
+};
+
+window.sendAdminCreatorPayout = async function(ownerId) {
+  if (!window.isAdmin) return;
+  if (window.creatorPayoutSendInProgress) {
+    Toast.info('A creator payout is already being prepared. Do not start another transfer.');
+    return;
+  }
+  window.creatorPayoutSendInProgress = true;
+  try {
+    const config = window.adminPayoutConfig || {};
+    const chain = userWallet?.account?.chain ? String(userWallet.account.chain) : '';
+    if (!userWallet?.account?.address || !tonConnectUI) {
+      Toast.error('Connect the platform wallet first.');
+      await window.connectAdminPayoutWallet();
+      return;
+    }
+    if (chain !== String(config.network_id || '')) {
+      Toast.error(`Connect the platform wallet on ${String(config.network || 'configured').toUpperCase()}.`);
+      await window.connectAdminPayoutWallet();
+      return;
+    }
+    const owner = (window.adminPayoutQueue || []).find(row => Number(row.channel_owner_id) === Number(ownerId));
+    if (!owner || !owner.wallet_address) { Toast.error('Creator payout wallet is not available.'); return; }
+    const amountPreview = Number(owner.active_withdrawal_amount || owner.pending_amount || 0);
+    if (!(amountPreview > 0)) { Toast.error('There is no unpaid balance to pay.'); return; }
+    const recipient = String(owner.wallet_address);
+    const confirmed = window.confirm(`Send approximately ${formatTon(amountPreview)} TON to this creator wallet?\n\n${recipient}\n\nTonkeeper will show the exact amount and network fee before you approve. Do not send a second transfer if verification is delayed.`);
+    if (!confirmed) return;
+
+    const prepared = await apiFetch('/api/admin/creator-payouts/prepare', {
+      method: 'POST',
+      body: JSON.stringify({
+        owner_id: Number(ownerId),
+        sender_wallet_address: userWallet.account.address,
+        sender_chain: chain
+      })
+    }, 0);
+    if (prepared?.error) { Toast.error(prepared.error); return; }
+    if (!prepared?.withdrawal_id || !prepared?.payload || !prepared?.amount_nano || !prepared?.destination) {
+      Toast.error('Backend returned incomplete payout instructions.');
+      return;
+    }
+
+    try {
+      Toast.info('Confirm the creator payout in your connected wallet.');
+      const sent = await tonConnectUI.sendTransaction({
+        validUntil: Math.floor(Date.now() / 1000) + 600,
+        network: String(prepared.network_id),
+        from: userWallet.account.address,
+        messages: [{
+          address: prepared.destination,
+          amount: String(prepared.amount_nano),
+          payload: prepared.payload
+        }]
+      });
+      if (!sent?.boc) {
+        Toast.warning('Wallet did not return a broadcast confirmation. Keep this payout reserved and verify it before taking further action.');
+        await window.loadAdminDashboard();
+        return;
+      }
+
+      let lastResult = null;
+      for (let attempt = 0; attempt < 5; attempt++) {
+        if (attempt > 0) await new Promise(resolve => setTimeout(resolve, 2000));
+        lastResult = await apiFetch(`/api/admin/creator-payouts/${encodeURIComponent(prepared.withdrawal_id)}/verify`, {
+          method: 'POST', body: JSON.stringify({})
+        }, 0);
+        if (lastResult?.processed) {
+          Toast.success(`Creator payout completed: ${prepared.amount_ton} TON.`);
+          await window.loadAdminDashboard();
+          return;
+        }
+        if (lastResult?.error && !lastResult?.pending) {
+          Toast.error(lastResult.error);
+          await window.loadAdminDashboard();
+          return;
+        }
+      }
+      Toast.info('Transfer submitted. TON Center has not confirmed it yet. Use Verify transfer later; do not send another transfer.');
+      await window.loadAdminDashboard();
+    } catch (error) {
+      console.error('Creator payout wallet transaction was not completed:', error);
+      Toast.warning('The payout remains reserved. Verify its status before retrying or releasing it; do not send another transfer.');
+      await window.loadAdminDashboard();
+    }
+  } finally {
+    window.creatorPayoutSendInProgress = false;
+  }
+};
+
+window.verifyAdminCreatorPayout = async function(withdrawalId) {
+  if (!window.isAdmin) return;
+  const result = await apiFetch(`/api/admin/creator-payouts/${encodeURIComponent(withdrawalId)}/verify`, {
+    method: 'POST', body: JSON.stringify({})
+  }, 0);
+  if (result?.processed) Toast.success('Creator payout verified and recorded.');
+  else if (result?.pending) Toast.info(result.message || result.error || 'Transfer not indexed yet. Do not send it again.');
+  else Toast.error(result?.error || 'Payout verification failed.');
+  await window.loadAdminDashboard();
+};
+
+window.releaseAdminCreatorPayout = async function(withdrawalId) {
+  if (!window.isAdmin) return;
+  if (!window.confirm('Release this payout reservation? The backend will scan TON history first. Only release it if no matching transfer was sent.')) return;
+  const result = await apiFetch(`/api/admin/creator-payouts/${encodeURIComponent(withdrawalId)}/release`, {
+    method: 'POST', body: JSON.stringify({})
+  }, 0);
+  if (result?.error) Toast.error(result.error);
+  else if (result?.processed) Toast.success('A previously sent payout was found and recorded.');
+  else Toast.success('Payout reservation released. The unpaid creator balance is available again.');
+  await window.loadAdminDashboard();
 };
 
 window.reviewAdminReport = async function(reportId, action) {
@@ -2524,7 +2691,15 @@ function updateWalletUI() {
 }
 
 async function saveWalletToBackend(address) {
-  try { await apiFetch('/api/auth/wallet', { method: 'POST', body: JSON.stringify({ wallet_address: address }) }); } catch {}
+  try {
+    const result = await apiFetch('/api/auth/wallet', { method: 'POST', body: JSON.stringify({ wallet_address: address }) }, 0);
+    if (!result?.error) {
+      if (window.currentUser) window.currentUser.wallet_address = result.wallet_address || address;
+      if (window.ownerCreatorProfile) window.ownerCreatorProfile.wallet_address = result.wallet_address || address;
+      if (window.currentPage === 'owner') await window.loadOwnerDashboard();
+      if (window.currentPage === 'admin' && window.isAdmin) await window.loadAdminDashboard();
+    }
+  } catch (error) { console.warn('Wallet address was not saved to creator profile:', error); }
 }
 
 window.connectWallet = async function() { if (tonConnectUI) try { await tonConnectUI.openModal(); } catch { Toast.error('Wallet error'); } else Toast.error('Not ready'); };
@@ -2695,8 +2870,8 @@ window.showOwnerGuide = function() {
                 <ul class="text-sm text-slate-400 space-y-1 list-disc list-inside">
                   <li>Payments go to platform wallet (escrow)</li>
                   <li>Track earnings in dashboard</li>
-                  <li>Request withdrawals anytime</li>
-                  <li>Minimum withdrawal: 1 TON</li>
+                  <li>Receive creator payouts directly to your connected TON wallet</li>
+                  <li>Payouts are processed by the MySubHub platform</li>
                 </ul>
                 <div class="mt-3 p-3 bg-emerald-500/10 border-2 border-emerald-500/30 rounded-xl">
                   <p class="text-xs text-emerald-300">💰 <strong>Revenue Split:</strong> You receive 99% of subscription fees. Platform takes 1% fee.</p>
@@ -2743,6 +2918,10 @@ async function init() {
   try {
     await initTonConnect();
     await authenticateUser();
+    // Persist an already-connected TonConnect account as a creator payout address.
+    if (userWallet?.account?.address) {
+      await saveWalletToBackend(userWallet.account.address);
+    }
 
     const navBar = document.getElementById('nav-bar');
     if (navBar) navBar.classList.remove('hidden');
