@@ -1,4 +1,4 @@
-// MySubHub Frontend v3.9.3 - unified Telegram channel onboarding
+// MySubHub Frontend v3.9.4 - 2% platform fee + unified channel onboarding
 // Phase 1: Low-resource API and discovery optimization
 // Phase 2: Channel detail pages, creator analytics, and marketplace sharing
 
@@ -9,6 +9,9 @@ function escapeHtml(str) {
   div.textContent = String(str);
   return div.innerHTML;
 }
+
+// New subscriber surcharge. The Supabase payment RPC remains authoritative.
+const PLATFORM_FEE_PERCENT = 0.02;
 
 // TON uses nanoton precision (1e-9). Never display a valid small price as 0.000 TON.
 function formatTon(value) {
@@ -67,7 +70,7 @@ const mySubHubTranslationsV331 = {
     channels: { title: 'My Channels', add: 'Add Channel', edit: 'Edit', copy: 'Copy', forward: 'Forward', delete: 'Delete', active: 'Active', inactive: 'Inactive', no_channels: 'No channels yet', add_first: 'Add Your First Channel', bot_admin_required: 'Bot Admin Access Required', bot_admin_instructions: 'Add @MySubsHub_bot as administrator to your channel first' },
     referrals: { title: 'Referral Program', balance: 'Balance', referrals: 'Referrals', earned: 'Earned', your_link: 'Your Referral Link', copy_link: 'Copy Link', earn_10_percent: 'Earn 10% credits when friends subscribe via your link', credits_note: 'Credits can be used for subscriptions but cannot be withdrawn' },
     admin: { title: 'Admin Panel', channels: 'All Channels', reports: 'Reported Channels', withdrawals: 'Pending Withdrawals', approve: 'Approve', ban: 'Ban', dismiss: 'Dismiss' },
-    purchase: { channel_price: 'Channel Price', platform_fee: 'Platform Fee (1%)', total_to_pay: 'Total to Pay', duration: 'Duration', days: 'days', pay_with_ton: 'Pay with TON', processing: 'Processing...', use_credits: 'Use credits to reduce payment', you_have: 'You have', in_credits: 'in credits' },
+    purchase: { channel_price: 'Channel Price', platform_fee: 'Platform Fee (2%)', total_to_pay: 'Total to Pay', duration: 'Duration', days: 'days', pay_with_ton: 'Pay with TON', processing: 'Processing...', use_credits: 'Use credits to reduce payment', you_have: 'You have', in_credits: 'in credits' },
     errors: { network_error: 'Network error', unauthorized: 'Unauthorized', invalid_price: 'Invalid price', invalid_duration: 'Invalid duration', channel_not_found: 'Channel not found', already_subscribed: 'Already subscribed' }
   },
   fa: {
@@ -79,7 +82,7 @@ const mySubHubTranslationsV331 = {
     channels: { title: 'کانال‌های من', add: 'افزودن کانال', edit: 'ویرایش', copy: 'کپی', forward: 'ارسال', delete: 'حذف', active: 'فعال', inactive: 'غیرفعال', no_channels: 'هنوز کانالی وجود ندارد', add_first: 'اولین کانال خود را اضافه کنید', bot_admin_required: 'دسترسی مدیر ربات مورد نیاز است', bot_admin_instructions: 'ابتدا @MySubsHub_bot را به عنوان مدیر به کانال خود اضافه کنید' },
     referrals: { title: 'برنامه معرفی', balance: 'موجودی', referrals: 'معرفی‌ها', earned: 'کسب شده', your_link: 'لینک معرفی شما', copy_link: 'کپی لینک', earn_10_percent: 'با اشتراک دوستان از طریق لینک شما 10% اعتبار کسب کنید', credits_note: 'اعتبارها می‌توانند برای اشتراک استفاده شوند اما قابل برداشت نیستند' },
     admin: { title: 'پنل مدیر', channels: 'همه کانال‌ها', reports: 'کانال‌های گزارش شده', withdrawals: 'برداشت‌های در انتظار', approve: 'تایید', ban: 'مسدود', dismiss: 'رد' },
-    purchase: { channel_price: 'قیمت کانال', platform_fee: 'کارمزد پلتفرم (1%)', total_to_pay: 'مبلغ قابل پرداخت', duration: 'مدت', days: 'روز', pay_with_ton: 'پرداخت با TON', processing: 'در حال پردازش...', use_credits: 'استفاده از اعتبار برای کاهش پرداخت', you_have: 'شما دارید', in_credits: 'اعتبار' },
+    purchase: { channel_price: 'قیمت کانال', platform_fee: 'کارمزد پلتفرم (2%)', total_to_pay: 'مبلغ قابل پرداخت', duration: 'مدت', days: 'روز', pay_with_ton: 'پرداخت با TON', processing: 'در حال پردازش...', use_credits: 'استفاده از اعتبار برای کاهش پرداخت', you_have: 'شما دارید', in_credits: 'اعتبار' },
     errors: { network_error: 'خطای شبکه', unauthorized: 'غیرمجاز', invalid_price: 'قیمت نامعتبر', invalid_duration: 'مدت نامعتبر', channel_not_found: 'کانال یافت نشد', already_subscribed: 'قبلاً مشترک شده‌اید' }
   },
   hi: {
@@ -91,7 +94,7 @@ const mySubHubTranslationsV331 = {
     channels: { title: 'मेरे चैनल', add: 'चैनल जोड़ें', edit: 'संपादित करें', copy: 'कॉपी', forward: 'फॉरवर्ड', delete: 'हटाएं', active: 'सक्रिय', inactive: 'निष्क्रिय', no_channels: 'अभी तक कोई चैनल नहीं', add_first: 'अपना पहला चैनल जोड़ें', bot_admin_required: 'बॉट व्यवस्थापक पहुँच आवश्यक', bot_admin_instructions: 'पहले @MySubsHub_bot को अपने चैनल में व्यवस्थापक के रूप में जोड़ें' },
     referrals: { title: 'रेफरल कार्यक्रम', balance: 'शेष', referrals: 'रेफरल', earned: 'अर्जित', your_link: 'आपका रेफरल लिंक', copy_link: 'लिंक कॉपी करें', earn_10_percent: 'अपने लिंक के माध्यम से दोस्तों की सदस्यता पर 10% क्रेडिट कमाएं', credits_note: 'क्रेडिट का उपयोग सदस्यता के लिए किया जा सकता है लेकिन वापस नहीं लिया जा सकता' },
     admin: { title: 'व्यवस्थापक पैनल', channels: 'सभी चैनल', reports: 'रिपोर्ट किए गए चैनल', withdrawals: 'लंबित निकासी', approve: 'स्वीकृत', ban: 'प्रतिबंध', dismiss: 'खारिज' },
-    purchase: { channel_price: 'चैनल मूल्य', platform_fee: 'प्लेटफॉर्म शुल्क (1%)', total_to_pay: 'कुल भुगतान', duration: 'अवधि', days: 'दिन', pay_with_ton: 'TON से भुगतान करें', processing: 'प्रोसेसिंग...', use_credits: 'भुगतान कम करने के लिए क्रेडिट का उपयोग करें', you_have: 'आपके पास है', in_credits: 'क्रेडिट में' },
+    purchase: { channel_price: 'चैनल मूल्य', platform_fee: 'प्लेटफॉर्म शुल्क (2%)', total_to_pay: 'कुल भुगतान', duration: 'अवधि', days: 'दिन', pay_with_ton: 'TON से भुगतान करें', processing: 'प्रोसेसिंग...', use_credits: 'भुगतान कम करने के लिए क्रेडिट का उपयोग करें', you_have: 'आपके पास है', in_credits: 'क्रेडिट में' },
     errors: { network_error: 'नेटवर्क त्रुटि', unauthorized: 'अनधिकृत', invalid_price: 'अमान्य मूल्य', invalid_duration: 'अमान्य अवधि', channel_not_found: 'चैनल नहीं मिला', already_subscribed: 'पहले से सदस्यता ली हुई है' }
   },
   ru: {
@@ -103,7 +106,7 @@ const mySubHubTranslationsV331 = {
     channels: { title: 'Мои каналы', add: 'Добавить канал', edit: 'Редактировать', copy: 'Копировать', forward: 'Переслать', delete: 'Удалить', active: 'Активный', inactive: 'Неактивный', no_channels: 'Пока нет каналов', add_first: 'Добавьте свой первый канал', bot_admin_required: 'Требуется доступ администратора бота', bot_admin_instructions: 'Сначала добавьте @MySubsHub_bot как администратора в ваш канал' },
     referrals: { title: 'Реферальная программа', balance: 'Баланс', referrals: 'Рефералы', earned: 'Заработано', your_link: 'Ваша реферальная ссылка', copy_link: 'Копировать ссылку', earn_10_percent: 'Зарабатывайте 10% кредитов, когда друзья подписываются по вашей ссылке', credits_note: 'Кредиты можно использовать для подписок, но нельзя вывести' },
     admin: { title: 'Панель администратора', channels: 'Все каналы', reports: 'Каналы с жалобами', withdrawals: 'Ожидающие выводы', approve: 'Одобрить', ban: 'Заблокировать', dismiss: 'Отклонить' },
-    purchase: { channel_price: 'Цена канала', platform_fee: 'Комиссия платформы (1%)', total_to_pay: 'Итого к оплате', duration: 'Продолжительность', days: 'дней', pay_with_ton: 'Оплатить TON', processing: 'Обработка...', use_credits: 'Использовать кредиты для уменьшения оплаты', you_have: 'У вас есть', in_credits: 'в кредитах' },
+    purchase: { channel_price: 'Цена канала', platform_fee: 'Комиссия платформы (2%)', total_to_pay: 'Итого к оплате', duration: 'Продолжительность', days: 'дней', pay_with_ton: 'Оплатить TON', processing: 'Обработка...', use_credits: 'Использовать кредиты для уменьшения оплаты', you_have: 'У вас есть', in_credits: 'в кредитах' },
     errors: { network_error: 'Ошибка сети', unauthorized: 'Неавторизован', invalid_price: 'Неверная цена', invalid_duration: 'Неверная продолжительность', channel_not_found: 'Канал не найден', already_subscribed: 'Уже подписаны' }
   },
   ar: {
@@ -115,7 +118,7 @@ const mySubHubTranslationsV331 = {
     channels: { title: 'قنواتي', add: 'إضافة قناة', edit: 'تعديل', copy: 'نسخ', forward: 'إعادة توجيه', delete: 'حذف', active: 'نشط', inactive: 'غير نشط', no_channels: 'لا توجد قنوات حتى الآن', add_first: 'أضف قناتك الأولى', bot_admin_required: 'مطلوب وصول مسؤول البوت', bot_admin_instructions: 'أضف @MySubsHub_bot كمسؤول إلى قناتك أولاً' },
     referrals: { title: 'برنامج الإحالة', balance: 'الرصيد', referrals: 'الإحالات', earned: 'المكتسب', your_link: 'رابط الإحالة الخاص بك', copy_link: 'نسخ الرابط', earn_10_percent: 'اكسب 10% من الرصيد عندما يشترك الأصدقاء عبر رابطك', credits_note: 'يمكن استخدام الأرصدة للاشتراكات ولكن لا يمكن سحبها' },
     admin: { title: 'لوحة المسؤول', channels: 'جميع القنوات', reports: 'القنوات المبلغ عنها', withdrawals: 'عمليات السحب المعلقة', approve: 'موافقة', ban: 'حظر', dismiss: 'رفض' },
-    purchase: { channel_price: 'سعر القناة', platform_fee: 'رسوم المنصة (1%)', total_to_pay: 'الإجمالي للدفع', duration: 'المدة', days: 'أيام', pay_with_ton: 'الدفع بـ TON', processing: 'جاري المعالجة...', use_credits: 'استخدام الأرصدة لتقليل الدفع', you_have: 'لديك', in_credits: 'في الأرصدة' },
+    purchase: { channel_price: 'سعر القناة', platform_fee: 'رسوم المنصة (2%)', total_to_pay: 'الإجمالي للدفع', duration: 'المدة', days: 'أيام', pay_with_ton: 'الدفع بـ TON', processing: 'جاري المعالجة...', use_credits: 'استخدام الأرصدة لتقليل الدفع', you_have: 'لديك', in_credits: 'في الأرصدة' },
     errors: { network_error: 'خطأ في الشبكة', unauthorized: 'غير مصرح', invalid_price: 'سعر غير صالح', invalid_duration: 'مدة غير صالحة', channel_not_found: 'القناة غير موجودة', already_subscribed: 'مشترك بالفعل' }
   },
   zh: {
@@ -127,7 +130,7 @@ const mySubHubTranslationsV331 = {
     channels: { title: '我的频道', add: '添加频道', edit: '编辑', copy: '复制', forward: '转发', delete: '删除', active: '活跃', inactive: '不活跃', no_channels: '暂无频道', add_first: '添加您的第一个频道', bot_admin_required: '需要机器人管理员权限', bot_admin_instructions: '首先将 @MySubsHub_bot 添加为频道的管理员' },
     referrals: { title: '推荐计划', balance: '余额', referrals: '推荐', earned: '已赚取', your_link: '您的推荐链接', copy_link: '复制链接', earn_10_percent: '通过您的链接订阅的朋友可获得10%积分', credits_note: '积分可用于订阅，但不能提取' },
     admin: { title: '管理员面板', channels: '所有频道', reports: '被举报的频道', withdrawals: '待处理提款', approve: '批准', ban: '禁止', dismiss: '驳回' },
-    purchase: { channel_price: '频道价格', platform_fee: '平台费用 (1%)', total_to_pay: '应付总额', duration: '时长', days: '天', pay_with_ton: '用TON支付', processing: '处理中...', use_credits: '使用积分减少支付', you_have: '您有', in_credits: '积分' },
+    purchase: { channel_price: '频道价格', platform_fee: '平台费用 (2%)', total_to_pay: '应付总额', duration: '时长', days: '天', pay_with_ton: '用TON支付', processing: '处理中...', use_credits: '使用积分减少支付', you_have: '您有', in_credits: '积分' },
     errors: { network_error: '网络错误', unauthorized: '未授权', invalid_price: '无效价格', invalid_duration: '无效时长', channel_not_found: '未找到频道', already_subscribed: '已订阅' }
   },
   id: {
@@ -139,7 +142,7 @@ const mySubHubTranslationsV331 = {
     channels: { title: 'Channel Saya', add: 'Tambah Channel', edit: 'Edit', copy: 'Salin', forward: 'Teruskan', delete: 'Hapus', active: 'Aktif', inactive: 'Tidak Aktif', no_channels: 'Belum ada channel', add_first: 'Tambahkan Channel Pertama Anda', bot_admin_required: 'Akses Admin Bot Diperlukan', bot_admin_instructions: 'Tambahkan @MySubsHub_bot sebagai admin ke channel Anda terlebih dahulu' },
     referrals: { title: 'Program Referral', balance: 'Saldo', referrals: 'Referral', earned: 'Diperoleh', your_link: 'Link Referral Anda', copy_link: 'Salin Link', earn_10_percent: 'Dapatkan 10% kredit ketika teman berlangganan melalui link Anda', credits_note: 'Kredit dapat digunakan untuk langganan tetapi tidak dapat ditarik' },
     admin: { title: 'Panel Admin', channels: 'Semua Channel', reports: 'Channel Dilaporkan', withdrawals: 'Penarikan Tertunda', approve: 'Setujui', ban: 'Blokir', dismiss: 'Tolak' },
-    purchase: { channel_price: 'Harga Channel', platform_fee: 'Biaya Platform (1%)', total_to_pay: 'Total Bayar', duration: 'Durasi', days: 'hari', pay_with_ton: 'Bayar dengan TON', processing: 'Memproses...', use_credits: 'Gunakan kredit untuk mengurangi pembayaran', you_have: 'Anda memiliki', in_credits: 'dalam kredit' },
+    purchase: { channel_price: 'Harga Channel', platform_fee: 'Biaya Platform (2%)', total_to_pay: 'Total Bayar', duration: 'Durasi', days: 'hari', pay_with_ton: 'Bayar dengan TON', processing: 'Memproses...', use_credits: 'Gunakan kredit untuk mengurangi pembayaran', you_have: 'Anda memiliki', in_credits: 'dalam kredit' },
     errors: { network_error: 'Kesalahan Jaringan', unauthorized: 'Tidak Sah', invalid_price: 'Harga Tidak Valid', invalid_duration: 'Durasi Tidak Valid', channel_not_found: 'Channel Tidak Ditemukan', already_subscribed: 'Sudah Berlangganan' }
   },
   pt: {
@@ -151,7 +154,7 @@ const mySubHubTranslationsV331 = {
     channels: { title: 'Meus Canais', add: 'Adicionar Canal', edit: 'Editar', copy: 'Copiar', forward: 'Encaminhar', delete: 'Excluir', active: 'Ativo', inactive: 'Inativo', no_channels: 'Nenhum canal ainda', add_first: 'Adicione Seu Primeiro Canal', bot_admin_required: 'Acesso de Admin do Bot Necessário', bot_admin_instructions: 'Adicione @MySubsHub_bot como administrador ao seu canal primeiro' },
     referrals: { title: 'Programa de Indicação', balance: 'Saldo', referrals: 'Indicações', earned: 'Ganho', your_link: 'Seu Link de Indicação', copy_link: 'Copiar Link', earn_10_percent: 'Ganhe 10% em créditos quando amigos assinarem pelo seu link', credits_note: 'Créditos podem ser usados para assinaturas mas não podem ser sacados' },
     admin: { title: 'Painel Admin', channels: 'Todos os Canais', reports: 'Canais Denunciados', withdrawals: 'Saques Pendentes', approve: 'Aprovar', ban: 'Banir', dismiss: 'Dispensar' },
-    purchase: { channel_price: 'Preço do Canal', platform_fee: 'Taxa da Plataforma (1%)', total_to_pay: 'Total a Pagar', duration: 'Duração', days: 'dias', pay_with_ton: 'Pagar com TON', processing: 'Processando...', use_credits: 'Usar créditos para reduzir pagamento', you_have: 'Você tem', in_credits: 'em créditos' },
+    purchase: { channel_price: 'Preço do Canal', platform_fee: 'Taxa da Plataforma (2%)', total_to_pay: 'Total a Pagar', duration: 'Duração', days: 'dias', pay_with_ton: 'Pagar com TON', processing: 'Processando...', use_credits: 'Usar créditos para reduzir pagamento', you_have: 'Você tem', in_credits: 'em créditos' },
     errors: { network_error: 'Erro de Rede', unauthorized: 'Não Autorizado', invalid_price: 'Preço Inválido', invalid_duration: 'Duração Inválida', channel_not_found: 'Canal Não Encontrado', already_subscribed: 'Já Assinado' }
   },
   tr: {
@@ -163,7 +166,7 @@ const mySubHubTranslationsV331 = {
     channels: { title: 'Kanallarım', add: 'Kanal Ekle', edit: 'Düzenle', copy: 'Kopyala', forward: 'İlet', delete: 'Sil', active: 'Aktif', inactive: 'Aktif Değil', no_channels: 'Henüz kanal yok', add_first: 'İlk Kanalınızı Ekleyin', bot_admin_required: 'Bot Yönetici Erişimi Gerekli', bot_admin_instructions: 'Önce @MySubsHub_bot\'u kanalınıza yönetici olarak ekleyin' },
     referrals: { title: 'Referans Programı', balance: 'Bakiye', referrals: 'Referanslar', earned: 'Kazanılan', your_link: 'Referans Linkiniz', copy_link: 'Linki Kopyala', earn_10_percent: 'Arkadaşlarınız linkiniz üzerinden abone olduğunda %10 kredi kazanın', credits_note: 'Krediler abonelikler için kullanılabilir ancak çekilemez' },
     admin: { title: 'Yönetici Paneli', channels: 'Tüm Kanallar', reports: 'Raporlanan Kanallar', withdrawals: 'Bekleyen Çekmeler', approve: 'Onayla', ban: 'Yasakla', dismiss: 'Reddet' },
-    purchase: { channel_price: 'Kanal Fiyatı', platform_fee: 'Platform Ücreti (%1)', total_to_pay: 'Toplam Ödenecek', duration: 'Süre', days: 'gün', pay_with_ton: 'TON ile Öde', processing: 'İşleniyor...', use_credits: 'Ödemeyi azaltmak için kredi kullan', you_have: 'Sahipsiniz', in_credits: 'kredi' },
+    purchase: { channel_price: 'Kanal Fiyatı', platform_fee: 'Platform Ücreti (%2)', total_to_pay: 'Toplam Ödenecek', duration: 'Süre', days: 'gün', pay_with_ton: 'TON ile Öde', processing: 'İşleniyor...', use_credits: 'Ödemeyi azaltmak için kredi kullan', you_have: 'Sahipsiniz', in_credits: 'kredi' },
     errors: { network_error: 'Ağ Hatası', unauthorized: 'Yetkisiz', invalid_price: 'Geçersiz Fiyat', invalid_duration: 'Geçersiz Süre', channel_not_found: 'Kanal Bulunamadı', already_subscribed: 'Zaten Abone' }
   }
 };
@@ -1288,8 +1291,8 @@ window.loadPurchasePage = async function(channelId, preloadedChannel = null) {
     }
 
     const channelPrice = parseFloat(channel.subscription_price || 0);
-    const platformFee = channelPrice * 0.01;
-    const totalPrice = channelPrice + platformFee;
+    const platformFee = Number((channelPrice * PLATFORM_FEE_PERCENT).toFixed(9));
+    const totalPrice = Number((channelPrice + platformFee).toFixed(9));
     const days = channel.duration_days || 30;
     const name = escapeHtml(channel.channel_name || 'Unknown');
     const reviews = channel.reviews || [];
@@ -2230,7 +2233,7 @@ window.loadAdminDashboard = async function() {
         <div class="grid grid-cols-2 lg:grid-cols-3 gap-2">
           ${metric('Gross value booked', `${formatTon(tx.gross_value_ton || 0)} TON`, `${Number(tx.count || 0).toLocaleString()} recorded payments`)}
           ${metric('Cash received on-chain', `${formatTon(tx.cash_received_ton || 0)} TON`, `Credits redeemed: ${formatTon(tx.credits_redeemed_ton || 0)} TON`)}
-          ${metric('Platform fees booked', `${formatTon(tx.platform_fees_ton || 0)} TON`, '1% fee recorded at checkout')}
+          ${metric('Platform fees booked', `${formatTon(tx.platform_fees_ton || 0)} TON`, 'New checkouts use 2%; historical payments retain their original fee.')}
           ${metric('Creator earnings booked', `${formatTon(tx.creator_earnings_ton || 0)} TON`)}
           ${metric('Creator payouts completed', `${formatTon(tx.creator_paid_ton || 0)} TON`)}
           ${metric('Unpaid creator liability', `${formatTon(tx.creator_unpaid_ton || 0)} TON`, 'Includes pending and approved withdrawal reservations')}
@@ -2877,8 +2880,8 @@ window.showOwnerGuide = function() {
                 <span class="text-2xl">3️⃣</span>
               </div>
               <div>
-                <h2 class="text-xl font-bold mb-2">Earn 99% of Revenue</h2>
-                <p class="text-slate-300 mb-3">You receive 99% of subscription fees. Platform takes only 1% fee.</p>
+                <h2 class="text-xl font-bold mb-2">Earn 100% of Your Listed Channel Price</h2>
+                <p class="text-slate-300 mb-3">You receive 100% of your listed channel price. The platform adds a 2% fee to the subscriber’s checkout total.</p>
                 <ul class="text-sm text-slate-400 space-y-1 list-disc list-inside">
                   <li>Payments go to platform wallet (escrow)</li>
                   <li>Track earnings in dashboard</li>
@@ -2886,7 +2889,7 @@ window.showOwnerGuide = function() {
                   <li>Payouts are processed by the MySubHub platform</li>
                 </ul>
                 <div class="mt-3 p-3 bg-emerald-500/10 border-2 border-emerald-500/30 rounded-xl">
-                  <p class="text-xs text-emerald-300">💰 <strong>Revenue Split:</strong> You receive 99% of subscription fees. Platform takes 1% fee.</p>
+                  <p class="text-xs text-emerald-300">💰 <strong>Revenue:</strong> You receive your full listed channel price. The subscriber pays a 2% platform fee on top.</p>
                 </div>
               </div>
             </div>
