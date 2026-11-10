@@ -1,4 +1,4 @@
-// MySubHub Frontend v3.9.0 - Phase 5.1 creator payouts, Discovery visibility, and responsive layout
+// MySubHub Frontend v3.9.3 - unified Telegram channel onboarding
 // Phase 1: Low-resource API and discovery optimization
 // Phase 2: Channel detail pages, creator analytics, and marketplace sharing
 
@@ -293,7 +293,7 @@ function apiCacheTtl(url) {
   if (/^\/api\/channels\/[0-9a-f-]{36}\/analytics$/i.test(path)) return 60_000;
   if (/^\/api\/reviews\/[0-9a-f-]{36}$/i.test(path)) return 60_000;
   if (path === '/api/channels/my') return 20_000;
-  if (path === '/api/owner/dashboard') return 15_000;
+  if (path === '/api/owner/dashboard') return 0;
   if (path === '/api/subscriptions/my') return 15_000;
   if (path === '/api/withdrawals/my') return 15_000;
   if (path === '/api/referrals/stats') return 30_000;
@@ -519,7 +519,11 @@ window.switchPage = function(pageId) {
   };
   const pageChanged = window.currentPage !== pageId;
   window.currentPage = pageId;
-  if (loaders[pageId]) Promise.resolve(loaders[pageId]()).catch(error => console.error(`Page load failed [${pageId}]:`, error));
+  window.currentPageLoad = loaders[pageId]
+    ? Promise.resolve().then(() => loaders[pageId]()).catch(error => {
+        console.error(`Page load failed [${pageId}]:`, error);
+      })
+    : Promise.resolve();
   if (pageChanged) window.scrollTo({ top: 0, behavior: 'auto' });
 };
 
@@ -1520,7 +1524,7 @@ window.loadOwnerDashboard = async function() {
   if (!container) return;
   container.innerHTML = '<div class="glass-card p-8 text-center text-slate-400"><span class="animate-pulse">Loading your creator studio…</span></div>';
 
-  const dashboard = await apiFetch('/api/owner/dashboard');
+  const dashboard = await apiFetch('/api/owner/dashboard', { noCache: true });
 
   if (dashboard?.error) {
     if (summary) summary.innerHTML = '';
@@ -1556,7 +1560,7 @@ window.loadOwnerDashboard = async function() {
       </div>
       <div class="flex items-center justify-between gap-2 mb-3">
         <div><p class="text-sm font-bold text-white">Your listings</p><p class="text-xs text-slate-500">${activeChannels} published · ${safeChannels.length - activeChannels} need setup</p></div>
-        <button type="button" onclick="openAddChannelModal()" class="btn-primary px-3 py-2 rounded-xl text-xs text-white font-semibold">＋ Add channel</button>
+        ${safeChannels.length > 0 ? '<button type="button" onclick="openAddChannelModal()" class="btn-primary px-3 py-2 rounded-xl text-xs text-white font-semibold">＋ Add channel</button>' : ''}
       </div>`;
   }
 
@@ -1567,15 +1571,15 @@ window.loadOwnerDashboard = async function() {
         <div class="text-center mb-5">
           <div class="w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center mx-auto mb-4 text-3xl">📣</div>
           <h3 class="text-xl font-bold text-white mb-2">Start earning from your community</h3>
-          <p class="text-sm text-slate-400 max-w-sm mx-auto">Add the MySubHub bot as a channel administrator. It will send you a private setup link. Use that link here to configure your subscription.</p>
+          <p class="text-sm text-slate-400 max-w-sm mx-auto">Add @${escapeHtml(BOT_USERNAME)} as an administrator. MySubHub will detect the channel and add it here automatically so you can configure its subscription.</p>
         </div>
         <ol class="text-sm text-slate-300 space-y-2 list-decimal list-inside bg-slate-900/60 rounded-xl p-4 mb-4">
           <li>Open your Telegram channel or group settings.</li>
           <li>Add <strong class="text-cyan-300">@${escapeHtml(BOT_USERNAME)}</strong> as an administrator.</li>
-          <li>Grant only the permissions required to manage members and invite links.</li>
-          <li>Return to MySubHub and paste the setup link sent by the bot.</li>
+          <li>Enable Invite Users via Links and Ban Users / Restrict Members.</li>
+          <li>Return to MySubHub. The channel will appear here automatically; tap Configure channel.</li>
         </ol>
-        <button type="button" onclick="openAddChannelModal()" class="btn-primary w-full min-h-11 rounded-xl px-4 py-3 text-sm font-semibold text-white">Configure a channel</button>
+        <button type="button" onclick="openAddChannelModal()" class="btn-primary w-full min-h-11 rounded-xl px-4 py-3 text-sm font-semibold text-white">Add a channel</button>
       </div>`;
   } else {
     channelsMarkup = safeChannels.map(channel => {
@@ -1606,8 +1610,9 @@ window.loadOwnerDashboard = async function() {
           <div class="flex items-center justify-between gap-3 mt-3 pt-3 border-t border-slate-700/70">
             <span class="text-xs text-amber-300">${reviews > 0 ? `★ ${rating.toFixed(1)} · ${reviews} reviews` : 'No reviews yet'}</span>
             <div class="flex flex-wrap justify-end gap-2">
-              ${active ? `<button type="button" onclick="showChannelShare('${id}')" class="btn-secondary px-3 py-2 rounded-lg text-xs">Share / QR</button><button type="button" onclick="openChannelAnalytics('${id}')" class="btn-secondary px-3 py-2 rounded-lg text-xs">Analytics</button>` : `<button type="button" onclick="openAddChannelModal('${id}')" class="btn-primary px-3 py-2 rounded-lg text-xs text-white">Finish setup</button>`}
-              <button type="button" onclick="openEditModal('${id}')" class="btn-secondary px-3 py-2 rounded-lg text-xs">Manage</button>
+              ${active
+                ? `<button type="button" onclick="showChannelShare('${id}')" class="btn-secondary px-3 py-2 rounded-lg text-xs">Share / QR</button><button type="button" onclick="openChannelAnalytics('${id}')" class="btn-secondary px-3 py-2 rounded-lg text-xs">Analytics</button><button type="button" onclick="openEditModal('${id}')" class="btn-secondary px-3 py-2 rounded-lg text-xs">Manage</button>`
+                : `<button type="button" onclick="openAddChannelModal('${id}')" class="btn-primary px-4 py-2 rounded-lg text-xs text-white">Configure channel</button>`}
             </div>
           </div>
         </article>`;
@@ -1704,78 +1709,111 @@ function renderOwnerEarningsCard(data) {
 window.openAddChannelModal = function(channelId = '') {
   const modal = document.getElementById('add-channel-modal');
   if (!modal) return;
-  const existing = channelId ? (window.ownerChannels || []).find(item => String(item.id) === String(channelId)) : null;
-  window.currentRegisterChannelId = existing?.id || null;
-  
+
+  // The Add Channel button is now an instruction entry point. A channel record
+  // is created automatically by the bot when Telegram confirms its admin role.
+  if (!channelId) {
+    window.currentRegisterChannelId = null;
+    modal.innerHTML = `
+      <div class="glass-card p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+        <div class="flex items-start justify-between gap-3 mb-3">
+          <div><h2 class="text-xl font-bold text-white">Add a Telegram channel</h2><p class="text-xs text-slate-400 mt-1">Connect the channel first. Then configure its subscription in MySubHub.</p></div>
+          <button type="button" onclick="closeAddChannelModal()" class="btn-secondary w-9 h-9 shrink-0 rounded-lg">×</button>
+        </div>
+        <ol class="space-y-3 text-sm text-slate-300">
+          <li class="flex gap-3"><span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-cyan-500/15 text-cyan-300 font-bold">1</span><span>Start <a class="font-semibold text-cyan-300 underline" href="https://t.me/${escapeHtml(BOT_USERNAME)}" target="_blank" rel="noopener">@${escapeHtml(BOT_USERNAME)}</a> in Telegram (one time).</span></li>
+          <li class="flex gap-3"><span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-cyan-500/15 text-cyan-300 font-bold">2</span><span>Open your Telegram channel or group → Settings → Administrators → Add Administrator. Search for <strong class="text-white">@${escapeHtml(BOT_USERNAME)} bot</strong> and select it.</span></li>
+          <li class="flex gap-3"><span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-cyan-500/15 text-cyan-300 font-bold">3</span><span>Enable <strong class="text-white">Invite users via links</strong> and <strong class="text-white">Ban users / Restrict members</strong> permissions, then save.</span></li>
+          <li class="flex gap-3"><span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-cyan-500/15 text-cyan-300 font-bold">4</span><span>The bot will link the channel to your account. Return to My Channels and tap <strong class="text-white">Configure channel</strong> on the new draft.</span></li>
+        </ol>
+        <div class="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-3 mt-4"><p class="text-xs text-cyan-100">No invite-link copy/paste. No second registration. The channel appears here automatically after Telegram confirms that @${escapeHtml(BOT_USERNAME)} is an administrator.</p></div>
+        <div class="grid grid-cols-2 gap-2 mt-5">
+          <button type="button" onclick="closeAddChannelModal()" class="btn-secondary rounded-xl px-4 py-3 text-sm">Close</button>
+          <button type="button" onclick="closeAddChannelModal(); loadOwnerDashboard()" class="btn-primary rounded-xl px-4 py-3 text-sm font-semibold text-white">Refresh My Channels</button>
+        </div>
+      </div>`;
+    modal.classList.remove('hidden');
+    return;
+  }
+
+  const existing = (window.ownerChannels || []).find(item => String(item.id) === String(channelId));
+  if (!existing) {
+    Toast.error('This channel draft was not found. Refresh My Channels.');
+    loadOwnerDashboard();
+    return;
+  }
+  if (existing.is_active === true) {
+    window.openEditModal(channelId);
+    return;
+  }
+
+  window.currentRegisterChannelId = existing.id;
   modal.innerHTML = `
     <div class="glass-card p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
-      <h2 class="text-xl font-bold text-white mb-2">${existing ? 'Finish channel setup' : t('channels.add')}</h2>
-      <p class="text-xs text-slate-400 mb-5">Paste the private setup invite link sent by @${escapeHtml(BOT_USERNAME)} after you added the bot as an administrator.</p>
+      <div class="flex items-start justify-between gap-3 mb-2">
+        <div><h2 class="text-xl font-bold text-white">Configure channel</h2><p class="text-xs text-slate-400 mt-1">${escapeHtml(existing.channel_name || 'Telegram channel')}</p></div>
+        <button type="button" onclick="closeAddChannelModal()" class="btn-secondary w-9 h-9 shrink-0 rounded-lg">×</button>
+      </div>
+      <div class="rounded-xl border border-emerald-500/25 bg-emerald-500/5 p-3 mb-4"><p class="text-xs text-emerald-200">Telegram channel detected and linked to your account. MySubHub will check the bot's current administrator permissions when you publish.</p></div>
       <div class="space-y-4">
         <div>
-          <label class="text-sm text-slate-400 mb-2 block">Channel Name</label>
-          <input type="text" id="add-channel-name" maxlength="100" value="${escapeHtml(existing?.channel_name || '')}" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white" placeholder="My Channel" />
+          <label class="text-sm text-slate-400 mb-2 block" for="add-channel-name">Listing name</label>
+          <input type="text" id="add-channel-name" maxlength="100" value="${escapeHtml(existing.channel_name || '')}" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white" placeholder="My Channel" />
         </div>
         <div>
-          <label class="text-sm text-slate-400 mb-2 block">Invite Link</label>
-          <input type="text" id="add-channel-link" maxlength="256" value="${escapeHtml(existing?.channel_invite_link || '')}" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white" placeholder="https://t.me/..." />
-        </div>
-        <div>
-          <label class="text-sm text-slate-400 mb-2 block">Subscription Price (TON)</label>
-          <input type="number" id="add-channel-price" step="0.000000001" min="0.000000001" max="1000000" value="${existing?.subscription_price ?? '0.1'}" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white" placeholder="1.0" />
+          <label class="text-sm text-slate-400 mb-2 block" for="add-channel-price">Subscription Price (TON)</label>
+          <input type="number" id="add-channel-price" step="0.000000001" min="0.000000001" max="1000000" value="${existing.subscription_price ?? '0.1'}" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white" placeholder="1.0" />
         </div>
         <div>
           <label class="text-sm text-slate-400 mb-3 block">Subscription Duration</label>
           <div class="grid grid-cols-3 gap-2">
-            <button onclick="selectDuration(7)" class="duration-btn bg-slate-800 border-2 border-slate-700 rounded-xl px-3 py-3 text-xs text-white hover:border-cyan-500 transition-all" data-days="7">1 Week</button>
-            <button onclick="selectDuration(30)" class="duration-btn bg-slate-800 border-2 border-slate-700 rounded-xl px-3 py-3 text-xs text-white hover:border-cyan-500 transition-all" data-days="30">1 Month</button>
-            <button onclick="selectDuration(90)" class="duration-btn bg-slate-800 border-2 border-slate-700 rounded-xl px-3 py-3 text-xs text-white hover:border-cyan-500 transition-all" data-days="90">3 Months</button>
-            <button onclick="selectDuration(180)" class="duration-btn bg-slate-800 border-2 border-slate-700 rounded-xl px-3 py-3 text-xs text-white hover:border-cyan-500 transition-all" data-days="180">6 Months</button>
-            <button onclick="selectDuration(365)" class="duration-btn bg-slate-800 border-2 border-slate-700 rounded-xl px-3 py-3 text-xs text-white hover:border-cyan-500 transition-all" data-days="365">1 Year</button>
-            <button onclick="selectDuration(9999)" class="duration-btn bg-slate-800 border-2 border-slate-700 rounded-xl px-3 py-3 text-xs text-white hover:border-cyan-500 transition-all" data-days="9999">9,999 days</button>
+            <button type="button" onclick="selectDuration(7)" class="duration-btn bg-slate-800 border-2 border-slate-700 rounded-xl px-3 py-3 text-xs text-white hover:border-cyan-500 transition-all" data-days="7">1 Week</button>
+            <button type="button" onclick="selectDuration(30)" class="duration-btn bg-slate-800 border-2 border-slate-700 rounded-xl px-3 py-3 text-xs text-white hover:border-cyan-500 transition-all" data-days="30">1 Month</button>
+            <button type="button" onclick="selectDuration(90)" class="duration-btn bg-slate-800 border-2 border-slate-700 rounded-xl px-3 py-3 text-xs text-white hover:border-cyan-500 transition-all" data-days="90">3 Months</button>
+            <button type="button" onclick="selectDuration(180)" class="duration-btn bg-slate-800 border-2 border-slate-700 rounded-xl px-3 py-3 text-xs text-white hover:border-cyan-500 transition-all" data-days="180">6 Months</button>
+            <button type="button" onclick="selectDuration(365)" class="duration-btn bg-slate-800 border-2 border-slate-700 rounded-xl px-3 py-3 text-xs text-white hover:border-cyan-500 transition-all" data-days="365">1 Year</button>
+            <button type="button" onclick="selectDuration(9999)" class="duration-btn bg-slate-800 border-2 border-slate-700 rounded-xl px-3 py-3 text-xs text-white hover:border-cyan-500 transition-all" data-days="9999">9,999 days</button>
           </div>
-          <input type="hidden" id="add-channel-duration" value="${Number(existing?.duration_days || 30)}" />
+          <input type="hidden" id="add-channel-duration" value="${Number(existing.duration_days || 30)}" />
         </div>
         <div>
           <label class="text-sm text-slate-400 mb-2 block" for="add-channel-description">Description</label>
-          <textarea id="add-channel-description" maxlength="1000" rows="3" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white" placeholder="Describe what subscribers receive, how often you post, and who this community is for.">${escapeHtml(existing?.description || '')}</textarea>
-          <p class="text-[11px] text-slate-500 mt-1">Up to 1,000 characters. A clear description helps visitors decide to subscribe.</p>
+          <textarea id="add-channel-description" maxlength="1000" rows="3" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white" placeholder="Describe what subscribers receive, how often you post, and who this community is for.">${escapeHtml(existing.description || '')}</textarea>
+          <p class="text-[11px] text-slate-500 mt-1">Up to 1,000 characters.</p>
         </div>
         <div>
           <label class="text-sm text-slate-400 mb-2 block" for="add-channel-image">Channel image URL (optional)</label>
-          <input type="url" id="add-channel-image" maxlength="2048" value="${escapeHtml(existing?.image_url || '')}" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white" placeholder="https://example.com/channel-image.webp" />
-          <p class="text-[11px] text-slate-500 mt-1">Use a public HTTPS image URL. Images are hosted elsewhere; MySubHub does not use Supabase Storage for them.</p>
+          <input type="url" id="add-channel-image" maxlength="2048" value="${escapeHtml(existing.image_url || '')}" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white" placeholder="https://example.com/channel-image.webp" />
         </div>
         <div>
-          <label class="text-sm text-slate-400 mb-2 block">Category</label>
+          <label class="text-sm text-slate-400 mb-2 block" for="add-channel-category">Category</label>
           <select id="add-channel-category" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white">
-            <option value="crypto" ${existing?.category === 'crypto' ? 'selected' : ''}>💰 Cryptocurrency</option>
-            <option value="news" ${existing?.category === 'news' ? 'selected' : ''}>📰 News</option>
-            <option value="education" ${existing?.category === 'education' ? 'selected' : ''}>📚 Education</option>
-            <option value="entertainment" ${existing?.category === 'entertainment' ? 'selected' : ''}>🎬 Entertainment</option>
-            <option value="sports" ${existing?.category === 'sports' ? 'selected' : ''}>⚽ Sports</option>
-            <option value="technology" ${existing?.category === 'technology' ? 'selected' : ''}>💻 Technology</option>
-            <option value="business" ${existing?.category === 'business' ? 'selected' : ''}>💼 Business</option>
-            <option value="lifestyle" ${existing?.category === 'lifestyle' ? 'selected' : ''}>🌟 Lifestyle</option>
-            <option value="gaming" ${existing?.category === 'gaming' ? 'selected' : ''}>🎮 Gaming</option>
-            <option value="music" ${existing?.category === 'music' ? 'selected' : ''}>🎵 Music</option>
-            <option value="other" ${!existing?.category || existing?.category === 'other' ? 'selected' : ''}>✨ Other</option>
+            <option value="crypto" ${existing.category === 'crypto' ? 'selected' : ''}>💰 Cryptocurrency</option>
+            <option value="news" ${existing.category === 'news' ? 'selected' : ''}>📰 News</option>
+            <option value="education" ${existing.category === 'education' ? 'selected' : ''}>📚 Education</option>
+            <option value="entertainment" ${existing.category === 'entertainment' ? 'selected' : ''}>🎬 Entertainment</option>
+            <option value="sports" ${existing.category === 'sports' ? 'selected' : ''}>⚽ Sports</option>
+            <option value="technology" ${existing.category === 'technology' ? 'selected' : ''}>💻 Technology</option>
+            <option value="business" ${existing.category === 'business' ? 'selected' : ''}>💼 Business</option>
+            <option value="lifestyle" ${existing.category === 'lifestyle' ? 'selected' : ''}>🌟 Lifestyle</option>
+            <option value="gaming" ${existing.category === 'gaming' ? 'selected' : ''}>🎮 Gaming</option>
+            <option value="music" ${existing.category === 'music' ? 'selected' : ''}>🎵 Music</option>
+            <option value="other" ${!existing.category || existing.category === 'other' ? 'selected' : ''}>✨ Other</option>
           </select>
         </div>
         <label class="flex items-start gap-3 rounded-xl border border-slate-700 bg-slate-900/50 p-3 cursor-pointer">
-          <input id="add-channel-discoverable" type="checkbox" class="mt-1 h-4 w-4 shrink-0 accent-cyan-500" ${existing?.is_discoverable !== false ? 'checked' : ''} />
-          <span class="min-w-0"><span class="block text-sm font-semibold text-white">Show this channel in Discovery</span><span class="block text-xs text-slate-400 mt-1">When disabled, the channel is hidden from public Discovery and search. People with its direct link can still open its listing.</span></span>
+          <input id="add-channel-discoverable" type="checkbox" class="mt-1 h-4 w-4 shrink-0 accent-cyan-500" ${existing.is_discoverable !== false ? 'checked' : ''} />
+          <span class="min-w-0"><span class="block text-sm font-semibold text-white">Show this channel in Discovery</span><span class="block text-xs text-slate-400 mt-1">Hidden listings remain accessible through their direct listing link.</span></span>
         </label>
       </div>
       <div class="flex gap-3 mt-6">
-        <button onclick="closeAddChannelModal()" class="flex-1 btn-secondary px-4 py-3 rounded-xl text-sm">${t('common.cancel')}</button>
-        <button onclick="submitAddChannel()" class="flex-1 btn-primary px-4 py-3 rounded-xl text-sm text-white font-semibold">${t('channels.add')}</button>
+        <button type="button" onclick="closeAddChannelModal()" class="flex-1 btn-secondary px-4 py-3 rounded-xl text-sm">Cancel</button>
+        <button type="button" id="setup-channel-submit" onclick="submitAddChannel()" class="flex-1 btn-primary px-4 py-3 rounded-xl text-sm text-white font-semibold">Publish channel</button>
       </div>
-    </div>
-  `;
-  
+    </div>`;
+
   modal.classList.remove('hidden');
-  window.selectDuration(Number(existing?.duration_days || 30));
+  window.selectDuration(Number(existing.duration_days || 30));
 };
 
 window.selectDuration = function(days) {
@@ -1797,87 +1835,66 @@ window.closeAddChannelModal = function() {
 };
 
 window.submitAddChannel = async function() {
-  const name = document.getElementById('add-channel-name')?.value?.trim();
-  const link = document.getElementById('add-channel-link')?.value?.trim();
-  const price = document.getElementById('add-channel-price')?.value;
-  const duration = document.getElementById('add-channel-duration')?.value;
-  const category = document.getElementById('add-channel-category')?.value;
+  const channelId = window.currentRegisterChannelId;
+  const name = document.getElementById('add-channel-name')?.value?.trim() || '';
+  const priceValue = document.getElementById('add-channel-price')?.value || '';
+  const durationValue = document.getElementById('add-channel-duration')?.value || '';
+  const category = document.getElementById('add-channel-category')?.value || 'other';
   const description = document.getElementById('add-channel-description')?.value?.trim() || '';
   const imageUrl = document.getElementById('add-channel-image')?.value?.trim() || '';
+  const submitButton = document.getElementById('setup-channel-submit');
 
-  if (!name || !link || !price) {
-    Toast.error('Please fill all fields');
+  if (!channelId) {
+    Toast.error('Add @MySubsHub_bot to the Telegram channel first. The channel will appear here automatically.');
+    return;
+  }
+  if (!name || name.length > 100) {
+    Toast.error('Enter a channel name between 1 and 100 characters.');
+    return;
+  }
+  const price = Number(priceValue);
+  const duration = Number(durationValue);
+  if (!Number.isFinite(price) || price <= 0) {
+    Toast.error('Enter a valid subscription price greater than zero.');
+    return;
+  }
+  if (![7, 30, 90, 180, 365, 9999].includes(duration)) {
+    Toast.error('Select a valid subscription duration.');
     return;
   }
 
-  const res = await apiFetch('/api/channels/register', {
-    method: 'POST',
+  if (submitButton) { submitButton.disabled = true; submitButton.textContent = 'Checking Telegram permissions…'; }
+  const res = await apiFetch(`/api/channels/${channelId}/configure`, {
+    method: 'PUT',
     body: JSON.stringify({
       channel_name: name,
-      channel_invite_link: link,
-      subscription_price: parseFloat(price),
-      duration_days: parseInt(duration),
-      category: category,
-      description: description,
+      subscription_price: price,
+      duration_days: duration,
+      category,
+      description,
       image_url: imageUrl,
       is_discoverable: document.getElementById('add-channel-discoverable')?.checked === true
     })
   }, 0);
 
-  if (res.error) {
-    if (res.error.includes('administrator') || res.error.includes('admin')) {
-      showBotAdminRequiredDialog(res.error);
-    } else {
-      Toast.error(res.error);
-    }
-  } else {
-    Toast.success('Channel added!');
-    closeAddChannelModal();
-    loadOwnerDashboard();
+  if (res?.error) {
+    Toast.error(res.error);
+    if (submitButton) { submitButton.disabled = false; submitButton.textContent = 'Publish channel'; }
+    return;
   }
-};
 
-function showBotAdminRequiredDialog(errorMessage) {
-  const modal = document.createElement('div');
-  modal.className = 'fixed inset-0 z-[9999] bg-black/80 backdrop-blur-md flex items-center justify-center p-4';
-  modal.innerHTML = `
-    <div class="glass-card p-6 max-w-md w-full border-2 border-amber-500/30">
-      <div class="text-center mb-5">
-        <div class="w-20 h-20 rounded-2xl bg-amber-500/20 border-2 border-amber-500/30 flex items-center justify-center mx-auto mb-4">
-          <span class="text-4xl">⚠️</span>
-        </div>
-        <h2 class="text-xl font-bold text-white mb-2">${t('channels.bot_admin_required')}</h2>
-        <p class="text-sm text-slate-300 mb-4">${escapeHtml(errorMessage)}</p>
-      </div>
-      
-      <div class="bg-slate-800/50 rounded-xl p-4 mb-5">
-        <h3 class="text-sm font-bold text-white mb-3">How to add bot as administrator:</h3>
-        <ol class="text-sm text-slate-300 space-y-2 list-decimal list-inside">
-          <li>Open your Telegram channel</li>
-          <li>Go to Channel Settings → Administrators</li>
-          <li>Click "Add Administrator"</li>
-          <li>Search for @MySubsHub_bot bot and select it</li>
-          <li>Grant necessary permissions</li>
-          <li>Click "Save" or "Done"</li>
-          <li>Try adding the channel again</li>
-        </ol>
-      </div>
-      
-      <div class="flex gap-3">
-        <button onclick="this.closest('.fixed').remove()" class="flex-1 btn-secondary px-4 py-3 rounded-xl text-sm">
-          ${t('common.close')}
-        </button>
-        <button onclick="this.closest('.fixed').remove(); openAddChannelModal()" class="flex-1 btn-primary px-4 py-3 rounded-xl text-sm text-white font-semibold">
-          ${t('common.retry')}
-        </button>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(modal);
-}
+  closeAddChannelModal();
+  Toast.success('Channel published successfully.');
+  await loadOwnerDashboard();
+};
 
 // ================== EDIT CHANNEL MODAL ==================
 window.openEditModal = async function(channelId) {
+  const ownerChannel = (window.ownerChannels || []).find(item => String(item.id) === String(channelId));
+  if (ownerChannel && ownerChannel.is_active !== true) {
+    window.openAddChannelModal(channelId);
+    return;
+  }
   window.currentEditChannelId = channelId;
   
   console.log('Opening edit modal for channel:', channelId);
@@ -2822,8 +2839,8 @@ window.showOwnerGuide = function() {
                   <li>Open your Telegram channel</li>
                   <li>Go to Channel Settings → Administrators</li>
                   <li>Click "Add Administrator"</li>
-                  <li>Search for <strong class="text-blue-400">@MySubsHub_bot</strong></li>
-                  <li>Grant ALL permissions (important!)</li>
+                  <li>Search for <strong class="text-blue-400">@MySubsHub_bot bot</strong> and select it</li>
+                  <li>Enable Invite Users via Links and Ban Users / Restrict Members</li>
                   <li>Click "Save" or "Done"</li>
                 </ul>
                 <div class="mt-3 p-3 bg-amber-500/10 border-2 border-amber-500/30 rounded-xl">
@@ -2839,22 +2856,17 @@ window.showOwnerGuide = function() {
                 <span class="text-2xl">2️⃣</span>
               </div>
               <div>
-                <h2 class="text-xl font-bold mb-2">Register Your Channel</h2>
-                <p class="text-slate-300 mb-3">Add your channel to MySubHub platform.</p>
+                <h2 class="text-xl font-bold mb-2">Configure Your Channel</h2>
+                <p class="text-slate-300 mb-3">MySubHub detects and links the channel automatically when Telegram confirms that the bot is an administrator.</p>
                 <ul class="text-sm text-slate-400 space-y-1 list-disc list-inside">
-                  <li>Go to "My Channels" tab</li>
-                  <li>Click "Add Channel"</li>
-                  <li>Fill in channel details:
-                    <ul class="ml-4 mt-1 space-y-1">
-                      <li>• Channel name</li>
-                      <li>• Invite link</li>
-                      <li>• Subscription price (in TON)</li>
-                      <li>• Duration (1 week to unlimited)</li>
-                      <li>• Category</li>
-                    </ul>
-                  </li>
-                  <li>Click "Add Channel"</li>
+                  <li>Return to the "My Channels" tab</li>
+                  <li>Find the channel marked "Setup incomplete"</li>
+                  <li>Tap "Configure channel"</li>
+                  <li>Set the listing name, subscription price, duration, and category</li>
+                  <li>Choose whether the channel appears in Discovery</li>
+                  <li>Tap "Publish channel"</li>
                 </ul>
+                <p class="text-xs text-slate-500 mt-3">You do not need to paste an invite link or register the channel a second time.</p>
               </div>
             </div>
           </div>
@@ -2948,6 +2960,11 @@ async function init() {
       window.switchPage('discover');
     } else if (startParam === 'owner') {
       window.switchPage('owner');
+    } else if (typeof startParam === 'string' && /^configure_[0-9a-fA-F-]{36}$/.test(startParam)) {
+      const channelId = startParam.slice('configure_'.length);
+      window.switchPage('owner');
+      await window.currentPageLoad;
+      window.openAddChannelModal(channelId);
     } else if (startParam === 'admin' && window.isAdmin) {
       window.switchPage('admin');
     } else if (startParam === 'admin-channels' && window.isAdmin) {
@@ -2968,5 +2985,5 @@ document.addEventListener('visibilitychange', () => {
 });
 window.addEventListener('focus', () => window.loadNotifications?.(false));
 window.addEventListener('load', () => { init(); }, { once: true });
-console.log('MySubHub app.js v3.7.0 - creator growth, share landing and retention');
+console.log('MySubHub app.js v3.9.3 - unified Telegram channel onboarding');
 console.log('Language:', currentLanguage);
