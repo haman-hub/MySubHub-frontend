@@ -553,3 +553,212 @@ button:disabled {
 .phase3-creator-avatar-img,.phase3-creator-avatar-fallback{width:48px;height:48px;flex:0 0 48px;border-radius:50%;object-fit:cover;border:1px solid rgba(103,232,249,.28);background:linear-gradient(135deg,#0e7490,#4338ca);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:19px}
 .phase3-funnel-panel{border:1px solid rgba(34,211,238,.18);border-radius:1rem;padding:1rem;background:linear-gradient(135deg,rgba(8,47,73,.28),rgba(15,23,42,.7))}
 .phase3-creator-profile textarea{resize:vertical;min-height:100px}
+
+/* ================== Phase 5.1 responsive and wallet payout refinements ================== */
+:root {
+  --mysubhub-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --mysubhub-safe-top: env(safe-area-inset-top, 0px);
+}
+
+html,
+body {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: clip;
+  overscroll-behavior-x: none;
+}
+
+body {
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding-bottom: calc(5.75rem + var(--mysubhub-safe-bottom));
+}
+
+#app-container,
+#app-container > section,
+#page-discover,
+#page-subscriptions,
+#page-owner,
+#page-referrals,
+#page-admin,
+#page-admin-channels,
+.glass-card,
+.creator-payout-row,
+.creator-earnings-card {
+  min-width: 0;
+  max-width: 100%;
+}
+
+#app-container {
+  width: 100%;
+  overflow-x: clip;
+  padding-left: max(0.75rem, env(safe-area-inset-left, 0px));
+  padding-right: max(0.75rem, env(safe-area-inset-right, 0px));
+}
+
+.glass-card {
+  overflow-wrap: anywhere;
+}
+
+.glass-card img,
+.glass-card svg,
+img,
+svg {
+  max-width: 100%;
+}
+
+button,
+a,
+input,
+select,
+textarea {
+  max-width: 100%;
+}
+
+button svg,
+.tab-icon-box svg,
+.tab-icon-box span {
+  flex: 0 0 auto;
+}
+
+#nav-bar {
+  padding-left: max(0.5rem, env(safe-area-inset-left, 0px));
+  padding-right: max(0.5rem, env(safe-area-inset-right, 0px));
+  padding-bottom: calc(0.45rem + var(--mysubhub-safe-bottom));
+  min-height: calc(4.25rem + var(--mysubhub-safe-bottom));
+  overflow: visible;
+}
+
+#nav-bar > div {
+  min-width: 0;
+  width: 100%;
+  gap: 0.15rem;
+}
+
+#nav-bar .tab-btn {
+  min-width: 0;
+  flex: 1 1 0%;
+  padding-left: 0.15rem;
+  padding-right: 0.15rem;
+  overflow: visible;
+}
+
+#nav-bar .tab-icon-box {
+  width: 2.35rem;
+  height: 2.1rem;
+  flex: 0 0 auto;
+  overflow: visible;
+}
+
+#nav-bar .tab-btn > span {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  overflow: visible;
+  white-space: normal;
+  text-align: center;
+  font-size: clamp(0.55rem, 2.5vw, 0.68rem);
+  line-height: 1.05;
+  overflow-wrap: anywhere;
+}
+
+#nav-bar .tab-indicator {
+  flex: 0 0 auto;
+}
+
+/* Modals remain inside short mobile/Telegram viewports and can scroll fully. */
+#add-channel-modal:not(.hidden),
+#edit-modal-dynamic {
+  overflow-y: auto;
+  align-items: flex-start;
+  padding-top: max(0.75rem, var(--mysubhub-safe-top));
+  padding-bottom: calc(1rem + var(--mysubhub-safe-bottom));
+}
+
+#add-channel-modal > .glass-card,
+#edit-modal-dynamic > .glass-card {
+  max-height: calc(100dvh - 1.5rem - var(--mysubhub-safe-top) - var(--mysubhub-safe-bottom));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.creator-payout-row p,
+.creator-payout-row span,
+.creator-earnings-card p {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.creator-payout-row button,
+.creator-earnings-card button {
+  max-width: 100%;
+  white-space: normal;
+}
+
+@media (max-width: 390px) {
+  #app-container {
+    padding-left: 0.625rem;
+    padding-right: 0.625rem;
+  }
+
+  .glass-card {
+    border-radius: 1rem;
+  }
+
+  #nav-bar .tab-icon-box {
+    width: 2rem;
+    height: 1.9rem;
+  }
+
+  #nav-bar .tab-icon-box svg {
+    width: 1.1rem;
+    height: 1.1rem;
+  }
+
+  #nav-bar .tab-btn > span {
+    font-size: 0.55rem;
+    letter-spacing: -0.02em;
+  }
+
+  .creator-payout-row .text-right {
+    text-align: left;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+
+/* Phase 5.1 responsive edge and icon safeguards */
+#app-container * { min-width: 0; }
+#app-container svg,
+#nav-bar svg,
+button svg {
+  display: block;
+  overflow: visible;
+  flex-shrink: 0;
+}
+#app-container :is(input, select, textarea) {
+  width: 100%;
+  min-width: 0;
+}
+#nav-bar .tab-btn {
+  min-height: 3.65rem;
+}
+#nav-bar .tab-icon-box {
+  margin-inline: auto;
+}
+#app-container .flex > :is(input, select, textarea) {
+  flex: 1 1 0%;
+}
+@supports not (overflow: clip) {
+  html, body { overflow-x: hidden; }
+}
