@@ -1,4 +1,4 @@
-// MySubHub Frontend v3.9.4 - 2% platform fee + unified channel onboarding
+// MySubHub Frontend v3.9.5 - Telegram-native channel sharing + 2% platform fee + unified channel onboarding
 // Phase 1: Low-resource API and discovery optimization
 // Phase 2: Channel detail pages, creator analytics, and marketplace sharing
 
@@ -897,9 +897,14 @@ window.loadMoreChannelReviews = async function(channelId) {
   if (target) target.innerHTML = renderChannelReviews(merged, channelId, channelReviewState.total);
 };
 
-function getPublicChannelShareUrl(channelId) {
+function getTelegramChannelLink(channelId) {
   if (!/^[0-9a-f-]{36}$/i.test(String(channelId || ''))) return '';
-  return `${API_BASE}/share/channels/${encodeURIComponent(channelId)}`;
+  const botUsername = String(BOT_USERNAME || '').replace(/^@/, '').trim();
+  if (!/^[A-Za-z0-9_]{5,32}$/.test(botUsername)) return '';
+  // Telegram's /start deep link is handled by the existing Telegraf bot.
+  // The bot forwards the UUID to the Mini App as startapp=<channel UUID>,
+  // where init() opens the matching channel details page.
+  return `https://t.me/${botUsername}?start=${encodeURIComponent(channelId)}`;
 }
 
 window.showChannelShare = function(channelId) {
@@ -908,7 +913,8 @@ window.showChannelShare = function(channelId) {
     ? window.currentChannelDetails
     : (window.ownerChannels || []).find(item => String(item.id) === String(channelId));
   const title = channel?.channel_name || 'MySubHub channel';
-  const link = getPublicChannelShareUrl(channelId);
+  const link = getTelegramChannelLink(channelId);
+  if (!link) { Toast.error('The Telegram bot username is not configured correctly.'); return; }
   let modal = document.getElementById('phase2-share-modal');
   if (!modal) {
     modal = document.createElement('div');
@@ -918,11 +924,11 @@ window.showChannelShare = function(channelId) {
   }
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&format=png&margin=10&data=${encodeURIComponent(link)}`;
   modal.innerHTML = `<div class="glass-card w-full max-w-sm max-h-[90vh] overflow-y-auto p-5">
-    <div class="flex items-center justify-between gap-3 mb-4"><div><h2 class="text-lg font-bold text-white">Promote ${escapeHtml(title)}</h2><p class="text-xs text-slate-400 mt-1">A public preview page people can open before launching Telegram.</p></div><button type="button" onclick="document.getElementById('phase2-share-modal')?.remove()" class="btn-secondary w-9 h-9 rounded-lg">×</button></div>
+    <div class="flex items-center justify-between gap-3 mb-4"><div><h2 class="text-lg font-bold text-white">Promote ${escapeHtml(title)}</h2><p class="text-xs text-slate-400 mt-1">A Telegram link that opens this channel in MySubHub.</p></div><button type="button" onclick="document.getElementById('phase2-share-modal')?.remove()" class="btn-secondary w-9 h-9 rounded-lg">×</button></div>
     <div class="bg-white rounded-2xl p-3 w-fit mx-auto"><img src="${escapeHtml(qrUrl)}" alt="QR code for ${escapeHtml(title)}" width="220" height="220" loading="lazy" referrerpolicy="no-referrer" onerror="this.closest('.bg-white').innerHTML='<p class=\'text-slate-700 text-sm p-6\'>QR image unavailable. Copy the link below instead.</p>'"></div>
-    <p class="text-[11px] text-slate-400 text-center mt-3">QR code encodes the public channel preview. It contains no payment or wallet information.</p>
+    <p class="text-[11px] text-slate-400 text-center mt-3">QR code opens this channel through the official MySubHub Telegram bot. It contains no payment or wallet information.</p>
     <div class="bg-slate-950/70 rounded-lg p-3 mt-4 break-all text-xs text-cyan-200">${escapeHtml(link)}</div>
-    <div class="grid grid-cols-2 gap-2 mt-3"><button type="button" onclick="copyToClipboard('${escapeHtml(link)}', 'Share link copied')" class="btn-primary py-3 rounded-xl text-sm text-white">Copy preview link</button><button type="button" onclick="forwardChannelLink('${channelId}')" class="btn-secondary py-3 rounded-xl text-sm text-white">Share in Telegram</button></div>
+    <div class="grid grid-cols-2 gap-2 mt-3"><button type="button" onclick="copyToClipboard('${escapeHtml(link)}', 'Share link copied')" class="btn-primary py-3 rounded-xl text-sm text-white">Copy Telegram link</button><button type="button" onclick="forwardChannelLink('${channelId}')" class="btn-secondary py-3 rounded-xl text-sm text-white">Share in Telegram</button></div>
     <button type="button" onclick="downloadChannelPromoCard('${channelId}')" class="btn-secondary w-full py-3 rounded-xl text-sm text-white mt-2">⬇ Download promotional image</button>
   </div>`;
 };
@@ -1004,7 +1010,7 @@ window.downloadChannelPromoCard = async function(channelId) {
   ctx.fillText(reviews > 0 ? `★ ${rating.toFixed(1)}  ·  ${reviews} reviews` : 'Discover this community', 690, 520);
   ctx.fillStyle = '#94a3b8';
   ctx.font = '18px Arial, sans-serif';
-  ctx.fillText('Open the public preview and continue in Telegram', 690, 555);
+  ctx.fillText('Open MySubHub in Telegram to subscribe', 690, 555);
 
   try {
     const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
@@ -2124,7 +2130,7 @@ window.deleteChannel = async function(channelId) {
 
 // ================== SHARE & FORWARD ==================
 window.copyShareLink = function(channelId) {
-  copyToClipboard(getPublicChannelShareUrl(channelId), 'Public preview link copied!');
+  copyToClipboard(getTelegramChannelLink(channelId), 'Telegram channel link copied!');
 };
 
 window.forwardChannelLink = function(channelId) {
@@ -2132,8 +2138,9 @@ window.forwardChannelLink = function(channelId) {
     ? window.currentChannelDetails
     : (window.ownerChannels || []).find(item => String(item.id) === String(channelId));
   const channelName = channel?.channel_name || 'a premium community';
-  const link = getPublicChannelShareUrl(channelId);
-  const message = `🎯 Discover "${channelName}" on MySubHub!\n\n💎 Get premium content with TON payments\n🔒 Secure and private\n✨ Easy subscription management\n\nClick here to subscribe: ${link}`;
+  const link = getTelegramChannelLink(channelId);
+  if (!link) { Toast.error('The Telegram bot username is not configured correctly.'); return; }
+  const message = `🎯 Discover "${channelName}" on MySubHub!\n\n💎 Get premium content with TON payments\n🔒 Secure and private\n✨ Easy subscription management\n\nOpen this channel in Telegram: ${link}`;
   
   const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(message)}`;
   
