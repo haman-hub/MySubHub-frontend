@@ -1,4 +1,4 @@
-// MySubHub Frontend v3.9.5 - Telegram-native channel sharing + 2% platform fee + unified channel onboarding
+// MySubHub Frontend v3.9.6 - Telegram-native channel sharing + 2% platform fee + unified channel onboarding
 // Phase 1: Low-resource API and discovery optimization
 // Phase 2: Channel detail pages, creator analytics, and marketplace sharing
 
@@ -1569,7 +1569,7 @@ window.loadOwnerDashboard = async function() {
       </div>
       <div class="flex items-center justify-between gap-2 mb-3">
         <div><p class="text-sm font-bold text-white">Your listings</p><p class="text-xs text-slate-500">${activeChannels} published · ${safeChannels.length - activeChannels} need setup</p></div>
-        ${safeChannels.length > 0 ? '<button type="button" onclick="openAddChannelModal()" class="btn-primary px-3 py-2 rounded-xl text-xs text-white font-semibold">＋ Add channel</button>' : ''}
+
       </div>`;
   }
 
@@ -1588,7 +1588,6 @@ window.loadOwnerDashboard = async function() {
           <li>Enable Invite Users via Links and Ban Users / Restrict Members.</li>
           <li>Return to MySubHub. The channel will appear here automatically; tap Configure channel.</li>
         </ol>
-        <button type="button" onclick="openAddChannelModal()" class="btn-primary w-full min-h-11 rounded-xl px-4 py-3 text-sm font-semibold text-white">Add a channel</button>
       </div>`;
   } else {
     channelsMarkup = safeChannels.map(channel => {
@@ -1703,12 +1702,9 @@ function renderOwnerEarningsCard(data) {
           <p class="text-xs font-mono text-slate-200 mt-2 break-all">${wallet ? escapeHtml(shortWallet) : 'Not connected'}</p>
         </div>
       </div>
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-slate-700/70 bg-slate-900/40 p-3">
-        <div class="min-w-0">
-          <p class="text-xs font-semibold ${wallet ? 'text-emerald-300' : 'text-amber-300'}">${wallet ? 'TON payout wallet saved' : 'Connect a TON payout wallet'}</p>
-          <p class="text-[11px] leading-relaxed text-slate-400 mt-1">MySubHub administrators send creator payouts directly to this saved wallet. Check that it belongs to you and is on the correct TON network.</p>
-        </div>
-        <button type="button" onclick="connectWallet()" class="btn-secondary shrink-0 px-4 py-2.5 rounded-lg text-xs font-semibold">${wallet ? 'Change wallet' : 'Connect wallet'}</button>
+      <div class="rounded-xl border border-slate-700/70 bg-slate-900/40 p-3">
+        <p class="text-xs font-semibold ${wallet ? 'text-emerald-300' : 'text-amber-300'}">${wallet ? 'TON payout wallet saved' : 'TON payout wallet not connected'}</p>
+        <p class="text-[11px] leading-relaxed text-slate-400 mt-1">${wallet ? 'To change this payout address, use the wallet control in the top bar.' : 'Connect your TON payout wallet using the wallet control in the top bar.'} MySubHub administrators send creator payouts directly to this saved wallet. Check that it belongs to you and is on the correct TON network.</p>
       </div>
       <p class="text-[10px] leading-relaxed text-slate-500 mt-3">Creator payouts are processed by the platform. There is no withdrawal request form in the creator dashboard.</p>
     </section>`;
