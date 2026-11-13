@@ -762,3 +762,77 @@ button svg {
 @supports not (overflow: clip) {
   html, body { overflow-x: hidden; }
 }
+
+
+/* MySubHub v3.9.6: keep header controls, especially language selection,
+   inside narrow Telegram WebApp and mobile viewports. */
+.glass-topbar > .max-w-2xl {
+  min-width: 0;
+}
+
+.glass-topbar #ton-connect-button {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.glass-topbar #btn-notifications,
+.glass-topbar #btn-language {
+  flex: 0 0 2.25rem;
+}
+
+@media (max-width: 640px) {
+  .glass-topbar > .max-w-2xl {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    row-gap: 0.5rem;
+  }
+
+  .glass-topbar > .max-w-2xl > div:first-child {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+
+  .glass-topbar > .max-w-2xl > div:last-child {
+    width: 100%;
+    min-width: 0;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .glass-topbar #ton-connect-button {
+    flex: 1 1 0%;
+    width: auto;
+    max-width: calc(100% - 6rem);
+    min-width: 0;
+    display: flex;
+    justify-content: flex-end;
+    overflow: visible;
+    transform: none;
+  }
+
+  .glass-topbar #ton-connect-button button {
+    max-width: 100%;
+    min-width: 0;
+    white-space: nowrap;
+  }
+
+  .glass-topbar #btn-notifications,
+  .glass-topbar #btn-language {
+    width: 2.25rem;
+    height: 2.25rem;
+    flex: 0 0 2.25rem;
+  }
+}
+
+@media (max-width: 360px) {
+  .glass-topbar > .max-w-2xl {
+    row-gap: 0.4rem;
+  }
+
+  .glass-topbar #ton-connect-button {
+    max-width: calc(100% - 6rem);
+  }
+}
