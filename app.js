@@ -1,4 +1,4 @@
-// MySubHub Frontend v3.9.6 - Telegram-native channel sharing + 2% platform fee + unified channel onboarding
+// MySubHub Frontend v3.9.7 - Telegram-native channel sharing + 2% platform fee + unified channel onboarding
 // Phase 1: Low-resource API and discovery optimization
 // Phase 2: Channel detail pages, creator analytics, and marketplace sharing
 
@@ -1699,12 +1699,12 @@ function renderOwnerEarningsCard(data) {
         </div>
         <div class="bg-slate-900/60 border border-slate-700/70 rounded-xl p-3 min-w-0">
           <p class="text-[10px] uppercase tracking-wide text-slate-500">Payout wallet</p>
-          <p class="text-xs font-mono text-slate-200 mt-2 break-all">${wallet ? escapeHtml(shortWallet) : 'Not connected'}</p>
+          <p class="text-xs font-mono text-slate-200 mt-2 break-all" title="${wallet ? escapeHtml(wallet) : 'No saved wallet'}">${wallet ? escapeHtml(shortWallet) : 'Not connected'}</p>
         </div>
       </div>
       <div class="rounded-xl border border-slate-700/70 bg-slate-900/40 p-3">
         <p class="text-xs font-semibold ${wallet ? 'text-emerald-300' : 'text-amber-300'}">${wallet ? 'TON payout wallet saved' : 'TON payout wallet not connected'}</p>
-        <p class="text-[11px] leading-relaxed text-slate-400 mt-1">${wallet ? 'To change this payout address, use the wallet control in the top bar.' : 'Connect your TON payout wallet using the wallet control in the top bar.'} MySubHub administrators send creator payouts directly to this saved wallet. Check that it belongs to you and is on the correct TON network.</p>
+        <p class="text-[11px] leading-relaxed text-slate-400 mt-1">${wallet ? 'This is the payout address saved when this Telegram account connected a TON wallet. It is not a generated or testing address. Disconnecting TON Connect does not erase it; connecting a different wallet updates the saved address.' : 'No creator payout address is saved yet. Connect your TON wallet using the control in the top bar.'} MySubHub administrators send creator payouts directly to this saved address. Check that it belongs to you and is on the correct TON network.</p>
       </div>
       <p class="text-[10px] leading-relaxed text-slate-500 mt-3">Creator payouts are processed by the platform. There is no withdrawal request form in the creator dashboard.</p>
     </section>`;
@@ -2307,7 +2307,11 @@ window.loadAdminDashboard = async function() {
     if (payoutResponse?.error) {
       payoutsContainer.innerHTML = `<p class="text-sm text-red-300">${escapeHtml(payoutResponse.error)}</p>`;
     } else {
-      const items = window.adminPayoutQueue;
+      // The SQL queue returns one row per creator, already aggregated over all
+      // their channels. Sort defensively by total unpaid balance, highest first.
+      const items = [...window.adminPayoutQueue].sort((a, b) =>
+        Number(b.pending_amount || 0) - Number(a.pending_amount || 0)
+      );
       payoutsContainer.innerHTML = items.length ? items.map(item => {
         const ownerId = Number(item.channel_owner_id || 0);
         if (!Number.isSafeInteger(ownerId) || ownerId <= 0) return '';
@@ -2315,6 +2319,11 @@ window.loadAdminDashboard = async function() {
         const reserved = Math.max(0, Number(item.active_withdrawal_amount || 0));
         const withdrawalId = String(item.active_withdrawal_id || '');
         const status = String(item.active_withdrawal_status || 'unreserved');
+        const hasOpenBatch = Boolean(withdrawalId) && ['pending', 'approved'].includes(status);
+        const batchAmount = hasOpenBatch && reserved > 0 ? reserved : pending;
+        const unpaidOutsideBatch = hasOpenBatch ? Math.max(0, pending - reserved) : 0;
+        const unpaidRecords = Number(item.unpaid_transaction_count || 0);
+        const creatorChannels = Number(item.channel_count || 0);
         const approvedAt = Date.parse(String(item.active_withdrawal_approved_at || '')) || 0;
         const canRelease = status === 'approved' && approvedAt > 0 && Date.now() - approvedAt >= 30 * 60 * 1000;
         const wallet = String(item.wallet_address || '');
@@ -2325,7 +2334,7 @@ window.loadAdminDashboard = async function() {
         const action = locked && /^[0-9a-f-]{36}$/i.test(withdrawalId)
           ? `<div class="flex flex-wrap gap-2 mt-3"><button type="button" onclick="verifyAdminCreatorPayout('${withdrawalId}')" class="btn-primary px-4 py-2.5 rounded-lg text-xs font-semibold text-white">Verify transfer</button>${canRelease ? `<button type="button" onclick="releaseAdminCreatorPayout('${withdrawalId}')" class="btn-secondary px-4 py-2.5 rounded-lg text-xs">Release reservation</button>` : `<span class="text-[10px] text-slate-500 self-center">${approvedAt ? 'Release available after 30 minutes if no transfer was sent' : 'Approved payout is reserved'}</span>`}</div>`
           : wallet
-            ? `<button type="button" onclick="sendAdminCreatorPayout(${ownerId})" class="btn-primary mt-3 px-4 py-2.5 rounded-lg text-xs font-semibold text-white">Prepare & send payout</button>`
+            ? `<button type="button" onclick="sendAdminCreatorPayout(${ownerId})" class="btn-primary mt-3 px-4 py-2.5 rounded-lg text-xs font-semibold text-white">${hasOpenBatch ? `Continue payout batch · ${formatTon(batchAmount)} TON` : `Pay all pending · ${formatTon(pending)} TON`}</button>`
             : `<p class="text-xs text-amber-300 mt-3">Waiting for the creator to connect a TON wallet in their creator dashboard.</p>`;
         return `<article class="creator-payout-row bg-slate-900/60 border border-slate-700 rounded-xl p-4 min-w-0">
           <div class="flex flex-wrap items-start justify-between gap-3">
@@ -2339,10 +2348,11 @@ window.loadAdminDashboard = async function() {
             </div>
           </div>
           <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-3">
-            <div class="bg-slate-950/60 rounded-lg p-2 min-w-0"><p class="text-[10px] text-slate-500">Channels</p><p class="text-sm text-slate-200 font-semibold">${Number(item.channel_count || 0).toLocaleString()}</p></div>
-            <div class="bg-slate-950/60 rounded-lg p-2 min-w-0"><p class="text-[10px] text-slate-500">Unpaid records</p><p class="text-sm text-slate-200 font-semibold">${Number(item.unpaid_transaction_count || 0).toLocaleString()}</p></div>
-            <div class="bg-slate-950/60 rounded-lg p-2 min-w-0"><p class="text-[10px] text-slate-500">Reserved</p><p class="text-sm text-amber-300 font-semibold">${formatTon(reserved)} TON</p></div>
+            <div class="bg-slate-950/60 rounded-lg p-2 min-w-0"><p class="text-[10px] text-slate-500">Channels owned</p><p class="text-sm text-slate-200 font-semibold">${creatorChannels.toLocaleString()}</p></div>
+            <div class="bg-slate-950/60 rounded-lg p-2 min-w-0"><p class="text-[10px] text-slate-500">Unpaid subscription records</p><p class="text-sm text-slate-200 font-semibold">${unpaidRecords.toLocaleString()}</p></div>
+            <div class="bg-slate-950/60 rounded-lg p-2 min-w-0"><p class="text-[10px] text-slate-500">Current payout batch</p><p class="text-sm text-amber-300 font-semibold">${formatTon(batchAmount)} TON</p></div>
           </div>
+          <p class="text-[10px] leading-relaxed text-slate-500 mt-2">One creator row combines all unpaid subscription earnings across this creator's channels. One verified payout transfer is allocated across those records. ${unpaidOutsideBatch > 0 ? `${formatTon(unpaidOutsideBatch)} TON is outside the already-reserved batch and remains due for a later batch.` : hasOpenBatch ? 'The current batch is already reserved; verify it before starting another payout.' : 'The next payout batch includes the full current unpaid balance.'}</p>
           <div class="mt-3 rounded-lg border border-slate-800 bg-slate-950/50 p-3 min-w-0">
             <p class="text-[10px] uppercase tracking-wide text-slate-500 mb-1">Saved payout wallet</p>
             <p class="text-xs font-mono text-slate-300 break-all">${walletLabel}</p>
@@ -2545,6 +2555,34 @@ window.openChannelAnalytics = async function(channelId, days = 30) {
 };
 
 // ================== ADMIN CHANNELS LIST ==================
+window.openAdminChannelInTelegram = async function(channelId) {
+  if (!window.isAdmin || !/^[0-9a-f-]{36}$/i.test(String(channelId || ''))) return;
+
+  // Open a temporary tab synchronously so the browser does not block the
+  // navigation while the admin-only endpoint resolves the Telegram URL.
+  const pendingTab = window.open('about:blank', '_blank');
+  const result = await apiFetch(`/api/admin/channels/${encodeURIComponent(channelId)}/inspect-link`, { noCache: true }, 0);
+  if (result?.error || !result?.url) {
+    pendingTab?.close();
+    Toast.error(result?.error || 'Could not open this Telegram channel.');
+    return;
+  }
+
+  if (window.Telegram?.WebApp?.openTelegramLink) {
+    pendingTab?.close();
+    window.Telegram.WebApp.openTelegramLink(result.url);
+  } else if (pendingTab) {
+    pendingTab.opener = null;
+    pendingTab.location.replace(result.url);
+  } else {
+    window.location.assign(result.url);
+  }
+
+  if (result.requires_existing_membership) {
+    Toast.info('This is a private Telegram channel. Your Telegram account must already have access to inspect it.');
+  }
+};
+
 window.loadAdminChannels = async function() {
   if (!window.isAdmin) { Toast.error('Admin only'); return; }
   const container = document.getElementById('admin-channels-list');
@@ -2563,6 +2601,8 @@ window.loadAdminChannels = async function() {
   }
 
   container.innerHTML = channels.map(ch => {
+    const channelId = String(ch.id || '');
+    if (!/^[0-9a-f-]{36}$/i.test(channelId)) return '';
     const name = escapeHtml(ch.channel_name || 'Unknown');
     const ownerName = escapeHtml(ch.owner_name || 'Unknown');
     const price = formatTon(ch.subscription_price || 0);
@@ -2574,7 +2614,7 @@ window.loadAdminChannels = async function() {
       <div class="glass-card p-5 mb-3">
         <div class="flex justify-between items-start mb-4">
           <div class="flex-1">
-            <h3 class="font-semibold text-white text-lg">${name}</h3>
+            <h3 class="font-semibold text-white text-lg"><button type="button" onclick="openAdminChannelInTelegram('${channelId}')" class="inline-flex items-center gap-2 text-left hover:text-cyan-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-400" title="Open this channel in Telegram">${name}<span class="text-xs text-cyan-400" aria-hidden="true">↗</span></button></h3>
             <p class="text-slate-400 text-sm mt-1">Owner: ${ownerName} (@${escapeHtml(ch.owner_username || 'unknown')})</p>
             <p class="text-slate-400 text-sm mt-1">${price} TON / ${days} days • ${subs} subscribers</p>
             ${rating > 0 ? `<p class="text-yellow-400 text-sm mt-1">⭐ ${rating.toFixed(1)}/5 (${ch.review_count || 0} reviews)</p>` : ''}
@@ -2582,8 +2622,8 @@ window.loadAdminChannels = async function() {
           <span class="badge ${ch.is_active ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'} px-3 py-1 rounded-full text-xs font-bold">${ch.is_active ? `● ${t('channels.active')}` : `○ ${t('channels.inactive')}`}</span>
         </div>
         <div class="flex flex-wrap gap-2">
-          ${ch.channel_invite_link ? `<a href="${escapeHtml(ch.channel_invite_link)}" target="_blank" rel="noopener noreferrer" class="btn-secondary px-4 py-2 rounded-xl text-xs">🔗 View</a>` : ''}
-          <button type="button" onclick="toggleFeaturedChannel('${escapeHtml(String(ch.id))}', ${ch.is_featured === true ? 'false' : 'true'})" class="btn-secondary px-4 py-2 rounded-xl text-xs">${ch.is_featured ? 'Remove featured' : '✦ Feature listing'}</button>
+          <button type="button" onclick="openAdminChannelInTelegram('${channelId}')" class="btn-secondary px-4 py-2 rounded-xl text-xs">↗ Open in Telegram</button>
+          <button type="button" onclick="toggleFeaturedChannel('${channelId}', ${ch.is_featured === true ? 'false' : 'true'})" class="btn-secondary px-4 py-2 rounded-xl text-xs">${ch.is_featured ? 'Remove featured' : '✦ Feature listing'}</button>
         </div>
       </div>
     `;
@@ -2991,5 +3031,5 @@ document.addEventListener('visibilitychange', () => {
 });
 window.addEventListener('focus', () => window.loadNotifications?.(false));
 window.addEventListener('load', () => { init(); }, { once: true });
-console.log('MySubHub app.js v3.9.3 - unified Telegram channel onboarding');
+console.log('MySubHub app.js v3.9.7 - creator payout batching and admin channel inspection');
 console.log('Language:', currentLanguage);
