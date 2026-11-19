@@ -2555,6 +2555,22 @@ window.openChannelAnalytics = async function(channelId, days = 30) {
 };
 
 // ================== ADMIN CHANNELS LIST ==================
+// Prefer the saved Telegram invite URL for admin inspection. This restores the
+// pre-Phase-5.4 behavior for existing private channels. Only use the generated
+// inspection endpoint when no safe saved Telegram invite URL exists.
+function getAdminSavedTelegramInvite(channel) {
+  const raw = typeof channel?.channel_invite_link === 'string' ? channel.channel_invite_link.trim() : '';
+  if (!raw) return '';
+  try {
+    const parsed = new URL(raw);
+    const host = parsed.hostname.toLowerCase();
+    if (parsed.protocol !== 'https:' || !['t.me', 'www.t.me', 'telegram.me'].includes(host)) return '';
+    return parsed.toString();
+  } catch {
+    return '';
+  }
+}
+
 window.openAdminChannelInTelegram = async function(channelId) {
   if (!window.isAdmin || !/^[0-9a-f-]{36}$/i.test(String(channelId || ''))) return;
 
@@ -2578,9 +2594,6 @@ window.openAdminChannelInTelegram = async function(channelId) {
     window.location.assign(result.url);
   }
 
-  if (result.requires_existing_membership) {
-    Toast.info('This is a private Telegram channel. Your Telegram account must already have access to inspect it.');
-  }
 };
 
 window.loadAdminChannels = async function() {
@@ -2609,12 +2622,19 @@ window.loadAdminChannels = async function() {
     const days = ch.duration_days || 30;
     const subs = ch.active_subscribers || 0;
     const rating = ch.avg_rating || 0;
+    const savedInviteUrl = getAdminSavedTelegramInvite(ch);
+    const openChannelControl = savedInviteUrl
+      ? `<a href="${escapeHtml(savedInviteUrl)}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 text-left hover:text-cyan-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-400" title="Open this channel in Telegram">${name}<span class="text-xs text-cyan-400" aria-hidden="true">↗</span></a>`
+      : `<button type="button" onclick="openAdminChannelInTelegram('${channelId}')" class="inline-flex items-center gap-2 text-left hover:text-cyan-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-400" title="Open this channel in Telegram">${name}<span class="text-xs text-cyan-400" aria-hidden="true">↗</span></button>`;
+    const openChannelAction = savedInviteUrl
+      ? `<a href="${escapeHtml(savedInviteUrl)}" target="_blank" rel="noopener noreferrer" class="btn-secondary px-4 py-2 rounded-xl text-xs">↗ Open in Telegram</a>`
+      : `<button type="button" onclick="openAdminChannelInTelegram('${channelId}')" class="btn-secondary px-4 py-2 rounded-xl text-xs">↗ Open in Telegram</button>`;
 
     return `
       <div class="glass-card p-5 mb-3">
         <div class="flex justify-between items-start mb-4">
           <div class="flex-1">
-            <h3 class="font-semibold text-white text-lg"><button type="button" onclick="openAdminChannelInTelegram('${channelId}')" class="inline-flex items-center gap-2 text-left hover:text-cyan-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-400" title="Open this channel in Telegram">${name}<span class="text-xs text-cyan-400" aria-hidden="true">↗</span></button></h3>
+            <h3 class="font-semibold text-white text-lg">${openChannelControl}</h3>
             <p class="text-slate-400 text-sm mt-1">Owner: ${ownerName} (@${escapeHtml(ch.owner_username || 'unknown')})</p>
             <p class="text-slate-400 text-sm mt-1">${price} TON / ${days} days • ${subs} subscribers</p>
             ${rating > 0 ? `<p class="text-yellow-400 text-sm mt-1">⭐ ${rating.toFixed(1)}/5 (${ch.review_count || 0} reviews)</p>` : ''}
@@ -2622,7 +2642,7 @@ window.loadAdminChannels = async function() {
           <span class="badge ${ch.is_active ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'} px-3 py-1 rounded-full text-xs font-bold">${ch.is_active ? `● ${t('channels.active')}` : `○ ${t('channels.inactive')}`}</span>
         </div>
         <div class="flex flex-wrap gap-2">
-          <button type="button" onclick="openAdminChannelInTelegram('${channelId}')" class="btn-secondary px-4 py-2 rounded-xl text-xs">↗ Open in Telegram</button>
+          ${openChannelAction}
           <button type="button" onclick="toggleFeaturedChannel('${channelId}', ${ch.is_featured === true ? 'false' : 'true'})" class="btn-secondary px-4 py-2 rounded-xl text-xs">${ch.is_featured ? 'Remove featured' : '✦ Feature listing'}</button>
         </div>
       </div>
@@ -3031,5 +3051,5 @@ document.addEventListener('visibilitychange', () => {
 });
 window.addEventListener('focus', () => window.loadNotifications?.(false));
 window.addEventListener('load', () => { init(); }, { once: true });
-console.log('MySubHub app.js v3.9.7 - creator payout batching and admin channel inspection');
+console.log('MySubHub app.js v3.9.8 - restore admin Telegram channel inspection');
 console.log('Language:', currentLanguage);
